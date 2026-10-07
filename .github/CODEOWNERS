@@ -1,18 +1,34 @@
-# CODEOWNERS —— 必须替换 @KID258w 为真实的 GitHub 用户名（账号名，不是昵称）。
-# 生效前提：被指定的用户/团队对该仓库有写权限。
-# 与团队约定 #5 对应：PR 合并前至少由一名非作者成员审阅。
+# CODEOWNERS —— 技术栈未定阶段：所有文件统一由仓库建立者 @KID258w 审核
+#
+# 阶段说明：Sprint 0 技术栈尚未定稿，暂不按模块分工。技术栈评审通过后，
+#          把下面各路径的 owner 换成对应模块负责人（每行至少 2 人）。
+#
+# ⚠️ 已知风险（重要）：某个文件只有 1 个 owner，而这个 owner 恰好是 PR 作者时，
+#    GitHub 不会请求他自己审自己，于是"无人可批准"。因此：
+#      - ruleset 里建议只勾「Require a pull request before merging → approvals: 1」，
+#        不要勾「Require review from Code Owners」。
+#      - 一旦勾了后者，@KID258w 自己开的 PR 会永久卡在 "Review required"，
+#        只能靠 bypass 或加第二个 owner 才能合并。
+#      - 想强制"必须 code owner 批准"，就把每行写成至少 2 个账号。
+#
+# 生效前提（缺一不可）：
+#   1) 下方的账号已接受协作者邀请并有 write 权限（Settings → Collaborators）
+#   2) 该文件位于默认分支 main 上
+#   3) GitHub 读取的是 PR 的 base 分支上的版本，因此 PR 不会用到它自己引入的新规则
+#
+# 对应团队约定 #5：PR 合并前至少由一名非作者成员审阅。
 
-# 默认审查人（兜底）
+# 兜底：所有文件
 *                       @KID258w
 
-# 规格与文档：由规格负责人把关
+# 规格与流程：技术栈定稿前同样由建立者把关
 /openspec/              @KID258w
 /docs/                  @KID258w
 
-# CI/CD 与仓库配置：改动必须有人复核
+# CI/CD 与仓库配置：任何改动都要有人复核
 /.github/               @KID258w
 
-# 后续按模块补充（技术栈确定后启用）
-# /backend/             @KID258w
-# /web/                 @KID258w
-# /android/             @KID258w
+# Phase 2 技术栈确定后按模块分工（把占位符换成实际账号，每行至少 2 人）
+# /backend/             @账号A @账号B
+# /web/                 @账号C @账号D
+# /android/             @账号E @账号F
