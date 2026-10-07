@@ -1,0 +1,91 @@
+name: CI
+
+# Phase 1：只做「不需要业务代码」的三道门禁。
+# Phase 2：技术栈确定后，把 templates/ 下的模块工作流复制到本目录（详见 docs/ci-cd/ci-cd-guide.md）。
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  specs:
+    name: 规格校验 (OpenSpec)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 与团队约定一致：先评审 proposal/spec/design/tasks，再写业务代码。
+      # 校验失败 = change 结构不完整，PR 不应合并。
+      - name: 严格校验所有 change 与主规格
+        run: npx -y @fission-ai/openspec@1.14.1 validate --all --strict
+
+      - name: 在 Summary 中输出 change 任务进度
+        if: always()
+        run: |
+          set -o pipefail
+          {
+            echo "## OpenSpec 变更进度"
+            echo ""
+            echo "| change | 任务完成 | 状态 |"
+            echo "| --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          npx -y @fission-ai/openspec@1.14.1 list --json \
+            | jq -r '.changes[] | "| \(.name) | \(.completedTasks)/\(.totalTasks) | \(.status) |"' \
+            >> "$GITHUB_STEP_SUMMARY" \
+            || echo "| （当前无 change） | - | - |" >> "$GITHUB_STEP_SUMMARY"
+
+  secret-scan:
+    name: 敏感文件扫描
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # 签名文件、keystore、.env 一旦进了 Git 就视为泄露，必须走 Actions Secrets。
+      # 若确有需要入库的文件（如公开证书），在下面的 exceptions 里加白名单。
+      - name: 检查是否误提交密钥/签名文件
+        run: |
+          set -euo pipefail
+          exceptions='^(docs/|examples/)'
+          pattern='\.(jks|keystore|p12|p8|pem|key|mobileprovision)$|(^|/)(\.env($|\.)|local\.properties|google-services\.json|credentials\.json|id_rsa.*|id_ed25519.*)$'
+          found=$(git ls-files | grep -Ev "$exceptions" | grep -E "$pattern" || true)
+          if [ -n "$found" ]; then
+            echo "::error::检测到疑似密钥/签名文件，请从 Git 移除并改用 Actions Secrets："
+            echo "$found"
+            exit 1
+          fi
+          echo "OK：未发现敏感文件"
+
+  workflow-lint:
+    name: Workflow 语法检查
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: actionlint
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:${{ github.workspace }}" \
+            -w "${{ github.workspace }}" \
+            rhysd/actionlint:latest -color

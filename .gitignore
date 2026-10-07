@@ -1,0 +1,61 @@
+# ==== 通用 ====
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+.idea/
+.vscode/
+*.iml
+
+# ==== 环境与密钥（禁止入库，一律走 CI/CD Secrets）====
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.p8
+*.mobileprovision
+id_rsa*
+id_ed25519*
+local.properties
+google-services.json
+credentials.json
+
+# ==== Android / Gradle ====
+.gradle/
+build/
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+release/
+cxx/
+
+# ==== Java / Maven ====
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.jar
+*.war
+
+# ==== Node / Web ====
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==== Python（如后端选型为 Python）====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
