@@ -23,12 +23,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
       - name: 安装 Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
@@ -58,7 +58,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # 签名文件、keystore、.env 一旦进了 Git 就视为泄露，必须走 Actions Secrets。
       # 若确有需要入库的文件（如公开证书），在下面的 exceptions 里加白名单。
@@ -81,7 +81,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: actionlint
         run: |
