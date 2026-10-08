@@ -71,6 +71,8 @@ openspec.cmd validate --all --strict
 
 之后将实现拆成更小的 changes，例如 `add-auth-and-roles`、`add-work-log`、`add-task-assignment`、`add-team-dashboard`。每个 change 独立分支、PR 和测试记录，能清晰展示全体成员的真实贡献。
 
+Git 分支、Issue 分配、PR 审阅、阶段发布和强推安全规则见[团队 Git 协作指南](../git/git-workflow.md)。
+
 ## 参考资料
 
 - OpenSpec 官方 Quickstart：https://openspec.dev/docs/quickstart
