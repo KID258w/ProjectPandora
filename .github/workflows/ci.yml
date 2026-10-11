@@ -48,7 +48,7 @@ jobs:
             echo "## OpenSpec 严格模式欠债"
             echo ""
             if [ "$code" -eq 0 ]; then
-              echo '✅ strict 已全部通过 —— 可以把阻断步骤改为 `--strict` 并删除本步骤'
+              echo "✅ strict 已全部通过 —— 可以把阻断步骤改为 --strict 并删除本步骤"
             else
               echo "以下问题暂不阻断合并，但需要逐步修掉："
               echo ""
@@ -110,9 +110,12 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
+      # 镜像钉住版本：官方镜像内含 shellcheck，会把 run: 里的 bash 也一起检查。
+      # 用 latest 会因为上游升级而突然报错（不同版本检查规则不同），本地也难复现。
+      # 本地复现：pip install shellcheck-py，再装对应版本的 actionlint 跑一遍。
       - name: actionlint
         run: |
           docker run --rm \
             -v "${{ github.workspace }}:${{ github.workspace }}" \
             -w "${{ github.workspace }}" \
-            rhysd/actionlint:latest -color
+            rhysd/actionlint:1.7.12 -color

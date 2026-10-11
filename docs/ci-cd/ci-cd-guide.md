@@ -92,7 +92,17 @@ git commit -m "chore: 停止跟踪 demo/.idea 下的 IDE 配置"
 | `needs: [c]` 但没有 job `c` | `job "b" needs job "c" which does not exist in this workflow` |
 | `${{ matrix.os }}` 但没定义 matrix | `property "os" is not defined in object type {}` |
 
-还会检查 YAML 语法、`on:` 触发条件写法、表达式括号与引号；runner 上装有 shellcheck 时，会顺带检查 `run:` 里的 bash 脚本。
+还会检查 YAML 语法、`on:` 触发条件写法、表达式括号与引号。
+
+**⚠️ 镜像里带了 shellcheck，本地不装就会漏报**：CI 用的是官方镜像 `rhysd/actionlint:1.7.12`，它内置 shellcheck，会一并检查 `run:` 里的 bash 脚本。本地如果只装了 actionlint 而没装 shellcheck，本地通过、CI 报错的典型情况就会出现（PR #4 就是这个原因：单引号里写了 `` `--strict` ``，触发 `SC2016`）。本地复现：
+
+```bash
+pip install shellcheck-py      # 提供 shellcheck 可执行文件
+# 再用与镜像同版本的 actionlint 跑一遍
+actionlint -color
+```
+
+镜像已钉住 `1.7.12`；用 `latest` 会因为上游升级而突然报错（不同版本的检查规则不同），且本地难以复现。
 
 **为什么必须留着它**：workflow 写坏最典型的症状是**悄无声息地不触发**——PR 上什么 check 都不出现，容易被误认为"改动小所以没跑"，实际上整条门禁已经失效。它是唯一检查"检查器自己"的机制。耗时约 10 秒。
 
@@ -181,7 +191,11 @@ openspec validate --all --strict       # 含 WARNING，用来检查欠债
 openspec list
 openspec status --change <change-name>
 
-# 3) 进 Android 目录本地跑一遍（与 ci-android.yml 相同的命令）
+# 3) 本地复现 actionlint（镜像里带了 shellcheck，只装 actionlint 会漏报）
+pip install shellcheck-py
+# 然后用与 ci.yml 镜像同版本的 actionlint 执行：actionlint -color
+
+# 4) 进 Android 目录本地跑一遍（与 ci-android.yml 相同的命令）
 cd demo
 ./gradlew lintDebug testDebugUnitTest assembleDebug
 ```
