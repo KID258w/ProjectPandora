@@ -1,0 +1,81 @@
+name: CI Android
+
+# 只在该模块有改动时触发，避免后端/Web 的 PR 白跑 Android 构建。
+on:
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - 'demo/**'
+      - '.github/workflows/ci-android.yml'
+  push:
+    branches: [dev, main]
+    paths:
+      - 'demo/**'
+      - '.github/workflows/ci-android.yml'
+
+concurrency:
+  group: ci-android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Android 静态检查与测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: demo
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # demo 用 Gradle 9.5 + AGP 9.3.3，需要 JDK 17 以上，这里取 21
+          java-version: '21'
+
+      - name: 配置 Gradle 缓存
+        uses: gradle/actions/setup-gradle@v4
+
+      # demo/gradlew 在 Git 里的模式是 100644（没有可执行位），Linux runner 上必须补。
+      # 根治办法（另开一个 chore PR 执行一次）：
+      #   git update-index --chmod=+x demo/gradlew && git commit -m "chore: 给 gradlew 加可执行位"
+      - name: 修正 gradlew 执行权限
+        run: chmod +x gradlew
+
+      - name: Android Lint
+        run: ./gradlew lintDebug --no-daemon
+
+      - name: 单元测试
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: 构建 Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: 上传测试与 Lint 报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-reports
+          path: demo/app/build/reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: 上传 Debug APK（供测试同学安装）
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: demo/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # 若首次运行报缺少 SDK platform（compileSdk 37），取消下面注释：
+      # - name: 安装 Android SDK platform
+      #   run: yes | sdkmanager --licenses > /dev/null && sdkmanager "platforms;android-37" "build-tools;37.0.0"
