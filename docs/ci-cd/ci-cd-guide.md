@@ -35,16 +35,93 @@ git commit -m "chore: 停止跟踪 demo/.idea 下的 IDE 配置"
 
 ---
 
-## 2. 每个门禁拦什么
+## 2. 四个门禁分别是什么，能拦什么
 
-| 门禁 | 能拦 | 拦不住 |
+### 2.0 总览
+
+| 门禁 | 管什么 | 能拦 | 拦不住 |
+| --- | --- | --- | --- |
+| **规格校验 (OpenSpec)** | 需求与规格有没有写全 | change 缺少 `specs/` delta；`### Requirement:` 下没有 `#### Scenario:`；主规格缺 `## Purpose`/`## Requirements` | 目录名是否 kebab-case；`tasks.md` 是否勾选完；需求写得对不对 |
+| **敏感文件扫描** | 有没有把密钥文件提交进去 | 按文件名：`*.jks/keystore/p12/p8/pem/key/mobileprovision`、`.env` 及 `.env.local/.env.production` 等变体、`local.properties`、`google-services.json`、`credentials.json`、`id_rsa*` | 源码里硬编码的密钥（靠原生 Secret scanning） |
+| **Workflow 语法检查** | 流水线自己有没有被写坏 | YAML/表达式错误、action 输入名拼错、`needs` 指向不存在的 job | 触发条件写错但语法合法、secrets 名字写错 |
+| **Android 静态检查与测试** | `demo` 这个 Android 模块还能不能编译、测试过没过 | 编译错误、Lint 报错、单元测试失败 | 真机/模拟器上的 UI 行为（需要另加 instrumentation 测试） |
+
+### 2.1 规格校验 (OpenSpec)
+
+执行 `npx -y @fission-ai/openspec@1.14.1 validate --all`，校验 `openspec/changes/**` 与 `openspec/specs/**`。
+
+校验粒度是**每条 `### Requirement:`**，不是每个文件——一个 spec 文件里放多条需求时，每条都要有自己的 Scenario：
+
+```markdown
+## ADDED Requirements
+
+### Requirement: 任务派发
+系统 SHALL 允许团队长派发任务。
+
+#### Scenario: 派发成功        ← 必须有，缺了直接报错
+- **WHEN** 团队长提交合法任务
+- **THEN** 员工在任务列表中看到该任务
+
+### Requirement: 任务撤回        ← 第二条需求，同样要 Scenario
+```
+
+它**不检查 Scenario 的内容质量**：`#### Scenario:` 下面只写一句中文、或者只有 WHEN 没有 THEN，都能通过。所以场景是否覆盖了边界与异常，仍然只能靠 CODEOWNERS 里那位审阅人。
+
+⚠️ **`--strict` 会把 WARNING 也算失败**。这是"格式看着对但 CI 红"的常见原因，遇到先找输出里的 `[WARNING]`。当前阻断步骤刻意不加 `--strict`，原因见第 5 节。
+
+### 2.2 敏感文件扫描
+
+对 `git ls-files` 的结果做两道正则过滤：
+
+- 命中（会失败）：签名与密钥文件 `*.jks/keystore/p12/p8/pem/key/mobileprovision`；`.env` 以及 `.env.local`、`.env.production`、`backend/.env.test` 等变体；`local.properties`、`google-services.json`、`credentials.json`、`id_rsa*`、`id_ed25519*`
+- 放行：`docs/`、`examples/` 下的示例，以及 `.env.example`、`.env.sample`、`.env.template`
+
+两个必须知道的边界：
+
+1. **只看文件名，不看内容**。源码里写 `DB_PASSWORD = "..."`、`OPENAI_API_KEY = "sk-..."` 是**拦不住的**，那类问题靠 `Settings → Code security` 的 Secret scanning + Push protection 兜底。
+2. 它拦的是**已经进入 Git 索引的文件**。密钥一旦提交过又删除，Git 历史里仍然存在，等于已泄露——必须换密钥。
+
+### 2.3 Workflow 语法检查 (actionlint)
+
+跑 `docker run rhysd/actionlint:latest`（GitHub 的 ubuntu runner 自带 Docker，无需安装）。它专门检查 `.github/workflows/*.yml`：
+
+| 典型错误 | actionlint 的提示 |
+| --- | --- |
+| `actions/checkout@v4` 下写成 `refs: main`（应为 `ref`） | `input "refs" is not defined in action "actions/checkout@v4"`，并把合法输入名全列出来 |
+| `if: ${{ github.evn == 'push' }}`（`event` 拼错） | `property "evn" is not defined in object type { ... }` |
+| `needs: [c]` 但没有 job `c` | `job "b" needs job "c" which does not exist in this workflow` |
+| `${{ matrix.os }}` 但没定义 matrix | `property "os" is not defined in object type {}` |
+
+还会检查 YAML 语法、`on:` 触发条件写法、表达式括号与引号；runner 上装有 shellcheck 时，会顺带检查 `run:` 里的 bash 脚本。
+
+**为什么必须留着它**：workflow 写坏最典型的症状是**悄无声息地不触发**——PR 上什么 check 都不出现，容易被误认为"改动小所以没跑"，实际上整条门禁已经失效。它是唯一检查"检查器自己"的机制。耗时约 10 秒。
+
+### 2.4 Android 静态检查与测试
+
+只在 `demo/**` 变化时触发（workflow 级 `paths` 过滤）。
+
+| 步骤 | 命令 | 抓什么 |
 | --- | --- | --- |
-| **规格校验** | change 缺少 `specs/` delta；`### Requirement:` 下没有 `#### Scenario:`；主规格缺 `## Purpose`/`## Requirements` | 目录名是否 kebab-case；`tasks.md` 是否勾选完；需求写成什么样 |
-| **敏感文件扫描** | 按文件名：`*.jks/keystore/p12/p8/pem/key/mobileprovision`、`.env` 及 `.env.local/.env.production` 等变体、`local.properties`、`google-services.json`、`credentials.json`、`id_rsa*` | 源码里硬编码的密钥（靠原生 Secret scanning） |
-| **Workflow 语法检查** | workflow 的 YAML/表达式错误、action 输入名拼错、`needs` 指向不存在的 job | 触发条件写错但语法合法、secrets 名字写错 |
-| **Android CI** | 编译错误、Lint 报错、单元测试失败 | 真机/模拟器上的 UI 行为（需要另加 instrumentation 测试） |
+| Android Lint | `./gradlew lintDebug` | 静态分析代码与资源：未使用资源、硬编码文案、权限声明、API 版本兼容（minSdk 24 用了高版本 API）、清单问题。severity=error 的问题会让构建失败 |
+| 单元测试 | `./gradlew testDebugUnitTest` | `demo/app/src/test/**` 下的 JUnit 测试，纯 JVM，**不需要模拟器**，几十秒 |
+| 构建 Debug APK | `./gradlew assembleDebug` | Kotlin 编译错误、依赖解析失败、`AndroidManifest.xml` 合并冲突、资源链接（AAPT2）失败、`libs.versions.toml` 版本冲突 |
+| 上传产物 | upload-artifact | `demo/app/build/reports/` 与 Debug APK，测试同学可直接下载安装 |
 
-⚠️ **`--strict` 会把 WARNING 也算失败**。这是"格式看着对但 CI 红"的常见原因，遇到先找输出里的 `[WARNING]`。
+环境参数（按 `demo/` 的实际情况固定）：
+
+| 项 | 值 | 原因 |
+| --- | --- | --- |
+| JDK | temurin 21 | `demo` 用 Gradle 9.5 + AGP 9.3.3，需要 JDK 17 以上 |
+| Gradle 缓存 | `gradle/actions/setup-gradle@v4` | 缓存 `~/.gradle`。冷启动要下 Gradle 9.5（约 150MB），不缓存每次 3–6 分钟；有缓存 1–2 分钟 |
+| `chmod +x gradlew` | 必须 | `demo/gradlew` 在 Git 中的模式是 `100644`（无可执行位），Linux runner 上会 Permission denied |
+| `--no-daemon` | 必须 | CI 里每次构建都是一次性进程，常驻 daemon 无意义还占内存 |
+
+⚠️ **不要把它设为必需 check**：它只在改动 `demo/**` 时出现，设为必需会让后端/Web 的 PR 永远等不到这个 check。
+
+已知首次运行的坑：`compileSdk 37` 需要对应 SDK platform，runner 镜像里可能没有。Gradle 通常会自行下载；若报缺 SDK，把 `ci-android.yml` 末尾注释掉的 `sdkmanager "platforms;android-37"` 那段启用。
+
+还没覆盖的：真机/模拟器上的 UI 行为需要 `connectedDebugAndroidTest` + 模拟器（慢 10 分钟起），当前未启用。
+
 
 ---
 
