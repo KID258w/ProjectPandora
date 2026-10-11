@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Users complete a personal MBTI exploration flow
-The system SHALL allow an authenticated mobile business user to start an MBTI self-exploration questionnaire, see answering progress, return to change earlier answers, and submit only after required answers are complete. The questionnaire content and scoring SHALL use the approved version selected before implementation.
+The system SHALL allow an authenticated mobile business user to start a lightweight MBTI self-exploration questionnaire, see answering progress, return to change earlier answers, and submit only after required answers are complete. It SHALL NOT present the questionnaire as a formal standardized or diagnostic psychological assessment. The question set, question count, preference calculation, and result copy SHALL use the approved version selected before implementation.
 
 #### Scenario: User completes the questionnaire
 - **WHEN** a user answers all required questions and submits the assessment
@@ -14,6 +14,10 @@ The system SHALL allow an authenticated mobile business user to start an MBTI se
 #### Scenario: User submits an incomplete assessment
 - **WHEN** a user attempts to submit while required answers are missing
 - **THEN** the system identifies incomplete questions and does not create a new result
+
+#### Scenario: User views the lightweight assessment boundary
+- **WHEN** a user starts or views a completed lightweight MBTI exploration
+- **THEN** the system describes it as personal self-exploration and does not claim standardized validity, diagnosis, or objective personality certainty
 
 ### Requirement: MBTI results are private and for self-exploration only
 The system SHALL present MBTI results as non-diagnostic self-exploration content and SHALL NOT use them for hiring, performance evaluation, task assignment, or management decisions. Only the owner SHALL be able to read the result; managers and administrators SHALL have no result-viewing interface or API access.

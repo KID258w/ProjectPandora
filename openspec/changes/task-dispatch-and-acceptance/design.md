@@ -1,39 +1,43 @@
 ## Context
 
-业务层级为创始人→部门经理→团队长→普通员工。任务是具备父子关系的正式记录；执行进度与验收过程必须可追溯，根任务进度由负责人手动维护，不根据子任务自动加权。
+The task is a standalone unit of assigned work. Business decomposition is a human process; the app records concrete assignments, not a parent/child task graph. A plain-text association note can preserve context without affecting authorization or lifecycle.
 
 ## Goals / Non-Goals
 
-**Goals:** 实现角色允许范围内的建任务/向下一层派发、拆分、本人执行、进度历史、提交验收、修改与取消联动。
+**Goals:** enforce role-bounded assignment, direct-supervisor approval, clear creator/assignee ownership, text-only execution history, separate completion acceptance, auditability, read-only hierarchical visibility, and efficient task-list filtering.
 
-**Non-Goals:** 跨部门请求、自动推算父任务进度、任务界面下属穿透、已完成任务重开、提交撤回和延期申请。
+**Non-Goals:** task trees, a split-task operation, automatic or percentage progress, multi-person assignees, recipient acceptance, attachment uploads, general-purpose task search outside subordinate inspection, or cross-department workflow details in this change.
 
 ## Decisions
 
-- 使用统一 Task 实体，以 parent relation 表达任务树；分配列表、我派发的和团队任务是同一批记录的权限化视图。
-- 服务端根据当前用户角色、组织关系、直接派发关系校验创建/分配/修改/验收/取消权限，不能依赖客户端隐藏按钮。
-- 普通员工在待开始状态主动开始；团队长/部门经理首次打开上级派发任务详情时转为进行中并记录开始时间。本人子任务仅标记完成，不填百分比、不自我验收。
-- 执行进度更新保存历史；提交进入待验收，直接派发者通过则完成，退回必须有原因。
-- 直接派发者可修改非待验收/已完成任务定义并写历史。取消必须填理由，在事务中级联取消未完成后代，已完成后代不变；子任务取消不影响父/兄弟任务。
-- 根任务完成需由负责人汇总必要子任务并手动结束；不自动汇总子任务百分比。
-- 关键流程事件产生应用内红点提醒；Android 系统通知不作为 MVP 验收条件。
+- A task has one creator and exactly one responsible assignee. The creator may assign to self or an allowed direct report; Employee may only assign to self. Cross-department work uses its dedicated entry point and is detailed in the companion change.
+- Keep optional `association_note` as ordinary text. Do not add `parent_task_id`, task-tree traversal, roll-up, inherited permissions, or cascade behavior.
+- Keep task completion status binary (`unfinished` / `completed`). Approval, returned-for-editing, waiting-for-acceptance, and cancellation are separate workflow/audit records, not additional completion states.
+- Use a separate approval record and queues. If the creator has a direct supervisor, every creation requires that supervisor's approval, including self-assigned work. Founder is the top role and bypasses approval.
+- Before approval, the creator and approver access the task only in their respective Approval Center queues; it does not appear in ordinary task lists or to the assignee. After approval, it appears in the creator's `Created by Me` and assignee's `My Tasks`. A self-assigned task is one record shown in both views.
+- A returned approval requires a reason. The creator edits and resubmits. Changes to assignee, deadline, task details, or expected deliverables after approval require approval again.
+- Execution updates are append-only text entries with author and timestamp. Do not store percentage completion.
+- Completion submission has its own form and record: completion explanation is required; deliverable information is required only when expected deliverables were specified at creation. MVP has no upload requirement.
+- Only the direct dispatcher may accept or return submitted work. Return requires a reason. Self-assigned work is marked complete by its assignee without self-acceptance.
+- Direct dispatcher may cancel their unfinished task with a reason. Cancellation archives only that task; there is no cascade because tasks are not physically linked.
+- Supervisors may inspect descendant users' tasks read-only. Visibility does not grant approve, edit, accept, return, or cancel authority. Only the creator's direct supervisor approves; only the creator/direct dispatcher accepts.
+- Execution/inspection lists (`My Tasks`, `Created by Me`, and subordinate tasks) have a non-mutating completion filter (`all` / `unfinished` / `completed`). Approval queues live in a dedicated Approval Center and are never filtered by task-completion status. The Department Manager's department-scope filter remains independently combinable. The subordinate list's “查看对象” selector defaults to all visible descendants and contains a name-only search over authorized descendants. Selecting one person shows approved tasks assigned to that person; the all-descendants option shows approved tasks assigned to any visible descendant. Creator remains task metadata and does not form a separate inspection list or filter. Search and object selection operate only within the server-authorized visible set.
+- `Created by Me` replaces the former dispatched-work label. `My Tasks` is not divided into source categories; cross-department status is a filter for managers.
 
-## Alternatives Considered
+## Data and Authorization Boundaries
 
-- Duplicating task records for each list was rejected; a single task tree preserves consistent assignment and acceptance history.
-- Automatically calculating parent progress from child percentages was rejected; the responsible manager maintains overall progress manually.
-- Hiding unauthorized controls only in the client was rejected; the server must enforce permissions.
+Implementation should represent task definition, approval history, text updates, completion submissions/decisions, and cancellation audit separately as needed. This design does not prescribe concrete database columns. The service must enforce authorization on every operation; UI hiding is not a security boundary.
 
 ## Risks / Trade-offs
 
-- [任务树权限易出现越权] → 所有写入和读取在服务端按直接关系与任务树授权，增加越权测试。
-- [取消级联部分成功会破坏一致性] → 在数据库事务内处理目标分支并记录取消来源/原因。
-- [状态很多] → 用受控状态迁移服务统一校验合法的旧状态、操作者和新状态。
+- Approval adds a gate before assignment visibility; show the task in both creator and approver queues inside the separate Approval Center and notify both sides to make the wait explicit.
+- Read-only hierarchical visibility is broader than direct assignment visibility; apply organization-scope filtering and keep workflow actions tied to creator/assignee relationships.
+- Text association is less queryable than a foreign key, intentionally avoiding artificial task-tree coupling and complex cascading behavior.
 
 ## Migration Plan
 
-新系统新增任务、进度、提交/验收、修改和取消历史结构；先完成身份与组织基础，再开放移动端任务 API。回滚仅关闭新任务入口/API，保留已存历史。
+This is an MVP greenfield workflow. Implement organization/supervisor lookup first, then task creation and approval, then execution and acceptance. Do not introduce task-tree migration logic. Retain audit history for all workflow decisions.
 
 ## Open Questions
 
-- 附件存储格式/大小及具体任务表字段在数据库详细设计阶段确定；不得改变本规格中的权限和状态约束。
+No product-level questions remain for this change. API shape, database field names, and notification implementation are implementation details to settle during delivery.

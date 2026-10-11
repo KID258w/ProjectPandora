@@ -1,24 +1,30 @@
 ## Why
 
-Pandora 的主要业务闭环是按企业层级派发工作、由责任人执行并提交成果、再由直接派发者验收。需要把已确认的角色边界、任务树、状态流转与取消规则固化为可实施规格。
+The task workflow has been simplified after product-owner review. Work decomposition happens in meetings and should not create a physical task tree in the app. The product needs one consistent task-creation flow, explicit supervisor approval, clear ownership, text-only execution updates, and direct-dispatcher acceptance.
 
 ## What Changes
 
-- 新增创始人、部门经理、团队长和普通员工的任务创建、分配、本人执行、进展更新、提交与直接派发者验收流程。
-- 支持上级任务拆分为责任人明确的子任务；多个列表引用同一任务树，不复制任务。
-- 支持任务定义修改、进度历史、退回原因、取消原因、未完成后代级联取消及站内红点提醒。
-- 保持任务界面的可见范围：管理者仅查看自己直接派发及本人执行的任务，不在任务界面下钻查看普通员工任务。
-- 不包含跨部门协作请求（独立 change）。
+- Define task creation for Founder, Department Manager, Team Leader, and Employee with role-bounded assignees.
+- Require approval from the creator's direct supervisor for every task they create; Founder-created tasks bypass approval.
+- Add a dedicated Approval Center for creator/approver queues; keep only approved tasks in `Created by Me` and `My Tasks`.
+- Add non-mutating unfinished/completed filters to execution/task-inspection lists only; subordinate inspection additionally supports choosing a visible descendant through an object selector with scoped employee-name search, and lists only tasks assigned to the selected person.
+- Replace task percentage progress with timestamped text updates; keep completion status binary.
+- Keep association to prior work as optional explanatory text, not a task relationship.
+- Retain direct-dispatcher completion acceptance/return, required return reasons, and non-cascading cancellation.
+- Allow authorized leaders to inspect subordinate task records read-only without inheriting workflow powers.
+- Keep cross-department task creation in its own entry point; its lifecycle is specified by `cross-department-coordination`.
 
 ## Capabilities
 
 ### New Capabilities
-- `task-dispatch-and-acceptance`: 层级任务创建、拆分、执行、进展更新、提交、验收与取消。
+- `task-dispatch-and-acceptance`: Unified task creation, approval, assignment, execution updates, completion submission, acceptance, and cancellation.
 
 ### Modified Capabilities
 - None.
 
 ## Impact
 
-- 关联 `docs/requirements/01-task-creation-and-acceptance.md`，并与 `docs/requirements/02-home-four-panels.md`、`03-daily-log-module.md`、`04-month-week-day-work-views.md` 集成。
-- 影响 Android 任务页、任务/任务进度/验收历史数据、Django API/RBAC、红点提醒与跨模块任务查询。依赖用户/组织基础能力；跨部门请求保持独立边界。
+- Source requirement: `docs/requirements/01-task-creation-and-acceptance.md`.
+- Affects Django task and approval APIs, authorization, task history, reminders, and Android task-center screens.
+- Depends on identity and organization relationships to resolve the creator's direct supervisor and permitted assignees.
+- Cross-department tasks use the same task and approval lifecycle with a dedicated entry point; see `cross-department-coordination`.

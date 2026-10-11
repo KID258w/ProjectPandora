@@ -4,22 +4,24 @@
 
 ## Goals / Non-Goals
 
-**Goals:** 每日唯一、草稿/提交、同日修改、历史、本人任务可选关联、授权管理者只读查看。
+**Goals:** 每日唯一、草稿/提交、同日修改、默认日历与日期详情、年月快捷切换、授权管理者只读查看及人员查找。
 
-**Non-Goals:** 附件、评论、搜索、管理者写入或验收、过去日期补录、视图 Tab 中显示日志。
+**Non-Goals:** 附件、评论、日志正文/摘要搜索、管理者写入或验收、过去日期补录、视图 Tab 中显示日志、任务关联及问题/风险字段。
 
 ## Decisions
 
 - DailyLog 以作者+自然日期唯一；状态为未填写（无记录）、草稿、已提交。数据库唯一约束防止并发重复创建。
-- 今日完成是唯一提交必填项；关联任务、问题与风险、明日计划可选。关联通过日志编辑流程维护，一篇日志可连多项本人任务，不写回任务进度。
+- 今日完成是唯一提交必填项，明日计划可选。日志仅包含工作文字，不设置任务关联及问题/风险字段。
+- 日志 Tab 首屏为月历和选中日期的日志详情；年月标题打开快捷年月选择器。本人视图右下角提供圆形新增按钮，进入今日日志编辑页；查看下属时不显示新增按钮。
+- 管理者对象选择窗口支持按姓名、团队或部门关键词筛选授权范围内人员。搜索只匹配人员信息，不搜索日志正文、摘要或历史内容，也不扩大组织范围。
 - 草稿仅作者可读；提交后只向授权管理者的下属日志查询返回。管理者看不到草稿状态或缺日志状态，只展示查询范围内的已提交记录。
 - 作者当天可编辑草稿/已提交记录；自然日结束后只读且不可补写/提交；修改已提交内容仍为已提交，只更新最后修改时间、不保存版本历史。
-- 角色范围由组织关系解析：团队长团队、部门经理部门、创始人公司；默认本人，管理者筛选对象时显示当前对象和组织路径。
-- API 以字段白名单返回摘要和正文；首页取最近十篇已提交记录，视图模块不得调用日志数据。
+- 角色范围由组织关系解析：团队长团队、部门经理部门、创始人公司；默认本人，管理者筛选对象时显示当前对象和组织路径。无已提交日志的日期显示空状态，不暴露草稿或未填写区别。
+- API 以字段白名单返回摘要和正文；首页取最近五篇已提交记录，视图模块不得调用日志数据。
 
 ## Alternatives Considered
 
-- Requiring every log to link to a task was rejected because meetings or training may not correspond to a formal task.
+- Keeping task association and issue/risk fields was removed from the MVP form to keep daily logging focused on work notes and next-day plans.
 - Showing managers whether a subordinate has a draft or no log was rejected to preserve draft privacy; manager queries return submitted records only.
 - Letting managers edit or accept logs was rejected; logs are author-maintained records, not an acceptance workflow.
 
@@ -27,11 +29,11 @@
 
 - [时区边界影响“当天”判定] → 后端使用统一配置的业务时区进行唯一性与日终只读校验。
 - [管理者查询暴露草稿状态] → 查询层只检索 submitted，不返回草稿/未填写占位。
-- [任务已取消/完成可能影响关联] → 保留历史关联显示，不允许日志编辑器选择无权限或非本人执行的任务。
+- [人员搜索被误解为日志内容搜索] → 搜索框只在查看对象选择窗口使用，并明确提示按姓名、团队或部门搜索。
 
 ## Migration Plan
 
-新增每日日志、任务关联表及提交时间字段。部署时无需为历史日期生成空日志；首页仅展示已有已提交记录。回滚关闭日志入口/API且保留数据。
+新增每日日志记录及提交时间字段，不创建日志—任务关联表。部署时无需为历史日期生成空日志；首页仅展示已有已提交记录。回滚关闭日志入口/API且保留数据。
 
 ## Open Questions
 

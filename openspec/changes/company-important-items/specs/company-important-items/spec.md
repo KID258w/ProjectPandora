@@ -16,11 +16,11 @@ The system SHALL allow an authenticated administrator to create and edit company
 - **THEN** the system rejects publication and identifies the missing required content
 
 ### Requirement: Published items are common and limited on mobile
-The system SHALL show the same published company-important items to every authenticated mobile business user, ordered by the administrator-managed sequence, with no more than ten items. Drafts and unpublished items SHALL NOT be returned to mobile users.
+The system SHALL show the same published company-important items to every authenticated mobile business user, ordered by the administrator-managed sequence, with no more than ten items in the secondary list. The Home card SHALL preview the first five items and provide access to the secondary list. Drafts and unpublished items SHALL NOT be returned to mobile users.
 
 #### Scenario: Mobile user views published items
-- **WHEN** any authenticated mobile business user opens the company-important-items panel
-- **THEN** the system returns up to ten currently published items in administrator-defined order with title, summary, publication time, and detail access
+- **WHEN** any authenticated mobile business user opens the Home company-important-items card and then selects “View all”
+- **THEN** Home previews the first five currently published items, and the secondary list shows up to ten in administrator-defined order with complete item information and detail access
 
 #### Scenario: Administrator reaches the published-item limit
 - **WHEN** ten items are already published and an administrator attempts to publish another

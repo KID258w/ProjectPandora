@@ -1,37 +1,37 @@
 ## Context
 
-跨部门工作以请求记录跨越组织边界；目标部门经理接受后自行组织本部门执行。发起方只掌握请求与最终交付，不得访问目标部门内部员工任务明细。
+Cross-department work is a standalone task created by one Department Manager for another Department Manager through a dedicated entry point. It reuses the ordinary task, approval, execution, and acceptance lifecycle. No independent accept/reject request state machine is needed.
 
 ## Goals / Non-Goals
 
-**Goals:** 经理间发送/接收请求、接受/拒绝/撤回、部门内执行、结果提交、发起方验收/退回、权限隔离与提醒。
+**Goals:** restrict cross-department creation to Department Managers, require Founder approval, expose approved tasks to the target manager, protect target-department internal tasks, and return the final result to the original direct dispatcher for acceptance.
 
-**Non-Goals:** 员工或团队长发起请求、创始人协调/查看、请求接受后取消、跨部门直接分派员工、请求内透视他部门任务。
+**Non-Goals:** direct assignment to another department's Team Leader or Employee, target-side acceptance, physical association between the cross-department task and internal tasks, task-tree roll-up, cancellation cascade, or Founder exclusion from approval/read-only visibility.
 
 ## Decisions
 
-- 将 CrossDepartmentRequest 与普通 Task 分开建模；请求接受后建立目标部门的跨部门工作根任务关联，不把请求本身伪装为员工任务。
-- 请求状态为待对方接受、办理中、待发起方验收、已关闭、已拒绝、已撤回。拒绝、撤回、结果退回均要求原因。
-- 发起后请求内容不可编辑；目标经理接受前发起人可填原因撤回。接受后不提供撤回/取消；新增范围新建请求。
-- 目标经理只在本部门层级内创建/分配正式任务；A 仅看到请求概要、状态和 B 提交的结果。
-- 用服务端校验双方均为相应部门经理，并确保请求参与者隔离；关键状态变化发应用内红点。
+- Department Manager A uses a separate “创建跨部门任务” entry and selects Department Manager B in another department as the sole assignee. The task has the ordinary task fields plus a cross-department flag.
+- Because A has a direct supervisor, the task first appears in A's Approval Center “待上级审批” and Founder's Approval Center “待你审批”. It does not appear in A's “我创建的” before approval. Founder approval is required before B sees or executes it. B does not accept it a second time.
+- After approval the same task appears in A's “我创建的” and B's “我的任务—跨部门工作”.
+- B may execute it and submit the completion description/material information directly to A, or create new standalone local tasks using the normal task-creation flow. B-created work must receive its own normal supervisor approval. Use optional text association notes if context is useful; no foreign-key task tree is created.
+- A can inspect the cross-department task A created and B's submitted result, but cannot view B's internal tasks. Founder has read-only hierarchical visibility and approves direct reports' creations; that does not make Founder the assignee or acceptance actor.
+- Only direct dispatcher A may accept or return B's submission; return requires a reason. Task completion remains binary and execution updates remain text-only.
+- The cross-department flag is a filter for Department Managers, not an alternate task status or linkage.
 
-## Alternatives Considered
+## Authorization and Data Boundaries
 
-- Directly assigning tasks to another department's employees was rejected because it bypasses that department's manager and hierarchy.
-- Treating the request itself as an employee task was rejected; the request tracks interdepartmental agreement while normal tasks track target-department execution.
-- Allowing cancellation after acceptance was rejected for MVP; changed scope requires a new request.
+Validate that creator and assignee are Department Managers in different departments. Use the ordinary task's creator, assignee, supervisor, approval, and submission relationships. Do not expose target department internal tasks to A through queries, UI, or APIs.
 
 ## Risks / Trade-offs
 
-- [请求与普通任务重复/脱节] → 保留明确关联ID和责任边界，普通任务负责目标部门内的执行。
-- [结果退回后任务状态不一致] → 将请求退回和目标部门补充状态作为事务化协调动作。
-- [越权泄露目标部门工作细节] → A 只能读取请求和提交结果，不授权读取 B 的任务树。
+- A dedicated entry can be mistaken for a separate approval flow; keep its form and state labels aligned with ordinary task creation.
+- B may need multiple local assignments to complete the requested work; optional text notes preserve context without imposing artificial linkage or cancellation semantics.
+- Founder approval can add latency; explicit pending queues and reminders make the gate visible.
 
 ## Migration Plan
 
-新增协作请求及其状态历史，不迁移普通任务。先部署身份组织、任务基础，再启用请求入口；关闭入口可回滚界面而保留记录。
+Implement after the regular task and approval foundation. No separate request tables or conversion migration are required for the MVP. Preserve ordinary task audit history.
 
 ## Open Questions
 
-- 协作请求附件能力及最大大小在实现设计阶段确认；请求优先级字段不纳入 MVP。
+No product-level questions remain. Concrete API and database design are implementation details.

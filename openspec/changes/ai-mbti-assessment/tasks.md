@@ -1,6 +1,6 @@
 ## 1. Assessment content and data
 
-- [ ] 1.1 Confirm and document questionnaire source/permission, question set, question count, scoring rules, and result copy before implementation.
+- [ ] 1.1 Confirm and document the lightweight self-exploration question set, question count, preference calculation rules, and result copy before implementation; ensure no unsupported standardized or diagnostic claims.
 - [ ] 1.2 Add versioned questionnaire definition and owner-scoped latest-result persistence.
 - [ ] 1.3 Implement answer validation, result calculation, and atomic replacement only after a completed reassessment.
 - [ ] 1.4 Enforce owner-only result APIs and exclude answers/results from manager, administrator, and other AI-context APIs.
