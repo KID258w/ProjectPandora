@@ -1,0 +1,75 @@
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+*.tmp
+
+# ==== IDE（各人环境不同，禁止入库）====
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+
+# ==== 环境与密钥（一律走 Actions Secrets）====
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+*.jks
+*.keystore
+*.p12
+*.p8
+*.pem
+*.key
+*.mobileprovision
+id_rsa*
+id_ed25519*
+local.properties
+google-services.json
+credentials.json
+
+# ==== Android / Gradle ====
+.gradle/
+build/
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+cxx/
+# Gradle wrapper 必须入库，别被上面的 *.jar 规则误伤
+!demo/gradle/wrapper/gradle-wrapper.jar
+
+# ==== Python / Django ====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.sqlite3
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+media/
+staticfiles/
+
+# ==== Node / Vue ====
+node_modules/
+dist/
+dist-ssr/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==== Java（如后续引入）====
+target/
+*.jar
+*.war

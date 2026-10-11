@@ -1,0 +1,54 @@
+name: 用户故事 / 需求
+description: 新建一个 Story（团队约定：先建 Issue，再建 OpenSpec change 和 PR）
+title: "[Story] "
+labels: ["story"]
+body:
+  - type: input
+    id: change
+    attributes:
+      label: OpenSpec change 名称
+      description: kebab-case，例如 add-work-log；如尚未确定可先留空
+      placeholder: add-work-log
+    validations:
+      required: false
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景与目标
+      description: 谁在什么场景下需要它，解决什么问题
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 建议写成 GIVEN / WHEN / THEN 场景，后续会进入 specs/<capability>/spec.md
+      placeholder: |
+        GIVEN 员工已登录
+        WHEN 提交当日工作日志
+        THEN 日志出现在团队看板中
+    validations:
+      required: true
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: 影响模块
+      multiple: true
+      options:
+        - 后端服务
+        - Web 管理端
+        - Android 移动端
+        - 文档 / 流程
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: 非目标
+      description: 本次明确不做什么（对应 proposal.md 的 Non-goals）
+    validations:
+      required: false
