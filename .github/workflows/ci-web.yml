@@ -1,16 +1,10 @@
 name: CI Web
 
-# Web 管理端骨架：Vue 3 + Vite + Element Plus。
-# 注意：web/package.json 目前只有 dev / build / preview 三个脚本，
-# 因此 lint 与 test 用 --if-present 跳过；等脚本补齐后会自动生效。
+# 在目标分支为 dev 的 PR 中自动运行；只在 web/ 有改动时触发。
+# 不在 push 时重复运行：PR 阶段已经验证过，合并后不必再跑一遍。
 on:
   pull_request:
-    branches: [dev, main]
-    paths:
-      - 'web/**'
-      - '.github/workflows/ci-web.yml'
-  push:
-    branches: [dev, main]
+    branches: [dev]
     paths:
       - 'web/**'
       - '.github/workflows/ci-web.yml'
@@ -23,8 +17,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Web 检查与构建
+  web:
+    name: Web 依赖安装与构建
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -45,6 +39,8 @@ jobs:
       - name: 安装依赖（按 lock 文件锁定版本）
         run: npm ci
 
+      # 下面三步用 --if-present：web/package.json 目前只有 dev / build / preview，
+      # 等 lint、typecheck、test 脚本补齐后会自动生效，无需再改工作流。
       - name: 代码规范（脚本存在时才执行）
         run: npm run lint --if-present
 
@@ -54,14 +50,30 @@ jobs:
       - name: 单元测试（脚本存在时才执行）
         run: npm run test --if-present
 
-      - name: 构建
+      - name: 构建（vite build）
         run: npm run build
 
-      - name: 上传构建产物（仅推送 dev/main 时）
-        if: github.event_name == 'push'
+      - name: 上传构建产物
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: web-dist
           path: web/dist
           if-no-files-found: ignore
           retention-days: 7
+
+      # 结果与本地复现命令一起显示在 PR 页面的 Checks → Summary 里
+      - name: 本地复现命令
+        if: always()
+        run: |
+          {
+            echo "## 本地复现命令"
+            echo ""
+            echo '```bash'
+            echo "cd web            # 需要 Node.js 20.19+ 或 22.12+"
+            echo "npm ci"
+            echo "npm run build"
+            echo '```'
+            echo ""
+            echo "排查说明见 docs/cicd/pr-check-workflow.md"
+          } >> "$GITHUB_STEP_SUMMARY"

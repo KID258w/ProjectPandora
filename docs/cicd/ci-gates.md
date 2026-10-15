@@ -11,11 +11,11 @@
 | `ci.yml` | PR 进 dev/main、推送 dev/main | `规格校验 (OpenSpec)` | `validate --all` 拦截规格结构性错误；输出 strict 欠债报告与各 change 任务进度 |
 | | | `敏感文件扫描` | 按文件名拦截 keystore、`.env` 全变体、`local.properties`、`google-services.json` 等 |
 | | | `Workflow 语法检查` | actionlint（镜像固定 `1.7.12`，内含 shellcheck）检查 workflow 自身与 `run:` 脚本 |
-| `ci-android.yml` | 仅 `android/**` 变化 | `Android 静态检查与测试` | Lint + 单元测试 + 构建 Debug APK，上传报告与 APK |
-| `ci-backend.yml` | 仅 `backend/**` 变化 | `后端检查与测试` | `manage.py check`、`makemigrations --check`、`migrate`、`manage.py test`（Python 3.11） |
-| `ci-web.yml` | 仅 `web/**` 变化 | `Web 检查与构建` | `npm ci` + lint/typecheck/test（脚本存在时才跑）+ `npm run build` |
+| `ci-android.yml` | PR → dev 且 `android/**` 变化 | `Android 测试与 Debug 编译` | Lint + 单元测试 + 编译 Debug APK，上传报告与 APK |
+| `ci-backend.yml` | PR → dev 且 `backend/**` 变化 | `Django 检查与测试` | `manage.py check`、`makemigrations --check`、`migrate`、`manage.py test`（Python 3.11） |
+| `ci-web.yml` | PR → dev 且 `web/**` 变化 | `Web 依赖安装与构建` | `npm ci` + lint/typecheck/test（脚本存在时才跑）+ `npm run build` |
 
-模块级工作流用 `paths` 过滤，改后端不会白跑一次 Gradle 构建。
+模块级工作流用 `paths` 过滤（改后端不会白跑一次 Gradle 构建），且只在目标分支为 `dev` 的 PR 上运行；详见 **[pr-check-workflow.md](pr-check-workflow.md)**（触发条件、检查内容、PR 页面查看与失败排查、本地复现命令）。
 
 ## 2. 能拦什么、拦不住什么
 
