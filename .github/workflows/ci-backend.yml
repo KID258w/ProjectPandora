@@ -1,0 +1,67 @@
+name: CI Backend
+
+# 后端骨架：Django 5.2 + DRF，当前用 SQLite（见 backend/README.md）。
+# 待正式切换到 MySQL 时，在此追加 services: mysql 并补 DATABASE_URL 环境变量。
+on:
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci-backend.yml'
+  push:
+    branches: [dev, main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci-backend.yml'
+
+concurrency:
+  group: ci-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: 后端检查与测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      # 仅用于 CI 的临时值，真实密钥一律走 Actions Secrets
+      DJANGO_SECRET_KEY: ci-only-not-a-real-secret
+      DJANGO_DEBUG: 'True'
+      DJANGO_ALLOWED_HOSTS: 127.0.0.1,localhost
+      SQLITE_PATH: ${{ github.workspace }}/backend/db.sqlite3
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          # backend/README.md 约定 Python 3.11 基线
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Django 自检
+        run: python manage.py check
+
+      - name: 检查是否有漏写的 migration
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: 应用迁移（保证迁移文件可执行）
+        run: python manage.py migrate --noinput
+
+      - name: 自动化测试
+        run: python manage.py test --verbosity 2

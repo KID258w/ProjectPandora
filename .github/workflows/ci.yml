@@ -1,0 +1,120 @@
+name: CI
+
+# 分支模型（见 docs/git/git-workflow.md）：feature/* --PR--> dev --PR--> main
+# 所以 dev 和 main 都要跑：功能 PR 进 dev，阶段发布 PR 进 main。
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  specs:
+    name: 规格校验 (OpenSpec)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 版本必须与本地一致：npx @fission-ai/openspec@1.14.1
+      # 本地若仍是 1.13.2，会看不到 1.14 新增的规则（如需求文字超过 500 字符的告警）。
+      - name: 校验所有 change 与主规格（阻断）
+        run: npx -y @fission-ai/openspec@1.14.1 validate --all
+
+      # dev 上仍有若干「Requirement text is very long (>500 characters)」的 WARNING，
+      # 属于风格欠债，暂不阻断合并，只在 Summary 里报告进度。
+      # 欠债清零后：把上面一步改成 validate --all --strict，并删除本步骤。
+      - name: strict 模式欠债报告（不阻断）
+        if: always()
+        run: |
+          set +e
+          out=$(npx -y @fission-ai/openspec@1.14.1 validate --all --strict 2>&1)
+          code=$?
+          {
+            echo "## OpenSpec 严格模式欠债"
+            echo ""
+            if [ "$code" -eq 0 ]; then
+              echo "✅ strict 已全部通过 —— 可以把阻断步骤改为 --strict 并删除本步骤"
+            else
+              echo "以下问题暂不阻断合并，但需要逐步修掉："
+              echo ""
+              echo '```'
+              # 按文件聚合，避免把超长告警原文贴进 Summary
+              echo "$out" | grep -E "^  (⚠|✗) \[" | sed 's/^  //' | cut -d: -f1 | sort | uniq -c | sort -rn
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: change 任务进度
+        if: always()
+        run: |
+          set -o pipefail
+          {
+            echo "## 变更进度"
+            echo ""
+            echo "| change | 任务完成 | 状态 |"
+            echo "| --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          npx -y @fission-ai/openspec@1.14.1 list --json \
+            | jq -r '.changes[] | "| \(.name) | \(.completedTasks)/\(.totalTasks) | \(.status) |"' \
+            >> "$GITHUB_STEP_SUMMARY" \
+            || echo "| （无 change） | - | - |" >> "$GITHUB_STEP_SUMMARY"
+
+  secret-scan:
+    name: 敏感文件扫描
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # 覆盖范围：文件「名字」这一层 —— 签名文件、keystore、私钥、真实 .env 及其变体。
+      # 注意：源码里硬编码的口令/Token 不在本步骤范围内，那类问题靠 GitHub 原生
+      #       Secret scanning + Push protection（Settings → Code security）兜底。
+      - name: 检查是否误提交密钥/签名文件
+        run: |
+          set -euo pipefail
+          # 放行：docs/ 与 examples/ 下刻意保留的示例，以及待提交的模板文件
+          # （.env.example 必须显式放行，否则会被下面的 .env.* 变体规则误伤）
+          exceptions='^(docs/|examples/)|(^|/)\.env\.(example|sample|template)$'
+          # 命中：*.jks/keystore/p12/p8/pem/key/mobileprovision；.env 及 .env.local/.env.production 等变体；
+          #       local.properties、google-services.json、credentials.json、id_rsa/id_ed25519
+          pattern='\.(jks|keystore|p12|p8|pem|key|mobileprovision)$|(^|/)(\.env($|\..*)?|local\.properties|google-services\.json|credentials\.json|id_rsa.*|id_ed25519.*)$'
+          found=$(git ls-files | grep -Ev "$exceptions" | grep -E "$pattern" || true)
+          if [ -n "$found" ]; then
+            echo "::error::检测到疑似密钥/签名文件，请从 Git 移除并改用 Actions Secrets："
+            echo "$found"
+            exit 1
+          fi
+          echo "OK：未发现敏感文件"
+
+  workflow-lint:
+    name: Workflow 语法检查
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # 镜像钉住版本：官方镜像内含 shellcheck，会把 run: 里的 bash 一起检查。
+      # 用 latest 会因为上游升级而突然报错（不同版本检查规则不同），本地也难复现。
+      # 本地复现：pip install shellcheck-py，再装同版本 actionlint 跑一遍。
+      - name: actionlint
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:${{ github.workspace }}" \
+            -w "${{ github.workspace }}" \
+            rhysd/actionlint:1.7.12 -color

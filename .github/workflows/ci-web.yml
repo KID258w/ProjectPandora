@@ -1,0 +1,67 @@
+name: CI Web
+
+# Web 管理端骨架：Vue 3 + Vite + Element Plus。
+# 注意：web/package.json 目前只有 dev / build / preview 三个脚本，
+# 因此 lint 与 test 用 --if-present 跳过；等脚本补齐后会自动生效。
+on:
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/ci-web.yml'
+  push:
+    branches: [dev, main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/ci-web.yml'
+
+concurrency:
+  group: ci-web-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Web 检查与构建
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 安装依赖（按 lock 文件锁定版本）
+        run: npm ci
+
+      - name: 代码规范（脚本存在时才执行）
+        run: npm run lint --if-present
+
+      - name: 类型检查（脚本存在时才执行）
+        run: npm run typecheck --if-present
+
+      - name: 单元测试（脚本存在时才执行）
+        run: npm run test --if-present
+
+      - name: 构建
+        run: npm run build
+
+      - name: 上传构建产物（仅推送 dev/main 时）
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+          if-no-files-found: ignore
+          retention-days: 7
