@@ -1,89 +1,95 @@
 package com.projectpandora.app.navigation
 
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import android.content.Context
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.*
+import com.projectpandora.app.feature.account.*
 import com.projectpandora.app.feature.ai.AiMapScreen
 import com.projectpandora.app.feature.home.HomeScreen
 import com.projectpandora.app.feature.logs.LogsScreen
-import com.projectpandora.app.feature.profile.ProfileScreen
+import com.projectpandora.app.feature.profile.*
 import com.projectpandora.app.feature.tasks.TaskCenterScreen
 import com.projectpandora.app.feature.views.ViewsScreen
+import com.projectpandora.app.ui.*
+import com.projectpandora.app.ui.theme.PandoraColors as C
+import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
+private object AccountRoute {
+    const val LAUNCH = "launch"
+    const val WELCOME = "welcome"
+    const val LOGIN = "login"
+    const val INFO = "personal-info"
+    const val NOTIFICATIONS = "notifications"
+    const val HELP = "help"
+}
+
 @Composable
-fun PandoraApp() {
-    val navController = rememberNavController()
-    val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = backStackEntry?.destination
-    val currentRoute = currentDestination?.route
-    val selectedTab = MainTab.entries.firstOrNull { tab ->
-        currentDestination?.hierarchy?.any { it.route == tab.route } == true
+fun PandoraApp(startupDelayMillis: Long = 1000L) {
+    val context = LocalContext.current.applicationContext
+    val store = remember { DemoSessionStore(context.getSharedPreferences("pandora_demo_ui", Context.MODE_PRIVATE)) }
+    val factory = remember {
+        object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T = AccountViewModel(store) as T
+        }
     }
-
-    Scaffold(
-        topBar = {
-            if (currentRoute == AppRoute.TASK_CENTER) {
-                CenterAlignedTopAppBar(
-                    title = { Text("任务中心") },
-                    navigationIcon = {
-                        TextButton(onClick = { navController.popBackStack() }) {
-                            Text("返回")
-                        }
-                    },
-                )
-            }
-        },
-        bottomBar = {
-            if (selectedTab != null) {
-                NavigationBar {
-                    MainTab.entries.forEach { tab ->
-                        NavigationBarItem(
-                            selected = selectedTab == tab,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Text(tab.label.take(1)) },
-                            label = { Text(tab.label) },
-                        )
+    val model: AccountViewModel = viewModel(factory = factory)
+    val nav = rememberNavController()
+    val entry by nav.currentBackStackEntryAsState()
+    val route = entry?.destination?.route ?: AccountRoute.LAUNCH
+    val selectedTab = MainTab.entries.find { it.route == route }
+    val user = model.user
+    fun resetTo(destination: String) {
+        nav.navigate(destination) { popUpTo(nav.graph.id) { inclusive = true }; launchSingleTop = true }
+    }
+    fun selectTab(tab: MainTab) {
+        nav.navigate(tab.route) {
+            popUpTo(MainTab.HOME.route) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+    LaunchedEffect(user, route) {
+        if (user != null && route == AccountRoute.LOGIN) resetTo(MainTab.HOME.route)
+    }
+    Box(Modifier.fillMaxSize().background(if (route == AccountRoute.LAUNCH) C.Amber else Color.White)
+        .windowInsetsPadding(WindowInsets.safeDrawing)) {
+        Scaffold(containerColor = Color.White, contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            bottomBar = { if (selectedTab != null && user != null) PandoraBottomBar(selectedTab, ::selectTab) }) { padding ->
+            NavHost(nav, startDestination = AccountRoute.LAUNCH, Modifier.padding(padding)) {
+                composable(AccountRoute.LAUNCH) {
+                    LaunchScreen()
+                    LaunchedEffect(Unit) {
+                        delay(startupDelayMillis)
+                        resetTo(if (model.user != null) MainTab.HOME.route else AccountRoute.WELCOME)
                     }
                 }
+                composable(AccountRoute.WELCOME) { WelcomeScreen { nav.navigate(AccountRoute.LOGIN) } }
+                composable(AccountRoute.LOGIN) { LoginScreen(model) }
+                composable(MainTab.HOME.route) { user?.let { HomeScreen(it, { selectTab(MainTab.VIEWS) }, { selectTab(MainTab.LOGS) }) } }
+                composable(MainTab.VIEWS.route) { ViewsScreen { nav.navigate(AppRoute.TASK_CENTER) } }
+                composable(MainTab.LOGS.route) { LogsScreen() }
+                composable(MainTab.AI_MAP.route) { AiMapScreen() }
+                composable(MainTab.PROFILE.route) {
+                    user?.let {
+                        ProfileScreen(it, { nav.navigate(AccountRoute.INFO) }, { nav.navigate(AccountRoute.NOTIFICATIONS) },
+                            { nav.navigate(AccountRoute.HELP) }, { model.logout(); resetTo(AccountRoute.LOGIN) })
+                    }
+                }
+                composable(AccountRoute.INFO) { user?.let { PersonalInfoScreen(it) { nav.popBackStack() } } }
+                composable(AccountRoute.NOTIFICATIONS) { NotificationScreen(store) { nav.popBackStack() } }
+                composable(AccountRoute.HELP) { HelpScreen { nav.popBackStack() } }
+                composable(AppRoute.TASK_CENTER) { Column { BackButton { nav.popBackStack() }; TaskCenterScreen() } }
             }
-        },
-    ) { contentPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = MainTab.HOME.route,
-            modifier = Modifier.padding(contentPadding),
-        ) {
-            composable(MainTab.HOME.route) { HomeScreen() }
-            composable(MainTab.VIEWS.route) {
-                ViewsScreen(onOpenTaskCenter = { navController.navigate(AppRoute.TASK_CENTER) })
-            }
-            composable(MainTab.LOGS.route) { LogsScreen() }
-            composable(MainTab.AI_MAP.route) { AiMapScreen() }
-            composable(MainTab.PROFILE.route) { ProfileScreen() }
-            composable(AppRoute.TASK_CENTER) { TaskCenterScreen() }
         }
     }
 }
