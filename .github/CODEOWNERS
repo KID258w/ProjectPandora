@@ -1,0 +1,31 @@
+# CODEOWNERS —— 当前阶段：所有文件由仓库建立者 @KID258w 审核
+#
+# 技术栈已在 openspec/config.yaml 中确定（Android: Kotlin/Compose，Web: Vue 3 + Element Plus，
+# Backend: Django REST Framework，DB: 先 SQLite 后 MySQL），但模块负责人尚未按人分工，
+# 暂时统一由 @KID258w 把关。分工确定后把下面各路径补上（每行至少 2 人）。
+#
+# ⚠️ 已知风险（重要）：某个文件只有 1 个 owner，而该 owner 恰好是 PR 作者时，GitHub 不会
+#    请求他审自己，于是"无人可批准"。因此：
+#      - ruleset 里建议只勾「Require a pull request before merging → approvals: 1」，
+#        不要勾「Require review from Code Owners」。
+#      - 想强制"必须 code owner 批准"，就把每行写成至少 2 个账号。
+#
+# 生效前提：账号需有 write 权限；GitHub 读取的是 PR 的 base 分支上的版本。
+#
+# 对应团队约定：PR 合并前至少由一名非作者成员审阅（docs/git/git-workflow.md）。
+
+# 兜底：所有文件
+*                       @KID258w
+
+# 规格与需求文档
+/openspec/              @KID258w
+/docs/                  @KID258w
+
+# CI/CD 与仓库配置：任何改动都要有人复核
+/.github/               @KID258w
+
+# 模块分工（技术栈已定，待按人分配后启用；每行至少 2 人）
+# /android/             @账号A @账号B      # Kotlin + Jetpack Compose
+# /backend/             @账号C @账号D      # Django REST Framework
+# /web/                 @账号E @账号F      # Vue 3 + Element Plus
+# /deploy/              @账号G @账号H      # Docker / Compose / 部署

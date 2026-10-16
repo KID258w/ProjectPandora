@@ -27,22 +27,24 @@
 
 ## 统一命令速查
 
-团队只使用一套 OpenSpec 流程；Claude Code 与 Codex 只是触发同一动作时的语法不同。命令后的 change 名称可省略，但多人并行或存在多个 change 时，应明确写出名称。
+团队只使用一套 OpenSpec 流程；Claude Code、Codex 与 pi 只是触发同一动作时的语法不同。命令后的 change 名称可省略，但多人并行或存在多个 change 时，应明确写出名称。
 
-| 使用时机 | 统一动作 | Claude Code | Codex |
-| --- | --- | --- | --- |
-| 需求还不清楚，需要讨论，不写代码 | 探索 | `/opsx:explore [主题]` | `$openspec-explore [主题]` |
-| 创建完整方案 | 提案 | `/opsx:propose [需求描述或名称]` | `$openspec-propose [需求描述或名称]` |
-| 方案需要调整 | 更新 | 直接说明要更新的 change 和内容 | 直接说明要更新的 change 和内容 |
-| 按 `tasks.md` 实现并勾选任务 | 实施 | `/opsx:apply [change-name]` | `$openspec-apply-change [change-name]` |
-| 提前将 delta specs 合入主规格，可选 | 同步 | `/opsx:sync [change-name]` | `$openspec-sync-specs [change-name]` |
-| 完成后同步规格并归档 | 归档 | `/opsx:archive [change-name]` | `$openspec-archive-change [change-name]` |
+| 使用时机 | 统一动作 | Claude Code | Codex | pi |
+| --- | --- | --- | --- | --- |
+| 需求还不清楚，需要讨论，不写代码 | 探索 | `/opsx:explore [主题]` | `$openspec-explore [主题]` | `/skill:openspec-explore [主题]` |
+| 创建完整方案 | 提案 | `/opsx:propose [需求描述或名称]` | `$openspec-propose [需求描述或名称]` | `/skill:openspec-propose [需求描述或名称]` |
+| 方案需要调整 | 更新 | 直接说明要更新的 change 和内容 | 直接说明要更新的 change 和内容 | 同左 |
+| 按 `tasks.md` 实现并勾选任务 | 实施 | `/opsx:apply [change-name]` | `$openspec-apply-change [change-name]` | `/skill:openspec-apply-change [change-name]` |
+| 提前将 delta specs 合入主规格，可选 | 同步 | `/opsx:sync [change-name]` | `$openspec-sync-specs [change-name]` | `/skill:openspec-sync-specs [change-name]` |
+| 完成后同步规格并归档 | 归档 | `/opsx:archive [change-name]` | `$openspec-archive-change [change-name]` | `/skill:openspec-archive-change [change-name]` |
 
 默认路径是：探索（可选）-> 提案 -> 人工评审 -> 实施 -> 归档。通常无需单独执行“同步”，因为归档时会提示并处理规格同步。
 
 示例：无论使用哪个工具，团队要表达的都是同一件事——“为 `add-task-assignment` 创建方案”或“实施 `add-task-assignment`”。在 Claude Code 输入 `/opsx:propose 增加团队长派发任务和员工更新进度`；在 Codex 输入 `$openspec-propose 增加团队长派发任务和员工更新进度`。
 
 如果 Codex 输入 `$` 后没有出现候选项，确认 IDE 工作区根目录为 ProjectPandora，且 `.codex/skills/` 已存在；新开 Codex 对话或重载窗口后再试。Claude Code 则应确认 `.claude/commands/opsx/` 已存在。
+
+pi 的技能位于 `.agents/skills/openspec-*/SKILL.md`（按 description 自动匹配，也可用 `/skill:<name>` 强制调用）；pi 必须在 **ProjectPandora 目录内**启动才能发现项目级技能，或者把这些技能安装到用户级 `~/.agents/skills/`。编辑技能后用 `/reload` 重新加载。pi 版技能已按 pi 的工具集改写（不使用 AskUserQuestion / TodoWrite / 未授权的子代理），步骤与判定标准与其他工具一致。
 
 ## CLI 检查命令
 

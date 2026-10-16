@@ -1,0 +1,57 @@
+# 各模块内部已有自己的 .gitignore（android/、backend/、web/、demo/），
+# 这里只放"跨模块 + 一眼就会出事"的规则。
+
+# ==== 操作系统与编辑器 ====
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+*.iml
+.vscode/
+*.swp
+*.log
+
+# ==== 环境与密钥（一律走 Actions Secrets，禁止入库）====
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+*.jks
+*.keystore
+*.p12
+*.p8
+*.pem
+*.key
+*.mobileprovision
+id_rsa*
+id_ed25519*
+local.properties
+google-services.json
+credentials.json
+
+# ==== 本地数据库与运行时数据 ====
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+
+# ==== 构建产物 ====
+dist/
+build/
+coverage/
+*.apk
+*.aab
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.gradle/
+
+# Gradle wrapper 必须入库，别被通用产物规则误伤
+!android/gradle/wrapper/gradle-wrapper.jar
+!demo/gradle/wrapper/gradle-wrapper.jar

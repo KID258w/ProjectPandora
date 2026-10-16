@@ -1,0 +1,88 @@
+name: CI Android
+
+# 在目标分支为 dev 的 PR 中自动运行；只在 android/ 有改动时触发。
+# 不在 push 时重复运行：PR 阶段已经验证过，合并后不必再跑一遍。
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - 'android/**'
+      - '.github/workflows/ci-android.yml'
+
+concurrency:
+  group: ci-android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android 测试与 Debug 编译
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # android/gradle/libs.versions.toml 使用 AGP 9.x，需要 JDK 17 以上，这里取 21
+          java-version: '21'
+
+      - name: 配置 Gradle 缓存
+        uses: gradle/actions/setup-gradle@v4
+
+      # android/gradlew 在 Git 中的模式是 100644（没有可执行位），Linux runner 上必须补。
+      # 根治办法（另开一个 chore PR 执行一次）：
+      #   git update-index --chmod=+x android/gradlew && git commit -m "chore: 给 gradlew 加可执行位"
+      - name: 修正 gradlew 执行权限
+        run: chmod +x gradlew
+
+      - name: Android Lint
+        run: ./gradlew lintDebug --no-daemon
+
+      - name: 单元测试
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: 编译 Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: 上传测试与 Lint 报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-reports
+          path: android/app/build/reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: 上传 Debug APK（测试同学可直接下载安装）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # 结果与本地复现命令一起显示在 PR 页面的 Checks → Summary 里
+      - name: 本地复现命令
+        if: always()
+        run: |
+          {
+            echo "## 本地复现命令"
+            echo ""
+            echo '```bash'
+            echo "cd android        # 需要 JDK 17 以上（CI 用 21）"
+            echo "./gradlew lintDebug testDebugUnitTest assembleDebug"
+            echo '```'
+            echo ""
+            echo "排查说明见 docs/cicd/pr-check-workflow.md"
+          } >> "$GITHUB_STEP_SUMMARY"
