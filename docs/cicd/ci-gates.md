@@ -1,5 +1,8 @@
 # CI 门禁说明（CI/CD 负责人维护）
 
+> **文档定位**：本文是**维护手册**（有哪些门禁、ruleset 怎么配、还剩哪些欠债），面向 CI/CD 负责人与仓库管理员。
+> 面向使用者的功能介绍（功能是什么、PR 页面怎么看结果、失败了怎么排查、本地怎么复现）见 **[pr-check-workflow.md](pr-check-workflow.md)**。
+>
 > 分支模型见 [docs/git/git-workflow.md](../git/git-workflow.md)：
 > `feature/<Issue编号>-<功能>` → PR → `dev` → PR → `main`
 > 部署方案见 [docs/cicd/cicd-guide.md](cicd-guide.md)（镜像、GHCR、Compose、服务器）。
@@ -45,6 +48,8 @@
 
 ⚠️ 若已经存在只配置了 `update`（限制直推）的 ruleset，注意：**限制直推但不要求 PR 批准/状态检查，等于"门锁上了但没人检查"**。需要补齐上面两行。
 
+**当前仓库实际状态**（以便区分"该怎么配"与"已经配成什么样"）：已有一条名为 `merge-main-and-dev-owner-only` 的 ruleset，覆盖 `main` 与 `dev`，状态 Active，Bypass 为空，但**只启用了限制直推（update）**，尚未配置必需批准与必需状态检查，也未开启 Require review from Code Owners。
+
 验证方法：开一个测试 PR 什么都不做 → Merge 按钮应为灰色；本地 `git push origin dev` 应被拒绝。
 
 ## 4. 本地命令
@@ -82,9 +87,9 @@ cd web     && npm ci && npm run build
 
 ## 6. 验收清单
 
-- [ ] `dev` 与 `main` 各有两条完整 ruleset（批准 + 必需检查 + 禁止强推）
+- [ ] `dev` 与 `main` 至少各被一条完整 ruleset 覆盖（允许 PR、必需批准、必需检查、禁止强推）
 - [ ] 开一个 PR 能看到 `规格校验 (OpenSpec)`、`敏感文件扫描`、`Workflow 语法检查`
-- [ ] 改 `android/**` 的 PR 额外出现 `Android 静态检查与测试`，可下载报告与 APK
+- [ ] 改 `android/**` 的 PR 额外出现 `Android 测试与 Debug 编译`，可下载报告与 APK
 - [ ] 故意提交 `.env.local` 或 `local.properties` → 被拦截（然后撤回）
 - [ ] 故意建一个只有 `proposal.md` 的 change → 被拦截（然后撤回）
 - [ ] 开启 Secret scanning + Push protection
