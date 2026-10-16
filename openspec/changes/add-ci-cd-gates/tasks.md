@@ -16,7 +16,7 @@
 - [x] 上传产物：Android 的测试/Lint 报告与 Debug APK、Web 的 `dist`
 - [x] 新增 `docs/cicd/pr-check-workflow.md`：触发条件、检查内容、失败排查方式、本地复现命令
 - [x] 本地验证：YAML 解析、actionlint（含 shellcheck）、`openspec validate`
-- [ ] 开 PR 到 dev，确认三项检查出现在 PR 页面且结果可查看
+- [x] 开 PR 到 dev，确认三项检查出现在 PR 页面且结果可查看（PR #7：四个 check 均 success）
 
 ## 3. 协作模板与仓库卫生
 
