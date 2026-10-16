@@ -28,7 +28,6 @@
 ### 3. 协作模板与仓库卫生
 
 - PR 模板、Issue 表单（用户故事 / 缺陷）、CODEOWNERS
-- Dependabot：`github-actions`、`npm(/web)`、`pip(/backend)`、`gradle(/android)`
 - 根 `.gitignore`：密钥、IDE 配置、构建产物（保留 gradle-wrapper.jar）
 
 ### 4. 文档

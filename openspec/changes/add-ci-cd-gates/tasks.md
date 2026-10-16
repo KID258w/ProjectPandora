@@ -23,7 +23,6 @@
 - [x] PR 模板（分支命名、本地校验、任务勾选、密钥、不直推 dev/main）
 - [x] Issue 表单（用户故事 / 缺陷）
 - [x] CODEOWNERS（并记录"唯一 owner 即作者"的风险）
-- [x] Dependabot：github-actions、npm(/web)、pip(/backend)、gradle(/android)
 - [x] 根 `.gitignore`（密钥、IDE、构建产物；保留 gradle-wrapper.jar）
 
 ## 4. 通用门禁文档
