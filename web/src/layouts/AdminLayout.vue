@@ -1,8 +1,9 @@
 <script setup>
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
+const router = useRouter()
 const pageTitle = computed(() => route.meta.title ?? '工作台')
 </script>
 
@@ -55,6 +56,7 @@ const pageTitle = computed(() => route.meta.title ?? '工作台')
         <div class="admin-chip">
           <div class="avatar">管</div>
           <span>系统管理员</span>
+          <el-button class="logout-button" text @click="router.push('/login')">退出</el-button>
         </div>
       </el-header>
       <el-main class="page-content">
