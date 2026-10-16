@@ -1,58 +1,48 @@
 package com.projectpandora.app.ui.theme
 
-import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
-)
+object PandoraColors {
+    val Amber = Color(0xFFFDC848)
+    val AmberPale = Color(0xFFFFF3D6)
+    val Ink = Color(0xFF1C1F24)
+    val Muted = Color(0xFF666666)
+    val Line = Color(0xFFE2E7EC)
+    val Orange = Color(0xFFC88622)
+    val Selected = Color(0xFFBA6110)
+    val Pressed = Color(0xFFD76E12)
+    val Error = Color(0xFFB3261E)
+    val ErrorPale = Color(0xFFFFF0EE)
+    val ErrorBorder = Color(0xFFF1B9B5)
+    val Blue = Color(0xFF175A9E)
+    val BluePale = Color(0xFFEAF3FF)
+    val Teal = Color(0xFF126B57)
+    val TealPale = Color(0xFFE7F8F3)
+    val Violet = Color(0xFF7356BB)
+    val VioletPale = Color(0xFFF1EDFF)
+}
 
 @Composable
-fun PandoraAppTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
-) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
+fun PandoraAppTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = lightColorScheme(
+            primary = PandoraColors.Amber,
+            onPrimary = PandoraColors.Ink,
+            primaryContainer = PandoraColors.AmberPale,
+            onPrimaryContainer = PandoraColors.Ink,
+            background = Color.White,
+            surface = Color.White,
+            onSurface = PandoraColors.Ink,
+            onBackground = PandoraColors.Ink,
+            onSurfaceVariant = PandoraColors.Muted,
+            outline = PandoraColors.Line,
+            error = PandoraColors.Error,
+            errorContainer = PandoraColors.ErrorPale,
+        ),
         typography = Typography,
-        content = content
+        content = content,
     )
 }
