@@ -176,3 +176,22 @@ class AccountApiTests(APITestCase):
         response = paths["/api/v1/admin/users/"]["post"]["responses"]["201"]["content"]["application/json"]["schema"]
         self.assertEqual(response["properties"]["data"]["$ref"], "#/components/schemas/User")
         self.assertNotIn("/api/auth/token/", paths)
+
+    def test_admin_user_creation_form_defaults_to_valid_admin(self):
+        from .admin import PandoraUserCreationForm
+
+        form = PandoraUserCreationForm(
+            {
+                "username": "admin_ui",
+                "password1": self.password,
+                "password2": self.password,
+                "account_type": "admin",
+                "business_role": "",
+                "department": "",
+                "team": "",
+                "manager": "",
+            }
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        user = form.save()
+        self.assertEqual(user.account_type, "admin")
