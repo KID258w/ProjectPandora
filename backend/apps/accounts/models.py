@@ -62,7 +62,7 @@ class User(AbstractUser):
                 ),
                 name="valid_account_placement",
             ),
-            models.UniqueConstraint(fields=["business_role"], condition=Q(business_role="founder"), name="one_founder"),
-            models.UniqueConstraint(fields=["department"], condition=Q(business_role="department_manager"), name="one_manager_per_department"),
-            models.UniqueConstraint(fields=["team"], condition=Q(business_role="team_leader"), name="one_leader_per_team"),
+            models.UniqueConstraint(fields=["business_role"], condition=Q(business_role="founder", is_active=True), name="one_founder"),
+            models.UniqueConstraint(fields=["department"], condition=Q(business_role="department_manager", is_active=True), name="one_manager_per_department"),
+            models.UniqueConstraint(fields=["team"], condition=Q(business_role="team_leader", is_active=True), name="one_leader_per_team"),
         ]

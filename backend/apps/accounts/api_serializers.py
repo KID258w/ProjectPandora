@@ -71,10 +71,11 @@ class BusinessUserCreateSerializer(StrictInputMixin, serializers.ModelSerializer
     def validate(self, attrs):
         role = attrs["business_role"]
         department, team = attrs.get("department"), attrs.get("team")
+        is_active = attrs.get("is_active", True)
         if role == User.Role.FOUNDER:
             if department or team:
                 raise serializers.ValidationError("创始人不能指定部门或团队。")
-            if User.objects.filter(business_role=role).exists():
+            if is_active and User.objects.filter(business_role=role, is_active=True).exists():
                 raise serializers.ValidationError({"business_role": "已存在创始人。"})
             manager = None
         else:
@@ -83,14 +84,14 @@ class BusinessUserCreateSerializer(StrictInputMixin, serializers.ModelSerializer
             if role == User.Role.DEPARTMENT_MANAGER:
                 if team is not None:
                     raise serializers.ValidationError({"team_id": "部门经理不能指定团队。"})
-                if User.objects.filter(business_role=role, department=department).exists():
+                if is_active and User.objects.filter(business_role=role, department=department, is_active=True).exists():
                     raise serializers.ValidationError({"business_role": "该部门已存在经理。"})
                 manager_query = {"business_role": User.Role.FOUNDER}
             else:
                 if team is None or team.department_id != department.pk:
                     raise serializers.ValidationError({"team_id": "请选择所选部门下的团队。"})
                 if role == User.Role.TEAM_LEADER:
-                    if User.objects.filter(business_role=role, team=team).exists():
+                    if is_active and User.objects.filter(business_role=role, team=team, is_active=True).exists():
                         raise serializers.ValidationError({"business_role": "该团队已存在团队长。"})
                     manager_query = {"business_role": User.Role.DEPARTMENT_MANAGER, "department": department}
                 else:

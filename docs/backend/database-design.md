@@ -10,9 +10,9 @@
 | Department / accounts_department | id BigAutoField；name 最长 100 且全局唯一；description 文本默认空；created_at 自动时间 |
 | Team / accounts_team | id BigAutoField；name 最长 100；description 默认空；department_id 必填外键；created_at 自动时间；(department_id, name) 唯一 |
 
-用户和组织外键均为 PROTECT，manager_id 自关联 User，反向 direct_reports；本次没有删除 API。数据库 CHECK 校验账号类型与角色组织形状：管理员/创始人没有组织和上级，部门经理有部门/上级无团队，团队长/员工有部门、团队和上级。数据库条件唯一约束保证一位创始人、一部门一经理、一团队一团队长（含停用）。跨表的团队部门一致、上级身份/组织和启用状态由服务端录入校验，manager_id 不接收客户端输入。业务账号不会自动获得 Django staff/superuser 权限。
+用户和组织外键均为 PROTECT，manager_id 自关联 User，反向 direct_reports；本次没有删除 API。数据库 CHECK 校验账号类型与角色组织形状：管理员/创始人没有组织和上级，部门经理有部门/上级无团队，团队长/员工有部门、团队和上级。数据库条件唯一约束保证一位在职创始人、一部门一在职经理、一团队一在职团队长；唯一约束和录入重复校验都过滤 `is_active=True`，停用账号不占用名额。跨表的团队部门一致、上级身份/组织和启用状态由服务端录入校验，manager_id 不接收客户端输入。业务账号不会自动获得 Django staff/superuser 权限。
 
-本次没有组织 status、负责人替换/停用工作流、审计表。下文的 status、审计、调动历史和其它业务实体不能视为已落地。当前 SQLite 支持条件唯一约束；未来 MySQL 迁移必须先重新设计等价约束并验证，不能直接假定条件索引可用。0002 对已有普通账号会停止迁移，要求显式规划身份数据迁移，不会自动提升权限。
+本次没有组织 status、负责人替换/停用工作流、审计表。下文的 status、审计、调动历史和其它业务实体不能视为已落地。当前 SQLite 支持条件唯一约束；未来 MySQL 迁移必须先重新设计等价约束并验证，不能直接假定条件索引可用。0002 对已有普通账号会停止迁移，要求显式规划身份数据迁移，不会自动提升权限；0003 将创始人/部门经理/团队长唯一约束改为仅对 `is_active=True` 生效。
 
 > 维护说明：由项目统筹与后端同学共同维护，作为数据库设计的持续文档。本文描述逻辑模型，字段、类型、索引及历史策略可随实现和需求协商调整。  
 > 当前后端使用 SQLite 开发；下表按 Django ORM 可实现、未来可迁移 MySQL 的关系模型设计。  

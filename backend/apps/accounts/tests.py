@@ -168,6 +168,15 @@ class AccountApiTests(APITestCase):
         with self.assertRaises(IntegrityError), transaction.atomic():
             User.objects.create_user(username="duplicate", business_role="department_manager", department=self.department, manager=users[0])
 
+    def test_inactive_leaders_do_not_block_active_replacements(self):
+        self.hierarchy()
+        User.objects.filter(username="founder").update(is_active=False)
+        self.assertEqual(self.create_user("founder2", "founder").status_code, 201)
+        User.objects.filter(username="manager").update(is_active=False)
+        self.assertEqual(self.create_user("manager2", "department_manager", self.department).status_code, 201)
+        User.objects.filter(username="leader").update(is_active=False)
+        self.assertEqual(self.create_user("leader2", "team_leader", self.department, self.team).status_code, 201)
+
     def test_schema_matches_envelope_and_user_response(self):
         schema = self.client.get("/api/schema/", HTTP_ACCEPT="application/json").json()
         paths = schema["paths"]

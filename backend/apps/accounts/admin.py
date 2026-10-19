@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
-from django.contrib.auth.forms import UserChangeForm, UserCreationForm
+from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 
 from .models import User
 
@@ -38,8 +38,8 @@ def _validate_placement(cleaned_data):
         raise forms.ValidationError("业务用户必须选择有效的业务角色。")
 
 
-class PandoraUserCreationForm(UserCreationForm):
-    class Meta(UserCreationForm.Meta):
+class PandoraUserCreationForm(AdminUserCreationForm):
+    class Meta(AdminUserCreationForm.Meta):
         model = User
         fields = ("username", "display_name", "account_type", "business_role", "department", "team", "manager")
 

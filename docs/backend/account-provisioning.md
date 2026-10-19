@@ -90,7 +90,7 @@ description 可省略，默认空字符串。部门名全局唯一，团队名�
 {"code":200,"message":"success","data":{"count":1,"next":null,"previous":null,"results":[{"id":5,"username":"employee01","account_type":"business","business_role":"employee","display_name":"张三","department_id":1,"department_name":"研发部","team_id":1,"team_name":"后端组","manager_id":4,"manager_name":"团队长","is_active":true}]},"requestId":"2e6c0997-3265-45ad-b08e-6b6b0b387aff"}
 ```
 
-自动上级：创始人无组织/上级；经理关联创始人；团队长关联本部门经理；员工关联本团队长。创建时上级必须存在且启用。当前只支持一位创始人，避免自动选取歧义；一部门一经理、一团队一团队长，停用不释放名额。团队必须属于指定部门。
+自动上级：创始人无组织/上级；经理关联创始人；团队长关联本部门经理；员工关联本团队长。创建时上级必须存在且启用。当前只支持一位在职创始人，避免自动选取歧义；一部门一在职经理、一团队一在职团队长，唯一约束与重复校验仅针对 `is_active=True` 的账号，停用账号不占用名额。团队必须属于指定部门。
 
 禁止传入 manager_id、account_type、is_staff、is_superuser 等字段；未知字段返回 400，不静默忽略。录入与关系写入在同一事务内，数据库唯一约束兜底并发重复录入，返回 400 而非 500。
 
