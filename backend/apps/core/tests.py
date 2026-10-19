@@ -24,14 +24,14 @@ class HealthCheckTests(APITestCase):
         )
 
     def test_jwt_token_can_be_obtained_with_username_and_password(self):
-        get_user_model().objects.create_user(username="demo", password="local-test-pass-123")
+        get_user_model().objects.create_superuser(username="demo", password="local-test-pass-123")
 
         response = self.client.post(
-            "/api/auth/token/",
+            "/api/v1/admin/auth/token/",
             {"username": "demo", "password": "local-test-pass-123"},
             format="json",
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("access", response.json())
-        self.assertIn("refresh", response.json())
+        self.assertIn("access", response.json()["data"])
+        self.assertIn("refresh", response.json()["data"])

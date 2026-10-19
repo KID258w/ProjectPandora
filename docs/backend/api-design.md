@@ -1,5 +1,7 @@
 # 后端 API 设计
 
+> **Issue #6 实施更新**：账号录入、组织列表/创建与两端认证已实现。各接口请求/响应示例、错误、分页、身份规则以 [账号录入与登录契约](account-provisioning.md) 为准。以下其它业务内容仍为规划，旧 `/api/auth/token/` 入口已移除。
+
 > 维护说明：由项目统筹与后端同学共同维护，作为 API 设计的持续文档。接口路径、字段名和错误格式可随开发协商调整。  
 > 依据：`docs/requirements/01` 至 `06`、`docs/cooperate/swagger-guide.md` 与当前 Django 骨架。需求变化时以最新确认的需求为准。
 
@@ -7,16 +9,16 @@
 
 ### 1.1 当前实现与目标接口
 
-当前后端仅有健康检查、JWT 获取/刷新及 Swagger 文档路由，业务接口尚未实现。下方的响应样例展示本设计要求的统一外层结构；现有骨架响应需在后端落实该规范时同步调整：
+当前已实现健康检查、文档及 Issue #6 的版本化账号/组织接口。版本化 API 已采用统一外层响应；健康检查保持原响应。
 
 | 当前已存在 | 路径 |
 |---|---|
 | 健康检查 | `GET /api/health/` |
-| 获取 JWT | `POST /api/auth/token/` |
-| 刷新 JWT | `POST /api/auth/token/refresh/` |
+| 获取 JWT | `POST /api/v1/admin/auth/token/`、`POST /api/v1/app/auth/token/` |
+| 刷新 JWT | `POST /api/v1/admin/auth/token/refresh/`、`POST /api/v1/app/auth/token/refresh/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
-下文的 `/api/v1/...` 均为**建议的业务接口**，不是当前已上线接口。开始联调前，应在 Django 路由和 Swagger 中落实并冻结实际路径。
+下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现，其余仍为建议接口，不代表已上线。
 
 ### 1.2 通用约定
 

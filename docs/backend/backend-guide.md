@@ -9,7 +9,7 @@
 - 认证基础：Simple JWT，提供获取和刷新令牌接口。
 - 接口文档：OpenAPI、Swagger UI、ReDoc。
 - 已有公开健康检查：`GET /api/health/`。
-- 已建立自定义用户模型，当前登录名使用 `username`，并有 `display_name` 字段；业务角色、部门/团队、RBAC 权限和业务模块还没有实现。
+- 已建立自定义用户模型，当前登录名使用 `username`，并有 `display_name` 字段；Issue #6 已落地管理员/业务账号隔离、账号录入、部门/团队列表与创建。完整组织管理、RBAC 和后续业务模块仍未实现。
 - Vue 本地开发地址 `http://localhost:5173` 与 `http://127.0.0.1:5173` 已加入 CORS 白名单。
 - Windows 本地开发使用 Django `runserver`。Gunicorn 依赖只在非 Windows 环境安装，供后续 Linux/Docker 部署使用。
 
@@ -99,12 +99,12 @@ python manage.py makemigrations
 python manage.py migrate
 ```
 
-JWT 接口：
+JWT 与账号接口：
 
-- `POST /api/auth/token/`：提交 JSON `{ "username": "账号", "password": "密码" }`，获取 `access` 和 `refresh`。
-- `POST /api/auth/token/refresh/`：提交 JSON `{ "refresh": "刷新令牌" }`，获取新的 `access`。
+- `POST /api/v1/admin/auth/token/`、`POST /api/v1/app/auth/token/`：提交 `{ "username": "账号", "password": "密码" }`，获取 `access` 和 `refresh`。
+- `POST /api/v1/admin/auth/token/refresh/`、`POST /api/v1/app/auth/token/refresh/`：提交 `{ "refresh": "刷新令牌" }`，获取新的 `access`。
 
-除健康检查、令牌获取/刷新和文档入口外，DRF 接口默认要求携带有效 JWT。当前还没有具体业务 API。
+两端登录、当前用户、部门/团队列表与创建、业务账号录入的完整请求/响应与错误约定见 [`account-provisioning.md`](account-provisioning.md)。除健康检查、登录/刷新和文档入口外，版本化业务接口默认要求携带有效 JWT；当前已落地管理员登录、当前用户、部门/团队列表与创建、业务账号录入与 App 登录，任务、日志、工作视图和 AI 等业务 API 仍在后续。
 
 ## 停止后端进程
 
@@ -148,6 +148,6 @@ python manage.py runserver 8001
 
 ## 当前范围与注意事项
 
-这只是后端基础骨架，不代表任务派发、审批验收、日志、工作视图、AI、组织管理或 RBAC 已经完成。新增业务前应先对照 `docs/requirements/` 和对应 OpenSpec change 确认需求。
+这只是后端基础骨架；账号与基础组织已经落地，但任务派发、审批验收、日志、工作视图、AI、完整组织管理（编辑/停用/调动/审计）或 RBAC 尚未完成。新增业务前应先对照 `docs/requirements/` 和对应 OpenSpec change 确认需求。
 
 本地 SQLite 适合当前原型与早期开发。后续多人联调或部署时，再由团队统一决定 MySQL 配置、Docker 数据卷和环境变量；不要把开发 SQLite 文件当作共享数据库。
