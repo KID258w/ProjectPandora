@@ -19,27 +19,38 @@ import java.io.File
 class AccountUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
-    private val preferences get() = context.getSharedPreferences("pandora_demo_ui", Context.MODE_PRIVATE)
+    private val preferences get() = context.getSharedPreferences("pandora_preferences", Context.MODE_PRIVATE)
+    private lateinit var repository: FakeAccountRepository
 
-    @Before fun clearSession() { preferences.edit().clear().commit() }
+    @Before fun clearSession() {
+        preferences.edit().clear().commit()
+        context.getSharedPreferences("pandora_secure_session", Context.MODE_PRIVATE).edit().clear().commit()
+        repository = FakeAccountRepository()
+    }
 
     private fun start() {
-        compose.setContent { PandoraAppTheme { PandoraApp(startupDelayMillis = 0) } }
+        compose.setContent { PandoraAppTheme { PandoraApp(startupDelayMillis = 0, accountRepository = repository) } }
     }
-    private fun login(account: String = "chenning") {
+
+    private fun login(account: String = TestUsers.EMPLOYEE.account) {
         compose.onNodeWithText("进入潘多拉").performScrollTo().performClick()
         compose.onNodeWithTag("account").performTextInput(account)
-        compose.onNodeWithTag("password").performTextInput(DemoAccounts.PASSWORD)
+        compose.onNodeWithTag("password").performTextInput(TestUsers.PASSWORD)
         compose.onNodeWithText("登录", useUnmergedTree = true).performScrollTo().performClick()
-        compose.waitUntil(10000) { compose.onAllNodesWithText("你好，${DemoAccounts.users.first { it.account == account }.name}").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10000) {
+            compose.onAllNodesWithText("你好，${TestUsers.byAccount(account).name}").fetchSemanticsNodes().isNotEmpty()
+        }
     }
+
     private fun screenshot(name: String) {
         compose.waitForIdle()
         val directory = File(context.getExternalFilesDir(null), "ui-review").apply { mkdirs() }
         File(directory, "$name.png").outputStream().use {
-            compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+            compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
+                .compress(Bitmap.CompressFormat.PNG, 100, it)
         }
     }
+
     @Test fun emptyValidationAndPasswordVisibility() {
         start()
         screenshot("01-welcome")
@@ -50,26 +61,30 @@ class AccountUiTest {
         compose.onNodeWithTag("account").performTextInput("chenning")
         compose.onNodeWithText("登录").performScrollTo().performClick()
         compose.onNodeWithText("请输入密码").assertIsDisplayed()
-        compose.onNodeWithTag("password").performTextInput(DemoAccounts.PASSWORD)
+        compose.onNodeWithTag("password").performTextInput(TestUsers.PASSWORD)
         compose.onNodeWithContentDescription("显示密码").performClick()
         compose.onNodeWithContentDescription("隐藏密码").assertExists()
-        compose.onNodeWithTag("password").assertTextContains(DemoAccounts.PASSWORD)
+        compose.onNodeWithTag("password").assertTextContains(TestUsers.PASSWORD)
         compose.onNodeWithContentDescription("隐藏密码").performClick()
         compose.onNodeWithContentDescription("显示密码").assertExists()
     }
-    @Test fun rejectedAndDisabledAccountsShowErrors() {
+
+    @Test fun rejectedAndDisabledAccountsShowBackendSafeMessage() {
         start()
         compose.onNodeWithText("进入潘多拉").performScrollTo().performClick()
         compose.onNodeWithTag("account").performTextInput("chenning")
         compose.onNodeWithTag("password").performTextInput("wrong")
         compose.onNodeWithText("登录").performScrollTo().performClick()
-        compose.waitUntil(10000) { compose.onAllNodesWithText("账号或密码错误，请检查后重试。").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10000) {
+            compose.onAllNodesWithText(AccountMessages.INVALID_CREDENTIALS).fetchSemanticsNodes().isNotEmpty()
+        }
         screenshot("03-login-error")
         compose.onNodeWithTag("account").performTextReplacement("disabled")
-        compose.onNodeWithTag("password").performTextReplacement(DemoAccounts.PASSWORD)
+        compose.onNodeWithTag("password").performTextReplacement(TestUsers.PASSWORD)
         compose.onNodeWithText("登录").performScrollTo().performClick()
-        compose.waitUntil(10000) { compose.onAllNodesWithText("该账号已停用，请联系管理员。").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(AccountMessages.INVALID_CREDENTIALS).assertIsDisplayed()
     }
+
     @Test fun completeProfileSettingsAndLogoutFlow() {
         start(); login(); screenshot("04-home")
         compose.onNodeWithText("我的").performClick()
@@ -97,12 +112,13 @@ class AccountUiTest {
         compose.onNodeWithText("退出登录").performScrollTo().performClick()
         compose.onNodeWithTag("confirm_logout").performClick()
         compose.onNodeWithText("欢迎回来").assertExists()
-        assertNull(preferences.getString("demo_account", null))
+        assertFalse(repository.hasStoredSession())
         compose.onNodeWithTag("password").assert(SemanticsMatcher.expectValue(
             androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
     }
+
     @Test fun savedSessionStartsAtHomeAndAllTabsNavigate() {
-        DemoSessionStore(preferences).save(DemoAccounts.users[0])
+        repository.seed(TestUsers.EMPLOYEE)
         start()
         compose.onNodeWithText("你好，陈宁").assertExists()
         listOf("视图", "日志", "AI地图", "我的", "首页").forEach { compose.onNodeWithText(it).performClick() }
@@ -112,20 +128,61 @@ class AccountUiTest {
         compose.onNodeWithText("‹ 返回").performClick()
         compose.onNodeWithText("工作视图").assertIsDisplayed()
     }
-    @Test fun leaderAndFounderOrganizationFixturesAreRestored() {
-        DemoSessionStore(preferences).save(DemoAccounts.users[3])
+
+    @Test fun founderProfileHasCompanyOrganization() {
+        repository.seed(TestUsers.FOUNDER)
         start()
         compose.onNodeWithText("我的").performClick()
         compose.onNodeWithText("创始人").assertExists()
         compose.onNodeWithText("个人资料").performScrollTo().performClick()
         compose.onNodeWithText("业务身份").assertExists()
+        compose.onNodeWithText("公司").assertExists()
     }
-    @Test fun sessionStoresNoPasswordAndCanBeCleared() {
-        val store = DemoSessionStore(preferences)
-        store.save(DemoAccounts.users[1])
-        assertEquals(DemoAccounts.users[1], DemoSessionStore(preferences).restore())
-        assertFalse(preferences.all.values.contains(DemoAccounts.PASSWORD))
+
+    @Test fun tokenStorageEncryptsAndClearsCredentialsWithoutSavingPasswords() {
+        val tokens = StoredTokens("access-secret-value", "refresh-secret-value")
+        val store = AndroidTokenStorage(context)
+        store.write(tokens)
+
+        assertEquals(tokens, store.read())
+        val persistedValues = context.getSharedPreferences("pandora_secure_session", Context.MODE_PRIVATE).all.values
+            .filterIsInstance<String>()
+        assertTrue(persistedValues.isNotEmpty())
+        assertTrue(persistedValues.none { it.contains(tokens.access) || it.contains(tokens.refresh) || it.contains(TestUsers.PASSWORD) })
+
         store.clear()
-        assertNull(DemoSessionStore(preferences).restore())
+        assertNull(store.read())
+    }
+}
+
+private object TestUsers {
+    const val PASSWORD = "Pandora-test-938!"
+    val EMPLOYEE = BusinessUser("chenning", "陈宁", "员工", "研发部", "Android组", "周晓")
+    val FOUNDER = BusinessUser("founder", "周总", "创始人")
+    private val users = listOf(EMPLOYEE, FOUNDER)
+
+    fun byAccount(account: String): BusinessUser = users.first { it.account == account }
+}
+
+private class FakeAccountRepository(initialUser: BusinessUser? = null) : AccountRepository {
+    private var user: BusinessUser? = initialUser
+
+    override fun hasStoredSession(): Boolean = user != null
+    override suspend fun restore(): BusinessUser? = user
+
+    override suspend fun login(account: String, password: String): BusinessUser {
+        if (account == "disabled" || account != TestUsers.EMPLOYEE.account || password != TestUsers.PASSWORD) {
+            throw AccountException(AccountFailureKind.INVALID_CREDENTIALS, AccountMessages.INVALID_CREDENTIALS)
+        }
+        user = TestUsers.EMPLOYEE
+        return user!!
+    }
+
+    override fun logout() {
+        user = null
+    }
+
+    fun seed(user: BusinessUser) {
+        this.user = user
     }
 }
