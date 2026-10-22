@@ -50,24 +50,30 @@ button, input { font: inherit; }
 .menu-caption { padding: 24px 22px 9px; letter-spacing: 0.08em; }
 .side-menu { flex: 1; border-right: 0; padding: 0 10px; }
 .side-menu .el-menu-item, .side-menu .el-sub-menu__title {
+  display: flex;
   height: 46px;
+  align-items: center;
   margin: 3px 0;
   border-radius: 8px;
   color: #59647a;
 }
+.side-menu .el-sub-menu__title { width: 100%; }
 .side-menu .el-menu-item.is-active { color: var(--brand); background: #edf3ff; font-weight: 600; }
 .side-menu .el-menu-item:hover, .side-menu .el-sub-menu__title:hover { color: var(--brand); background: #f5f7fc; }
 .side-menu .el-sub-menu .el-menu-item { min-width: 0; padding-left: 52px !important; }
 .menu-symbol {
-  display: inline-grid;
+  display: inline-flex;
+  flex: 0 0 23px;
   width: 23px;
   height: 23px;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   margin-right: 10px;
   border-radius: 7px;
   color: #70809a;
   background: #f0f3f8;
   font-size: 12px;
+  line-height: 1;
 }
 .is-active .menu-symbol { color: #fff; background: var(--brand); }
 .sidebar-footer { padding: 18px 22px; border-top: 1px solid #f0f1f5; }
@@ -202,15 +208,10 @@ button, input { font: inherit; }
 .login-privacy { margin: 26px 0 0; color: #9ba4b2; font-size: 12px; text-align: center; }
 
 @media (max-width: 760px) {
-  .sidebar { width: 68px !important; overflow: hidden; }
-  .brand { justify-content: center; padding: 0; }
-  .brand > div:last-child, .menu-caption, .sidebar-footer,
-  .side-menu .el-menu-item span:not(.menu-symbol),
-  .side-menu .el-sub-menu__title span:not(.menu-symbol),
-  .side-menu .el-sub-menu__icon-arrow { display: none; }
-  .side-menu { padding: 0 7px; }
-  .side-menu .el-menu-item, .side-menu .el-sub-menu__title { justify-content: center; padding: 0 !important; }
-  .menu-symbol { margin: 0; }
+  .sidebar { width: 220px !important; overflow: visible; }
+  .brand { justify-content: flex-start; padding: 0 18px; }
+  .side-menu { padding: 0 8px; }
+  .side-menu .el-sub-menu .el-menu-item { padding-left: 48px !important; }
   .page-content { padding: 24px 18px 36px; }
   .login-page { grid-template-columns: 1fr; }
   .login-brand-panel { display: none; }

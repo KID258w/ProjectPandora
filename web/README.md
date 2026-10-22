@@ -17,7 +17,7 @@ Vite 默认在 `http://localhost:5173` 启动。
 
 复制 `.env.example` 为 `.env.local`，按需修改 `VITE_API_BASE_URL`。默认 Django 地址为 `http://127.0.0.1:8000`。
 
-管理端业务 API 目前尚未实现；当前工作台和导航页面是结构占位。Axios 实例已放在 `src/services/http.js`，JWT access token 的请求头读取入口也已预留。
+管理员登录、当前管理员信息、部门/团队/业务用户列表与创建已接入后端 `/api/v1/admin/` 接口。API base URL 由 `VITE_API_BASE_URL` 配置（只填写 Django 服务根地址，不包含 `/api/v1`）。管理员需先通过 Django `createsuperuser` 初始化；后端接口与组织业务约束见 `docs/backend/account-provisioning.md`。
 
 ## 构建
 
