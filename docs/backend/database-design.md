@@ -118,9 +118,8 @@ erDiagram
 | `description` | 文本，必填 | 任务详情 |
 | `required_materials` | 可空文本 | 完成时应提交的材料说明，不代表附件 |
 | `association_note` | 可空文本 | 与其他工作/上级任务的注释型关联，不设 `parent_task_id` |
-| `is_cross_department` | 布尔值 | 是否通过跨部门专用入口创建；仅供筛选，普通接口不可任意设置 |
-| `creator_department_id` | 可空外键/快照 | 创建时部门，便于审计；当前权限是否用快照待定 |
-| `assignee_department_id` | 可空外键/快照 | 派发时负责人部门，便于跨部门识别 |
+| `creator_department_id` | 可空外键/快照 | 创建时部门快照，用于历史审计；不作为任务类型标记 |
+| `assignee_department_id` | 可空外键/快照 | 派发时负责人部门快照，用于历史审计；不作为任务类型标记 |
 | `due_at` | 带时区时间，必填 | 截止时间 |
 | `approval_status` | 枚举 | `pending` / `returned` / `approved` |
 | `completion_status` | 枚举 | `unfinished` / `completed`，业务完成状态仅两种 |
@@ -130,7 +129,7 @@ erDiagram
 | `cancellation_reason` | 可空文本 | 创建人取消原因 |
 | `created_at`, `updated_at` | 时间 | 创建与最近修改时间 |
 
-不设优先级、百分比进度、多负责人字段或物理父子任务外键。`is_cross_department` 应由跨部门创建服务端点产生并校验。任务创建/关键定义编辑/截止时间历史是否需要完整版本留痕，建议先纳入审计策略确认。
+不设优先级、百分比进度、多负责人字段、物理父子任务外键或跨部门类型字段。负责人范围由统一任务创建服务按创建人角色和组织关系校验；部门经理可指派给其他部门经理，且仍走创建人的直属上级审批。部门快照仅用于保留创建/派发时的组织上下文，不用于分类或筛选。任务创建/关键定义编辑/截止时间历史是否需要完整版本留痕，建议先纳入审计策略确认。
 
 #### `tasks_approval_record`
 
@@ -139,7 +138,7 @@ erDiagram
 | `id` | 主键 | 审批记录 ID |
 | `task_id` | 外键 | 对应任务 |
 | `round` | 正整数 | 审批轮次，任务重提时递增 |
-| `approver_id` | 用户外键 | 应审批的直属上级；跨部门入口可为创始人 |
+| `approver_id` | 用户外键 | 应审批的创建人直属上级；创始人创建的任务无需审批 |
 | `decision` | 枚举 | `approved` / `returned` |
 | `comment` | 文本 | 退回时必填说明；通过说明可选 |
 | `decided_at` | 时间 | 审批时间 |
@@ -288,7 +287,7 @@ erDiagram
 ## 5. 索引与约束建议
 
 - 用户：`username` 唯一；按 `(department_id, team_id, business_role, is_active)` 查询组织成员；`manager_id` 索引。
-- 任务：`(assignee_id, approval_status, completion_status, lifecycle_status, due_at)`、`(creator_id, approval_status, created_at)`、`(is_cross_department, created_at)`；`due_at` 必填。
+- 任务：`(assignee_id, approval_status, completion_status, lifecycle_status, due_at)`、`(creator_id, approval_status, created_at)`；`due_at` 必填。
 - 审批：`(approver_id, decision, created_at)`、`(task_id, round)` 唯一。
 - 任务动态/提交：`(task_id, created_at)`、`(task_id, submitted_at)`；按需对负责人和事件时间增加索引。
 - 日志：`(author_id, log_date)` 唯一；`(department_id, log_date)`、`(team_id, log_date)` 用于授权范围查询。

@@ -1,25 +1,28 @@
 ## Why
 
-Departments need a controlled way to request work from one another without assigning directly to another department's employees. Product-owner review settled on treating cross-department work as a normal standalone task with a dedicated Department Manager entry point, not a separate request that the receiving manager must accept.
+Departments need a controlled way to request work from one another. Product-owner review settled on using the existing task-creation and approval flow: a Department Manager may assign an ordinary task to a Department Manager in another department. This is not a separate task type or request/acceptance workflow.
 
 ## What Changes
 
-- Add a dedicated “创建跨部门任务” entry for Department Managers, assigning to a Department Manager in another department.
-- Reuse the regular task fields, direct-supervisor approval, execution update, completion submission, and direct-dispatcher acceptance/return lifecycle.
-- The creator's direct supervisor (Founder) approves the task; approval automatically places it in the target manager's “我的任务—跨部门工作”.
-- The target manager may execute directly or create ordinary internal tasks for self/team leaders; internal tasks remain invisible to the requesting department.
-- Keep the cross-department flag as a manager-facing filter; do not create a physical link to internal tasks.
+- Extend the Department Manager's permitted assignee choices to include other Department Managers, while retaining self and same-department Team Leader choices.
+- Create and approve these assignments through the ordinary task endpoint and the creator's direct-supervisor approval flow.
+- After approval, show the task in the creator's “我创建的” and the assignee's “我的任务”; no second acceptance is needed.
+- Preserve direct-dispatcher acceptance and prevent the creator from inspecting the receiving department's internal tasks.
+- Do not add a cross-department task flag, special entry, special filter, separate API endpoint, or physical link to internal tasks.
 
 ## Capabilities
 
 ### New Capabilities
-- `cross-department-coordination`: Dedicated cross-department task creation and its integration with the ordinary task lifecycle.
+- `cross-department-coordination`: Permission and visibility rules for ordinary task assignments between Department Managers in different departments.
 
 ### Modified Capabilities
-- None.
+- `task-dispatch-and-acceptance`: Department Manager assignee scope includes other Department Managers, using the unified task flow.
+- `home-dashboard-panels`: Tasks assigned by other Department Managers use the ordinary “他人派发” source category, not a cross-department category.
+- `month-week-day-work-views`: Month-view colors distinguish “他人派发” and “本人创建” only.
 
 ## Impact
 
 - Source requirement: `docs/requirements/01-task-creation-and-acceptance.md`.
-- Affects the Android Department Manager task center, task assignment validation, approval integration, organization-based visibility, and direct-dispatcher acceptance.
-- Depends on `task-dispatch-and-acceptance`; it does not define a second task or acceptance model.
+- Related requirements: `docs/requirements/02-home-four-panels.md` and `docs/requirements/04-month-week-day-work-views.md`.
+- Affects ordinary task assignee validation, creator-supervisor approval, task visibility, task-center lists, home ordering, and month-view source colors.
+- Does not introduce a separate task model, API, or state machine.

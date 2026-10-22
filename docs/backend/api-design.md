@@ -43,7 +43,7 @@
 | `completion_status` | `unfinished`、`completed` | 业务任务只保留未完成、已完成两种完成状态 |
 | `lifecycle_status` | `active`、`cancelled` | 任务是否被创建人取消；取消需记录原因，不等同于完成 |
 
-审批通过后任务才进入创建人的“我创建的”和负责人的“我的任务”；审批中的任务分别出现在上级“待你审批”和创建人“待上级审批”。验收由直接派发者处理；创建人与负责人为同一人时，提交即完成。上级向下查看仅看下属承担的任务，不另提供“下属创建的任务”列表。跨部门任务使用独立创建入口，审批通过后负责人直接获得任务，不需要负责人另行接受。
+审批通过后任务才进入创建人的“我创建的”和负责人的“我的任务”；审批中的任务分别出现在上级“待你审批”和创建人“待上级审批”。验收由直接派发者处理；创建人与负责人为同一人时，提交即完成。上级向下查看仅看下属承担的任务，不另提供“下属创建的任务”列表。部门经理向其他部门经理派发任务仍使用普通创建入口和同一审批流程；审批通过后负责人直接获得任务，不需要负责人另行接受。
 
 ## 2. Web 管理端 API
 
@@ -102,18 +102,17 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 | `GET /api/v1/app/task-approvals/inbox/` | 待当前上级审批任务；不提供已完成/未完成筛选 |
 | `GET /api/v1/app/task-approvals/outbox/` | 当前用户等待上级审批的任务；不提供已完成/未完成筛选 |
 | `GET /api/v1/app/tasks/{id}/` | 任务详情；服务端按创建人、负责人、授权上级等校验可见性 |
-| `POST /api/v1/app/tasks/` | 普通入口创建任务；负责人为本人或符合规则的直接下属，有直属上级则进入待审批 |
-| `POST /api/v1/app/cross-department-tasks/` | 部门经理跨部门任务独立入口；负责人为其他部门经理，审批人按规则为创始人 |
+| `POST /api/v1/app/tasks/` | 普通入口创建任务；创始人可指派给本公司任一成员，其他角色按各自组织范围选择负责人；创建人有直属上级则进入待审批 |
 | `PATCH /api/v1/app/tasks/{id}/` | 修改有权修改且仍可编辑的任务；审批后关键定义变更需重新审批 |
 | `POST /api/v1/app/tasks/{id}/approval/` | 上级审批通过或退回；退回必须附原因 |
 | `POST /api/v1/app/tasks/{id}/updates/` | 负责人追加进展说明；只追加记录，不设置百分比进度 |
 | `POST /api/v1/app/tasks/{id}/submissions/` | 负责人提交完成说明及所需材料说明；不是创建任务表单 |
 | `POST /api/v1/app/tasks/{id}/submissions/{submission_id}/review/` | 直接派发者验收通过或退回；验收通过后任务完成 |
 | `POST /api/v1/app/tasks/{id}/cancel/` | 创建人取消本人创建的未完成任务，必须填写原因 |
-| `GET /api/v1/app/organization/direct-reports/` | 查询有权分配任务的直接下属，支持姓名关键词 |
+| `GET /api/v1/app/organization/assignable-users/` | 查询当前用户在普通任务表单中有权选择的负责人；创始人可查询本公司全体成员，其他角色按其派发范围返回，支持姓名关键词 |
 | `GET /api/v1/app/organization/visible-subordinates/` | 查看对象选择器可访问的下属；逐级查看时支持姓名/团队/部门搜索 |
 
-任务列表可支持 `completion_status=all|unfinished|completed`；`lifecycle_status=cancelled` 可作为单独筛选或独立历史列表，具体交互待最终确认。审批列表仅按审批状态筛选。负责人选择接口只返回创建者有权派发给的对象；普通员工只能创建指派给自己的任务。跨部门入口不与普通负责人选择混在一起。
+任务列表可支持 `completion_status=all|unfinished|completed`；`lifecycle_status=cancelled` 可作为单独筛选或独立历史列表，具体交互待最终确认。审批列表仅按审批状态筛选。负责人选择接口只返回创建者有权派发给的对象：创始人为本公司全体成员；部门经理为本人、本部门团队长或其他部门经理；团队长为本人或本团队普通员工；普通员工仅本人。部门经理指派给其他部门经理仍调用统一创建接口，并由服务端按创建人的直属上级规则发起审批。
 
 建议创建任务请求示例：
 
@@ -128,7 +127,7 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 }
 ```
 
-服务端根据登录人、组织关系和目标负责人决定是否需要审批，客户端不得自行传入/覆盖 `approval_status`、创建人、跨部门标记或完成状态。关联说明为自由文本，不建立上级任务外键或任务树。
+服务端根据登录人、组织关系和目标负责人决定是否需要审批，客户端不得自行传入/覆盖 `approval_status`、创建人或完成状态。接口不接收跨部门标记；是否允许负责人由服务端按角色、部门关系校验。关联说明为自由文本，不建立上级任务外键或任务树。
 
 ### 3.3 日志
 
@@ -137,12 +136,12 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 | `GET /api/v1/app/logs/calendar/` | 按 `year`、`month` 返回本人或选中查看对象已提交日志的日期标记 |
 | `GET /api/v1/app/logs/` | 查询本人历史日志或有权查看的下属日志；按用户/日期筛选 |
 | `GET /api/v1/app/logs/{id}/` | 查看日志内容；管理者只读且只能查看已提交日志 |
-| `GET /api/v1/app/logs/today/` | 获取本人今日日志草稿/已提交状态，未创建时返回空表单态 |
-| `PUT /api/v1/app/logs/today/` | 新建或更新本人今日唯一日志；字段为完成工作、下一步计划等 |
-| `POST /api/v1/app/logs/today/submit/` | 提交本人今日日志 |
+| `GET /api/v1/app/logs/mine/{log_date}/` | 获取本人指定日期日志（含草稿）；未创建时返回空表单态，并返回是否可编辑 |
+| `PUT /api/v1/app/logs/mine/{log_date}/` | 新建或更新本人指定日期唯一日志；只允许今天、昨天或前天 |
+| `POST /api/v1/app/logs/mine/{log_date}/submit/` | 提交本人指定日期日志；只允许今天、昨天或前天 |
 | `GET /api/v1/app/log-viewers/` | 返回当前用户可选择查看的下属，支持姓名关键词搜索 |
 
-建议日志请求字段：`completed_work`（必填）、`next_day_plan`（可选）。MVP 不提供关联任务、问题与风险字段、附件和日志正文关键字搜索。每人每天最多一条；历史日志只读；自然日结束后不可修改。管理者查询草稿与无日志日期时不应泄露草稿内容。
+建议日志请求字段：`completed_work`（提交必填）、`next_day_plan`（可选）。MVP 不提供关联任务、问题与风险字段、附件和日志正文关键字搜索。每人每天最多一条。作者可新建、修改及提交业务时区内今天、昨天和前天的日志；该窗口按自然日滚动，不是滚动 72 小时，超过前天的日期及未来日期拒绝写入并只读展示。读取本人历史记录仍允许。管理者查询草稿与无日志日期时不应泄露草稿内容，管理者写入接口不开放。
 
 ### 3.4 月、周、日工作视图
 
@@ -1445,7 +1444,6 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
     "description": "整理本周收集到的需求并形成结论",
     "required_materials": "需求清单与评审结论",
     "association_note": "与 Q4 项目方案相关",
-    "is_cross_department": false,
     "due_at": "2026-10-20T18:00:00+08:00",
     "approval_status": "approved",
     "completion_status": "unfinished",
@@ -1480,50 +1478,14 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
   "message": "success",
   "data": {
     "id": 105,
-    "creator_id": 42,
-    "assignee_id": 42,
+    "creator_id": 31,
+    "assignee_id": 63,
     "title": "完成客户需求梳理",
     "approval_status": "pending",
     "completion_status": "unfinished",
     "lifecycle_status": "active",
     "due_at": "2026-10-20T18:00:00+08:00",
     "created_at": "2026-10-11T10:00:00+08:00"
-  },
-  "requestId": "<uuid>"
-}
-```
-
-#### POST /api/v1/app/cross-department-tasks/
-
-**请求 JSON**
-
-```json
-{
-  "assignee_id": 63,
-  "title": "提供客户数据分析",
-  "description": "分析本季度客户反馈",
-  "required_materials": "分析结论",
-  "due_at": "2026-10-25T18:00:00+08:00",
-  "association_note": "跨部门协作事项说明"
-}
-```
-
-**响应 JSON**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "id": 106,
-    "creator_id": 31,
-    "assignee_id": 63,
-    "title": "提供客户数据分析",
-    "is_cross_department": true,
-    "approval_status": "pending",
-    "completion_status": "unfinished",
-    "lifecycle_status": "active",
-    "due_at": "2026-10-25T18:00:00+08:00"
   },
   "requestId": "<uuid>"
 }
@@ -1694,7 +1656,9 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 }
 ```
 
-#### GET /api/v1/app/organization/direct-reports/?keyword=张
+#### GET /api/v1/app/organization/assignable-users/?keyword=张
+
+根据当前登录用户返回统一任务表单可选负责人。创始人结果范围为本公司全体成员；部门经理可选择本人、本部门团队长或其他部门经理；团队长可选择本人或本团队普通员工；普通员工仅可选择本人。服务端必须在创建时再次校验选择范围；此接口不区分或返回跨部门任务类型。
 
 **请求：** 无 JSON 请求体；如有筛选条件，查询参数见接口 URL。
 
@@ -1891,7 +1855,7 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 }
 ```
 
-#### GET /api/v1/app/logs/today/
+#### GET /api/v1/app/logs/mine/2026-10-11/
 
 **请求：** 无 JSON 请求体；如有筛选条件，查询参数见接口 URL。
 
@@ -1904,13 +1868,14 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
   "data": {
     "log_date": "2026-10-11",
     "log": null,
-    "status": "not_created"
+    "status": "not_created",
+    "can_edit": true
   },
   "requestId": "<uuid>"
 }
 ```
 
-#### PUT /api/v1/app/logs/today/
+#### PUT /api/v1/app/logs/mine/2026-10-11/
 
 **请求 JSON**
 
@@ -1933,13 +1898,14 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
     "status": "draft",
     "completed_work": "完成接口梳理",
     "next_day_plan": "补充测试用例",
-    "updated_at": "2026-10-11T17:30:00+08:00"
+    "updated_at": "2026-10-11T17:30:00+08:00",
+    "can_edit": true
   },
   "requestId": "<uuid>"
 }
 ```
 
-#### POST /api/v1/app/logs/today/submit/
+#### POST /api/v1/app/logs/mine/2026-10-11/submit/
 
 **请求 JSON**
 
@@ -1957,11 +1923,14 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
     "id": 302,
     "log_date": "2026-10-11",
     "status": "submitted",
-    "submitted_at": "2026-10-11T18:00:00+08:00"
+    "submitted_at": "2026-10-11T18:00:00+08:00",
+    "can_edit": true
   },
   "requestId": "<uuid>"
 }
 ```
+
+以上 `log_date` 为路径参数中的示例日期。对于早于今天两天的日期或未来日期，读取本人日志仍可返回内容及 `can_edit: false`；对应 `PUT`、`submit` 请求应拒绝且不得改变数据。服务端以统一配置的业务时区计算自然日窗口，不能信任客户端传来的日期范围或 `can_edit` 值。
 
 #### GET /api/v1/app/log-viewers/?keyword=张
 

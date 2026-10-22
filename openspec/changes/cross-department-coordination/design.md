@@ -1,37 +1,36 @@
 ## Context
 
-Cross-department work is a standalone task created by one Department Manager for another Department Manager through a dedicated entry point. It reuses the ordinary task, approval, execution, and acceptance lifecycle. No independent accept/reject request state machine is needed.
+Cross-department collaboration is represented by an ordinary standalone task assigned from one Department Manager to another. The common task model, endpoint, form, approval center, execution, and acceptance workflow remain authoritative. No separate “cross-department task” type is stored or shown.
 
 ## Goals / Non-Goals
 
-**Goals:** restrict cross-department creation to Department Managers, require Founder approval, expose approved tasks to the target manager, protect target-department internal tasks, and return the final result to the original direct dispatcher for acceptance.
+**Goals:** permit controlled Department Manager-to-Department Manager assignment across departments; require the creator's direct-supervisor approval; expose the approved task to the assignee; protect the target department's internal tasks; and return completion to the direct dispatcher for acceptance.
 
-**Non-Goals:** direct assignment to another department's Team Leader or Employee, target-side acceptance, physical association between the cross-department task and internal tasks, task-tree roll-up, cancellation cascade, or Founder exclusion from approval/read-only visibility.
+**Non-Goals:** direct assignment to another department's Team Leader or Employee by a Department Manager; target-side acceptance; a cross-department boolean/type/filter/entry/API; physical association between the assigned task and internal tasks; task-tree roll-up; cancellation cascade; or Founder exclusion from approval/read-only visibility.
 
 ## Decisions
 
-- Department Manager A uses a separate “创建跨部门任务” entry and selects Department Manager B in another department as the sole assignee. The task has the ordinary task fields plus a cross-department flag.
-- Because A has a direct supervisor, the task first appears in A's Approval Center “待上级审批” and Founder's Approval Center “待你审批”. It does not appear in A's “我创建的” before approval. Founder approval is required before B sees or executes it. B does not accept it a second time.
-- After approval the same task appears in A's “我创建的” and B's “我的任务—跨部门工作”.
-- B may execute it and submit the completion description/material information directly to A, or create new standalone local tasks using the normal task-creation flow. B-created work must receive its own normal supervisor approval. Use optional text association notes if context is useful; no foreign-key task tree is created.
-- A can inspect the cross-department task A created and B's submitted result, but cannot view B's internal tasks. Founder has read-only hierarchical visibility and approves direct reports' creations; that does not make Founder the assignee or acceptance actor.
-- Only direct dispatcher A may accept or return B's submission; return requires a reason. Task completion remains binary and execution updates remain text-only.
-- The cross-department flag is a filter for Department Managers, not an alternate task status or linkage.
+- Department Manager A uses the ordinary “创建任务” form and may select themself, a Team Leader in A's department, or a Department Manager in another department. A may not assign to a Team Leader or Employee in another department. Other roles keep their existing assignment scopes; the Founder can assign to any company member.
+- A task assigned to another Department Manager has only the ordinary task attributes. The API and database do not store or accept a cross-department flag, and the client does not offer a special entry or filter. Creator, assignee, and their organization information provide the necessary context in task details.
+- Because A has a direct supervisor, the task appears in A's “待上级审批” and the Founder's “待你审批”. Before approval it is not in A's “我创建的” or B's “我的任务”. After approval, the same task appears in A's “我创建的” and B's “我的任务”; B does not accept it a second time.
+- B may execute the assigned task directly or create new standalone local tasks for themself or eligible direct reports using the ordinary form and approval flow. Optional association notes may explain context; there is no foreign-key task tree or cascade. A cannot inspect B's internal tasks.
+- Only direct dispatcher A may accept or return B's submission; return requires a reason. Completion remains binary and execution updates remain text-only.
+- Home ordering treats tasks created by someone else and assigned to the current user as “他人派发”, without a separate cross-department category. Month-view colors distinguish “他人派发” from “本人创建” only.
 
 ## Authorization and Data Boundaries
 
-Validate that creator and assignee are Department Managers in different departments. Use the ordinary task's creator, assignee, supervisor, approval, and submission relationships. Do not expose target department internal tasks to A through queries, UI, or APIs.
+Validate both role and organization at the service layer: a Department Manager may target a manager in a different department; the target must belong to the same company and be active. Keep ordinary creator, assignee, approval, submission, and audit relationships as the source of truth. Do not expose target-department internal tasks to A through queries, UI, or APIs. Organization snapshots, if stored for historical audit, are not task-type markers and must not drive a separate category filter.
 
 ## Risks / Trade-offs
 
-- A dedicated entry can be mistaken for a separate approval flow; keep its form and state labels aligned with ordinary task creation.
-- B may need multiple local assignments to complete the requested work; optional text notes preserve context without imposing artificial linkage or cancellation semantics.
-- Founder approval can add latency; explicit pending queues and reminders make the gate visible.
+- Without a special label, users rely on creator/assignee details to understand where a task came from; show those fields consistently in task details.
+- Founder approval can add latency; the common approval center and reminders make the gate visible.
+- A may see only the task A directly assigned and B's submitted result, not B's internal execution breakdown; this is intentional and avoids artificial task-tree coupling.
 
 ## Migration Plan
 
-Implement after the regular task and approval foundation. No separate request tables or conversion migration are required for the MVP. Preserve ordinary task audit history.
+Use the existing task and approval model. New assignments use the ordinary task creation endpoint. If an implementation already has a cross-department flag or endpoint, stop reading/writing the flag and route new creation through the common endpoint; removing legacy storage can be handled with the normal database migration. No separate request table or conversion state is required.
 
 ## Open Questions
 
-No product-level questions remain. Concrete API and database design are implementation details.
+No product-level questions remain. Existing organization data and deployment constraints determine concrete implementation details.

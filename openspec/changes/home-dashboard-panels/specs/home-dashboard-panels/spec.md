@@ -23,11 +23,11 @@ The system SHALL show at most five company-important-item summaries on Home. Its
 - **THEN** the task and log panels show the manager's own records rather than replacing them with subordinate records
 
 ### Requirement: Company Top Ten Tasks is generated per user
-The system SHALL select up to ten unfinished tasks that the current user personally owns or executes. Task completion status SHALL be limited to “未完成” and “已完成”; start, progress, acceptance-submission, return, and cancellation are represented by separate process records/metadata. The panel SHALL order tasks first by source category (upstream-assigned, current-level/self-created, cross-department), then by earliest deadline and earliest creation time. Completed and cancelled/archived tasks SHALL be excluded. This panel SHALL NOT be user-editable and SHALL NOT show progress percentages.
+The panel SHALL list up to ten unfinished tasks assigned to the current user, ordered first by other-created assignments, then by self-created tasks, then by earliest deadline and creation time. Assignments from another Department Manager use the ordinary “他人派发” category, without a separate department marker. Completed and cancelled tasks SHALL be excluded. The list is not user-editable and shows no percentage progress; completion status remains “未完成” or “已完成”.
 
-#### Scenario: User has tasks from several sources
+#### Scenario: User has tasks from other creators and self-created tasks
 - **WHEN** the system builds the Company Top Ten Tasks panel
-- **THEN** it combines the current user's eligible unfinished tasks in source-category order, applies deadline/creation ordering within each source, and returns at most ten
+- **THEN** it lists tasks created by others before self-created tasks, applies deadline/creation ordering within each source, treats assignments from another Department Manager as ordinary tasks created by someone else, and returns at most ten
 
 #### Scenario: User opens the Company Top Ten secondary page
 - **WHEN** the user selects “View all” from the Home Company Top Ten card
@@ -77,3 +77,18 @@ The system SHALL show concise summaries and provide navigation to the source mod
 #### Scenario: User follows a Home card entry
 - **WHEN** the user taps a Home card or its “View all” action
 - **THEN** the system opens the corresponding authorized secondary list or module without modifying the source record from Home
+
+### Requirement: Home exposes unread task notifications
+Home SHALL show a task-notification bell with a red dot when unread notifications exist. Opening its list SHALL mark the notifications currently displayed as read; new notifications SHALL remain unread. Notification rows SHALL navigate to the corresponding task without changing task state.
+
+#### Scenario: User has an unread approval or assignment notification
+- **WHEN** the current user has an unread notice for a direct subordinate's pending approval or an approved task assigned by another user
+- **THEN** the Home bell displays a red dot
+
+#### Scenario: User opens the notification list
+- **WHEN** the user taps the Home bell
+- **THEN** the notification list opens and its currently displayed unread notices are marked read, clearing the red dot unless a newer unread notice exists
+
+#### Scenario: User follows a task notification
+- **WHEN** the user taps an approval or new-assignment notification
+- **THEN** the corresponding task detail opens with only the user's existing task permissions and no workflow state changes caused by viewing
