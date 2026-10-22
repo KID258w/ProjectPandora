@@ -42,6 +42,32 @@ class AppApiHttpIntegrationTest {
         }
     }
 
+    @Test fun rejectedLoginDoesNotClearAnExistingSession() {
+        val server = LocalApiServer { request ->
+            if (request.path == "/api/v1/app/auth/token/") unauthorized("账号或密码错误")
+            else HttpResult(404, envelope("{}"))
+        }
+        try {
+            val tokens = MemoryTokenStorage().apply { write(StoredTokens("saved-access", "saved-refresh")) }
+            val repository = ApiAccountRepository(ApiClient.createAppAccountApi(tokens, server.baseUrl), tokens)
+            var failure: AccountException? = null
+
+            try {
+                runBlocking { repository.login("employee01", "wrong-password") }
+            } catch (expected: AccountException) {
+                failure = expected
+            }
+
+            assertEquals(AccountFailureKind.INVALID_CREDENTIALS, failure?.kind)
+            assertEquals(StoredTokens("saved-access", "saved-refresh"), tokens.read())
+            assertEquals(1, server.requests.size)
+            assertEquals("/api/v1/app/auth/token/", server.requests.single().path)
+            assertNull(server.requests.single().authorization)
+        } finally {
+            server.close()
+        }
+    }
+
     @Test fun expiredAccessRefreshesAndRetriesCurrentUserOnce() {
         val server = LocalApiServer { request ->
             when (request.path) {

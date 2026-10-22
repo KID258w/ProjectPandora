@@ -19,6 +19,8 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    var canRetrySessionValidation by mutableStateOf(false)
+        private set
 
     init {
         viewModelScope.launch {
@@ -34,10 +36,12 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
                 user = null
                 startupDestination = AccountStartupDestination.LOGIN
                 error = failure.message
+                canRetrySessionValidation = failure.isRetryableSessionCheck()
             } catch (_: Exception) {
                 user = null
                 startupDestination = AccountStartupDestination.LOGIN
                 error = AccountMessages.SERVER
+                canRetrySessionValidation = true
             } finally {
                 initializing = false
             }
@@ -57,6 +61,7 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
             try {
                 user = repository.login(account.trim(), password)
                 error = null
+                canRetrySessionValidation = false
             } catch (failure: CancellationException) {
                 throw failure
             } catch (failure: AccountException) {
@@ -75,9 +80,43 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
         error = null
     }
 
+    fun retrySessionValidation() {
+        if (loading || !canRetrySessionValidation) return
+
+        loading = true
+        canRetrySessionValidation = false
+        error = null
+        viewModelScope.launch {
+            try {
+                user = repository.restore()
+                if (user == null) {
+                    error = AccountMessages.SESSION_EXPIRED
+                } else {
+                    startupDestination = AccountStartupDestination.HOME
+                }
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: AccountException) {
+                user = null
+                error = failure.message
+                canRetrySessionValidation = failure.isRetryableSessionCheck()
+            } catch (_: Exception) {
+                user = null
+                error = AccountMessages.SESSION_CHECK
+                canRetrySessionValidation = true
+            } finally {
+                loading = false
+            }
+        }
+    }
+
     fun logout() {
         repository.logout()
         user = null
         error = null
+        canRetrySessionValidation = false
     }
+
+    private fun AccountException.isRetryableSessionCheck(): Boolean =
+        kind == AccountFailureKind.NETWORK || kind == AccountFailureKind.SERVER
 }

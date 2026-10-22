@@ -72,7 +72,7 @@ class AppAccountContractTest {
         assertFalse(tokens.toString().contains("not-trimmed-password"))
     }
 
-    @Test fun rejectedCredentialsDoNotPersistTokens() = runBlocking {
+    @Test fun rejectedCredentialsKeepThePreviousSessionWithoutStoringNewTokens() = runBlocking {
         val api = FakeAppAccountApi().apply {
             loginResponse = Response.error(
                 401,
@@ -91,7 +91,37 @@ class AppAccountContractTest {
 
         assertEquals(AccountFailureKind.INVALID_CREDENTIALS, failure?.kind)
         assertEquals(AccountMessages.INVALID_CREDENTIALS, failure?.message)
-        assertNull(tokens.read())
+        assertEquals(StoredTokens("old-access", "old-refresh"), tokens.read())
+    }
+
+    @Test fun networkFailureDuringLoginKeepsThePreviousSession() = runBlocking {
+        val api = FakeAppAccountApi().apply { throwOnLogin = IOException("offline") }
+        val tokens = MemoryTokenStorage().apply { write(StoredTokens("old-access", "old-refresh")) }
+        var failure: AccountException? = null
+
+        try {
+            ApiAccountRepository(api, tokens).login("zhangsan", "password")
+        } catch (expected: AccountException) {
+            failure = expected
+        }
+
+        assertEquals(AccountFailureKind.NETWORK, failure?.kind)
+        assertEquals(StoredTokens("old-access", "old-refresh"), tokens.read())
+    }
+
+    @Test fun transientCurrentUserFailureAfterLoginRestoresThePreviousSession() = runBlocking {
+        val api = FakeAppAccountApi().apply { throwOnCurrentUser = IOException("offline") }
+        val tokens = MemoryTokenStorage().apply { write(StoredTokens("old-access", "old-refresh")) }
+        var failure: AccountException? = null
+
+        try {
+            ApiAccountRepository(api, tokens).login("zhangsan", "password")
+        } catch (expected: AccountException) {
+            failure = expected
+        }
+
+        assertEquals(AccountFailureKind.NETWORK, failure?.kind)
+        assertEquals(StoredTokens("old-access", "old-refresh"), tokens.read())
     }
 
     @Test fun expiredSessionClearsTokensWhileNetworkErrorKeepsThem() = runBlocking {
@@ -144,11 +174,13 @@ class AppAccountContractTest {
         var loginRequest: LoginRequest? = null
         var loginResponse: Response<ApiEnvelope<TokenResponse>> = Response.success(envelope(TokenResponse("access-secret", "refresh-secret")))
         var currentUserResponse: Response<ApiEnvelope<AppUserResponse>> = Response.success(envelope(user("employee")))
+        var throwOnLogin: IOException? = null
         var throwOnCurrentUser: IOException? = null
         var onCurrentUserCall: (() -> Unit)? = null
 
         override suspend fun login(request: LoginRequest): Response<ApiEnvelope<TokenResponse>> {
             loginRequest = request
+            throwOnLogin?.let { throw it }
             return loginResponse
         }
 

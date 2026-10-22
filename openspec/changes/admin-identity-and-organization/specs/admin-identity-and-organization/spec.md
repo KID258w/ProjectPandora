@@ -91,7 +91,11 @@ The Android client SHALL authenticate business users only through the App-scoped
 
 #### Scenario: Invalid credentials or a disabled account are rejected
 - **WHEN** a business user submits invalid credentials or an inactive account
-- **THEN** the App remains signed out, does not retain the password or tokens, and shows a login error that directs disabled users to their administrator
+- **THEN** the App does not retain the submitted password or rejected tokens, preserves any previously saved session, and shows a login error that directs disabled users to their administrator
+
+#### Scenario: Session validation fails temporarily during startup
+- **WHEN** the App cannot validate a saved session because the network or server is temporarily unavailable
+- **THEN** the App retains the saved tokens, shows a retry-validation action, and restores the session if a later validation succeeds
 
 #### Scenario: Access token expires
 - **WHEN** a protected App request is rejected because its access token expired

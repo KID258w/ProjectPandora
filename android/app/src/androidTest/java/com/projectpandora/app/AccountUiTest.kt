@@ -85,6 +85,19 @@ class AccountUiTest {
         compose.onNodeWithText(AccountMessages.INVALID_CREDENTIALS).assertIsDisplayed()
     }
 
+    @Test fun temporaryRestoreFailureOffersRetryAndKeepsSession() {
+        repository.seed(TestUsers.EMPLOYEE)
+        repository.restoreFailuresRemaining = 2
+        start()
+
+        compose.onNodeWithText(AccountMessages.SESSION_CHECK).assertIsDisplayed()
+        compose.onNodeWithTag("retry_session_validation").assertIsDisplayed().performClick()
+        compose.onNodeWithText(AccountMessages.SESSION_CHECK).assertIsDisplayed()
+        compose.onNodeWithTag("retry_session_validation").assertIsDisplayed().performClick()
+        compose.onNodeWithText("你好，陈宁").assertIsDisplayed()
+        assertTrue(repository.hasStoredSession())
+    }
+
     @Test fun completeProfileSettingsAndLogoutFlow() {
         start(); login(); screenshot("04-home")
         compose.onNodeWithText("我的").performClick()
@@ -166,9 +179,16 @@ private object TestUsers {
 
 private class FakeAccountRepository(initialUser: BusinessUser? = null) : AccountRepository {
     private var user: BusinessUser? = initialUser
+    var restoreFailuresRemaining = 0
 
     override fun hasStoredSession(): Boolean = user != null
-    override suspend fun restore(): BusinessUser? = user
+    override suspend fun restore(): BusinessUser? {
+        if (restoreFailuresRemaining > 0) {
+            restoreFailuresRemaining -= 1
+            throw AccountException(AccountFailureKind.NETWORK, AccountMessages.SESSION_CHECK)
+        }
+        return user
+    }
 
     override suspend fun login(account: String, password: String): BusinessUser {
         if (account == "disabled" || account != TestUsers.EMPLOYEE.account || password != TestUsers.PASSWORD) {

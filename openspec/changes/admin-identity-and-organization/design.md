@@ -29,6 +29,7 @@ The Web console must provision business accounts and their organization scopes b
 - Keep access and refresh tokens in an AES-GCM encrypted preference value. Protect the encryption key with Android Keystore, never persist the password, and remove the encrypted value on logout or when refresh is rejected.
 - Attach the access token to protected API requests. On an unauthorized response, serialize refresh attempts, retry the original request once with the new access token, and clear the session if the refresh token is rejected. Network/server failures must not be mistaken for an expired session.
 - Fetch `/app/me/` after login and while restoring a saved session. Use that response as the source for the Home greeting and the Profile/personal-info fields; do not reconstruct identity or organization data from local demo fixtures.
+- If startup validation fails because of a temporary network or server error, retain the saved session and offer an explicit retry action. During reauthentication, keep the prior token pair unless the new credentials and profile have both been verified successfully.
 - Keep the login form usable without a backend connection and show actionable feedback for rejected credentials/disabled accounts, expired sessions, and network failures.
 - Use the provided Pandora app-logo asset for adaptive and legacy launcher icons without changing the in-app Figma brand artwork.
 

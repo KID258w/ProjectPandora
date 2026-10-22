@@ -25,8 +25,8 @@ class ApiAccountRepository(
     }
 
     override suspend fun login(account: String, password: String): BusinessUser {
-        // A deliberate sign-in replaces any prior local session, including when credentials are rejected.
-        tokenStorage.clear()
+        // Keep an existing session until the new credentials and current-user request both succeed.
+        val previousTokens = tokenStorage.read()
         val envelope = request(isLogin = true) { api.login(LoginRequest(account.trim(), password)) }
         val tokenResponse = envelope.data
         if (tokenResponse.access.isBlank() || tokenResponse.refresh.isNullOrBlank()) {
@@ -38,10 +38,11 @@ class ApiAccountRepository(
             fetchCurrentUser()
         } catch (failure: AccountException) {
             val resolved = resolveRefreshFailure(failure)
-            if (resolved.kind == AccountFailureKind.SESSION_EXPIRED || resolved.kind == AccountFailureKind.FORBIDDEN) {
-                tokenStorage.clear()
-            }
+            restorePreviousSession(previousTokens)
             throw resolved
+        } catch (failure: CancellationException) {
+            restorePreviousSession(previousTokens)
+            throw failure
         }
     }
 
@@ -60,6 +61,10 @@ class ApiAccountRepository(
         // The authenticator clears tokens after a definitive refresh rejection. If they remain,
         // refresh could not be verified because of a transport or temporary server failure.
         return AccountException(AccountFailureKind.NETWORK, AccountMessages.SESSION_CHECK, failure)
+    }
+
+    private fun restorePreviousSession(tokens: StoredTokens?) {
+        if (tokens == null) tokenStorage.clear() else tokenStorage.write(tokens)
     }
 
     private suspend fun <T> request(

@@ -16,8 +16,8 @@ Android 只调用 `/api/v1/app/` 业务用户入口。成功和失败响应都�
 
 ## 登录、刷新和退出
 
-1. 启动页先恢复本地会话。没有令牌时进入欢迎页；有令牌时请求 `/app/me/`，校验成功后进入首页。
-2. 登录请求通过后，令牌暂存到 AES-GCM 加密的 SharedPreferences，再请求 `/app/me/`。只有取得有效的业务用户信息才进入主界面。
+1. 启动页先恢复本地会话。没有令牌时进入欢迎页；有令牌时请求 `/app/me/`，校验成功后进入首页。网络或服务暂时不可用时保留令牌并显示“重试验证”入口。
+2. 登录请求通过后，新令牌暂存到 AES-GCM 加密的 SharedPreferences，再请求 `/app/me/`。只有取得有效的业务用户信息才进入主界面；新凭据或资料请求失败时恢复此前保存的令牌对。
 3. 受保护请求收到 `401` 时，OkHttp Authenticator 串行调用 App 刷新接口，并将原请求用新 access token 重试一次。refresh 被拒绝或过期时删除本地令牌，启动流程进入登录页并提示重新登录。
 4. 错误密码、停用账号或错误账号类型均不建立登录态；登录页显示“账号或密码错误；如果账号已停用，请联系管理员。”服务端的 `403` 显示 App 权限提示。
 5. 网络错误不会被当作令牌过期。恢复会话时遇到网络错误会保留令牌并提示检查网络；服务端错误显示稍后重试提示。
@@ -51,7 +51,11 @@ Launcher 的 adaptive icon 与 API 24–25 密度图标使用提供的 `Pandoraz
 2026-10-20 本地验证：
 
 - 后端：`python manage.py test --verbosity 2`，17 项测试通过，覆盖 App 登录、刷新、当前用户、错误密码、停用账号及账号类型隔离。
-- Android：`./gradlew.bat lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest --no-daemon`，通过。10 项 JVM 测试覆盖响应映射、凭据失败、会话恢复，以及 Retrofit 登录、当前用户、401 刷新和重试；`connectedDebugAndroidTest` 在隔离的 Android 37 模拟器上 7 项全部通过，覆盖账户 UI 流程和 Keystore 令牌存储。
+- Android：`./gradlew.bat lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest --no-daemon`，通过。10 项 JVM 测试和 Android 37 模拟器上的 7 项仪器测试通过。
+
+2026-10-22 会话恢复修复验证：
+
+- Android：`./gradlew.bat lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest connectedDebugAndroidTest --no-daemon`，通过。14 项 JVM 测试和 8 项模拟器仪器测试通过，覆盖重新登录保留旧会话及临时验证故障后的重试。
 - Debug APK 位于 `android/app/build/outputs/apk/debug/app-debug.apk`。
 
 Android CI 的标准复现命令为：

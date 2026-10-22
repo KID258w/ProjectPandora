@@ -72,6 +72,15 @@ fun LoginScreen(model: AccountViewModel) {
         PageTitle("欢迎回来")
         Text("使用管理员为你录入的业务账号登录", fontSize = 14.sp, color = C.Muted)
         model.error?.let { Note(it, C.ErrorPale, C.Error) }
+        if (model.canRetrySessionValidation) {
+            TextButton(
+                onClick = model::retrySessionValidation,
+                enabled = !model.loading,
+                modifier = Modifier.testTag("retry_session_validation"),
+            ) {
+                Text("重试验证", color = C.Orange)
+            }
+        }
         OutlinedTextField(account, { account = it; model.clearError() }, Modifier.fillMaxWidth().testTag("account"),
             label = { Text("账号") }, singleLine = true, enabled = !model.loading,
             isError = model.error == "请输入账号", shape = RoundedCornerShape(12.dp),
