@@ -12,6 +12,7 @@
 - [ ] 2.2 Build personal task selection capped at ten and long-press drag-handle reordering without exposing task-definition edits.
 - [ ] 2.3 Add “view all” navigation to secondary lists; keep up to ten company items/tasks/personal tasks there and route selected tasks to their authorized task detail.
 - [ ] 2.4 Keep full log editing/history and full task actions in their dedicated modules.
+- [ ] 2.5 Add a Home task-notification bell and notification list with unread red-dot behavior and navigation to the relevant task detail.
 
 ## 3. Verification
 
@@ -19,3 +20,8 @@
 - [ ] 3.2 Test first-use prefill, subsequent independence, per-user isolation, max-ten validation, drag ordering, and automatic ineligible-item removal.
 - [ ] 3.3 Test five-row Home previews, up-to-ten secondary lists, task-detail navigation, latest-five submitted logs, draft exclusion, common published items, and short/empty states.
 - [ ] 3.4 Verify Home APIs do not expose subordinate tasks/logs or enable full task/log mutations.
+- [ ] 3.5 Verify approval and approved-assignment notification triggers, read-state behavior, authorized task navigation, and that viewing a notification does not change task state.
+
+## 4. Prototype scope
+
+- [x] 4.1 Update the local Android demo with a Home notification bell, red dot for unread approval/incoming-assignment notices, and a notification list that opens the related task detail. This prototype item does not count as production implementation of sections 1–3.

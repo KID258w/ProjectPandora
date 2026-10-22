@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Work views are responsibility-scoped and read-only
-The system SHALL provide month, week, and day views of formal tasks for the selected responsible person. Every user SHALL default to their own view. Authorized managers SHALL be able to select a subordinate or any permitted lower-level subordinate and view that person's tasks without combining other people's tasks into the selected view. The view surface SHALL NOT mutate tasks. Every task bar in month, week, unfinished-task, and event areas SHALL open its task detail; details reached through a subordinate view SHALL be read-only. Work views SHALL NOT reveal DailyLog data.
+Month, week, and day views SHALL show tasks for one responsible person. Users SHALL default to their own view; authorized managers MAY select one descendant. Views SHALL be read-only, subordinate details SHALL remain read-only, and no DailyLog data SHALL be shown.
 
 #### Scenario: Manager drills down to a subordinate's views
 - **WHEN** a manager selects an authorized subordinate or subordinate of a subordinate and switches between month, week, and day
@@ -16,20 +16,22 @@ The system SHALL provide month, week, and day views of formal tasks for the sele
 - **THEN** the system displays no log content, summary, draft state, or task-log association
 
 ### Requirement: Month view spans task creation through deadline
-The system SHALL position a task bar from the task's actual creation date to its deadline. The creation-date position SHALL NOT imply that work started on that date. Each bar SHALL display only task title and binary completion status (“未完成” or “已完成”), with a clearly legible status label and no leading dot. A date SHALL show at most three task bars and an exact date-specific “+N项” overflow indicator; selecting a bar opens task detail and selecting the date or overflow opens that date's day view.
+Month view SHALL draw each task bar from its actual creation date through its deadline. Bars show only the title; color distinguishes other-created assignments from self-created tasks, not status or department. A legend explains colors and bars have no leading dot. Each date shows at most three bars plus an exact “+N项” overflow; bars open task detail and dates/overflow open day view.
 
 #### Scenario: Month view shows creation date and deadline
 - **WHEN** a task is created on one date and has a later deadline in the selected month
 - **THEN** its bar starts at its actual creation date and ends at its deadline without implying a planned start date
+
+#### Scenario: Month bars show title and ordinary assignment source color only
+- **WHEN** a user views tasks in the month calendar
+- **THEN** each bar displays its title only, its color distinguishes other-created assignments from self-created tasks according to the legend, and neither text nor color indicates completion status or a special cross-department type
 
 #### Scenario: Month view caps visible bars
 - **WHEN** more than three task bars overlap a calendar date
 - **THEN** no more than three bars are shown directly and the date displays an exact “+N项” count for the remaining bars
 
 ### Requirement: Week and day views use a date strip and full-day time axis
-The week view SHALL display a compact date strip for Monday through Sunday, an all-day task area, and a complete 24-hour timeline in that order. All seven date columns SHALL fit simultaneously within the available mobile viewport without horizontal scrolling. The date strip and all-day task area SHALL remain fixed above the timeline; only the timeline SHALL scroll vertically. The date strip, all-day task bars, and event columns SHALL share the same seven-column widths and spacing so each event aligns with its corresponding date. The timeline SHALL use dates as horizontal columns and 00:00–23:00 as vertical hour marks. Selecting a date from the week strip SHALL open that date in day view.
-
-The day view SHALL use the same fixed compact seven-day strip for the selected date's week with the selected day highlighted, an all-day task area when viewing today, and the selected day's complete 24-hour timeline. The seven dates SHALL fit without horizontal scrolling; the date strip and all-day task area SHALL remain fixed while only the selected day's timeline scrolls vertically. Selecting another date in the strip SHALL change the day being viewed.
+Week view SHALL show a Monday–Sunday date strip, all-day task area, and full 24-hour timeline in that order; seven columns fit without horizontal scrolling. Date strip and all-day area stay fixed while the aligned timeline scrolls vertically. Day view reuses the fixed week strip with the selected date highlighted and its full-day timeline; dates remain selectable.
 
 #### Scenario: User views the current week calendar
 - **WHEN** a user opens the current week
@@ -47,10 +49,26 @@ The day view SHALL use the same fixed compact seven-day strip for the selected d
 - **WHEN** a user vertically scrolls the selected day's timeline
 - **THEN** the compact seven-day strip and today's all-day task area remain fixed and the selected date's events scroll only vertically
 
-### Requirement: Week and day views show timestamped task events as bars
-The system SHALL display actual task-operation events in the hour row corresponding to their recorded local date and hour; each event card represents a point in time, not a duration. Within each hour row, cards SHALL be ordered by their full recorded local timestamp and SHALL show the exact event time, task title, event type, and complete summary without truncation; text SHALL wrap as needed and card height SHALL grow to fit. Each hour row SHALL have a baseline height and SHALL expand to fit all cards in that hour, using the greatest stacked-card height required by any date column in that hour; all date columns in the same row SHALL remain aligned at that expanded height. No event card SHALL cross its hour-row boundary. Event types SHALL be limited to responsible-person task update, completion submission, acceptance completion, and the combined “提交并完成” event when the responsible person is also the creator. Approval, return, cancellation, and ordinary task-field edits SHALL NOT appear as view events.
+### Requirement: Work-view periods support direct date selection
+The month period header SHALL open a quick year/month selector. The week and day period headers SHALL open a calendar that allows directly selecting a specific date. Selecting a date in week mode SHALL show the week containing that date and highlight the selected date; selecting a date in day mode SHALL show that exact date. The week and day date strips SHALL remain directly selectable as already specified above.
 
-Events SHALL be scoped to the responsible person's task view, not to the event actor's view. An acceptance by an upper-level task dispatcher SHALL appear in the responsible person's view and SHALL NOT appear in the dispatcher's own view unless the dispatcher is also the responsible person.
+#### Scenario: User jumps to a month in month mode
+- **WHEN** a user opens the quick year/month selector from month mode and chooses a year and month
+- **THEN** the month view navigates to the selected month
+
+#### Scenario: User directly selects a date in week or day mode
+- **WHEN** a user opens the calendar from week/day mode and taps a specific date
+- **THEN** week mode jumps to the containing week and highlights that date, while day mode opens the exact selected date
+
+### Requirement: Work view minimizes redundant headers
+The work-view page SHALL omit its redundant brand masthead and large page title. It SHALL keep object selection and Task Center access in a compact control row and reserve the remaining height for the schedule board. In week/day mode the date strip and all-day tasks SHALL remain pinned, and the timeline SHALL occupy the remaining viewport and scroll vertically. Other main-tab pages MAY retain their own branding and page headings.
+
+#### Scenario: Work view prioritizes the timeline viewport
+- **WHEN** a user opens week or day view on a phone
+- **THEN** redundant brand and page-title headers are omitted, essential controls remain compact, the date strip and all-day task bars stay fixed, and the timeline receives the remaining visible height for vertical scrolling
+
+### Requirement: Week and day views show timestamped task events as bars
+Week/day views SHALL place actual task updates, completion submissions, and acceptance completion at their recorded local hour. Cards show time, title, type, and full summary; they wrap and hour rows expand as needed without overlap or misalignment. Events belong to the task assignee's view, not the actor's. Approval, return, cancellation, and ordinary task edits are excluded.
 
 #### Scenario: Responsible person adds a task update
 - **WHEN** the responsible person appends a textual progress update
@@ -73,9 +91,7 @@ Events SHALL be scoped to the responsible person's task view, not to the event a
 - **THEN** the day hour row expands to show every full event card and its complete text without clipping or crossing the neighboring hour boundary
 
 ### Requirement: Current unfinished tasks appear in the all-day area
-The current week SHALL show all active unfinished tasks for the selected responsible person as clickable task bars in an “全天” area above the timeline. Week bars SHALL start at the first day of the week and extend to the deadline's day column when the deadline falls within the week; tasks whose deadline is outside the week SHALL extend to the last day column. This length SHALL only cue whether the deadline falls within the current week, and SHALL NOT communicate creation date, start date, or actual task duration. Bars SHALL show the task title only.
-
-Today SHALL show that person's active unfinished tasks as full-width task bars in the day view's “全天” area, without status, deadline, or summary text. Past/future weeks and past/future days SHALL NOT show these current unfinished-task areas. Future dates SHALL NOT fabricate task-operation events.
+The current week SHALL show the selected person's active unfinished tasks as clickable “全天” bars from Monday through the deadline column, or through Sunday when due outside the week. Bar length only cues whether the deadline is in this week; it does not show duration. Today shows full-width bars. Past/future periods omit this area, and future events are not fabricated.
 
 #### Scenario: Current week shows cross-day all-day task bars
 - **WHEN** the selected responsible person has active unfinished tasks and views the current week
@@ -88,10 +104,3 @@ Today SHALL show that person's active unfinished tasks as full-width task bars i
 #### Scenario: Historical or future period omits the unfinished area
 - **WHEN** the selected period is not the current week or today
 - **THEN** the relevant unfinished-task area is omitted; only actual events are displayed and future events are not fabricated
-
-### Requirement: Historical completion state freezes at natural-day end
-The system SHALL derive a historical day's binary completion state from events through the end of that natural day in the configured business time zone. Later task events SHALL NOT rewrite that historical state.
-
-#### Scenario: Task completes after a historical day
-- **WHEN** a task is completed after a previously viewed day ended
-- **THEN** that past day retains its end-of-day completion state while the completion event appears on its actual date

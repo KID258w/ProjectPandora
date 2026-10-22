@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas as ComposeCanvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -54,7 +55,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
@@ -65,6 +70,7 @@ import com.example.pandorademo.ui.theme.PandoraDemoTheme
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 private val Canvas = Color(0xFFF6F7F9)
 private val Paper = Color(0xFFFFFFFF)
@@ -75,10 +81,8 @@ private val Amber = Color(0xFFF2A51A)
 private val AmberPale = Color(0xFFFFF3D6)
 private val Blue = Color(0xFF438FE8)
 private val BluePale = Color(0xFFEAF3FF)
-private val BlueStatus = Color(0xFF175A9E)
 private val Teal = Color(0xFF20B99A)
 private val TealPale = Color(0xFFE7F8F3)
-private val TealStatus = Color(0xFF126B57)
 private val Violet = Color(0xFF8A6BE8)
 private val VioletPale = Color(0xFFF1EDFF)
 private val Rose = Color(0xFFE77778)
@@ -92,7 +96,7 @@ private enum class RootTab(val title: String, val symbol: String) {
     MINE("我的", "○")
 }
 
-private enum class ChildPage { TASKS, LOG_EDITOR, COMPANY_MATTERS, COMPANY_TASKS, PERSONAL_FOCUS }
+private enum class ChildPage { TASKS, LOG_EDITOR, COMPANY_MATTERS, COMPANY_TASKS, PERSONAL_FOCUS, NOTIFICATIONS }
 private enum class ViewMode(val title: String) { MONTH("月"), WEEK("周"), DAY("日") }
 private data class WorkViewUiState(
     val mode: ViewMode = ViewMode.MONTH,
@@ -101,6 +105,9 @@ private data class WorkViewUiState(
     val monthShift: Int = 0,
     val unfinishedExpanded: Boolean = true
 )
+
+private const val DemoBaseYear = 2026
+private const val DemoBaseMonth = Calendar.OCTOBER
 
 private data class DemoTask(val title: String, val source: String, val status: String, val deadline: String, val color: Color)
 private enum class WorkEventKind(val label: String, val accent: Color, val tint: Color) {
@@ -157,8 +164,7 @@ private enum class ApprovalStatus(val label: String) {
 
 private enum class WorkflowOrigin {
     UPPER,
-    INDEPENDENT,
-    CROSS_DEPARTMENT
+    INDEPENDENT
 }
 
 private data class WorkflowProgress(val percent: Int, val note: String, val date: String)
@@ -189,10 +195,20 @@ private data class WorkflowTask(
     val approvalNote: String = "",
     val expectedDeliverables: String = "",
     val associationNote: String = "",
-    val isCrossDepartment: Boolean = false,
     val textUpdates: List<WorkflowTextUpdate> = emptyList(),
     val cancelled: Boolean = false,
     val cancellationNote: String = ""
+)
+
+private enum class TaskNoticeKind(val title: String, val accent: Color, val tint: Color) {
+    APPROVAL("待你审批", Violet, VioletPale),
+    ASSIGNMENT("新任务已分配", Blue, BluePale)
+}
+
+private data class TaskInboxNotice(
+    val key: String,
+    val kind: TaskNoticeKind,
+    val task: WorkflowTask
 )
 
 private val initialWorkflowTasks = listOf(
@@ -215,14 +231,12 @@ private val initialWorkflowTasks = listOf(
 private fun workflowTaskFromHomeDemo(task: DemoTask, id: Int, person: DemoPerson): WorkflowTask {
     val origin = when (task.source) {
         "上级分配" -> WorkflowOrigin.UPPER
-        "跨部门工作" -> WorkflowOrigin.CROSS_DEPARTMENT
         else -> WorkflowOrigin.INDEPENDENT
     }
     val sender = when (origin) {
-        WorkflowOrigin.INDEPENDENT -> person
-        WorkflowOrigin.CROSS_DEPARTMENT -> demoPeople.firstOrNull {
+        WorkflowOrigin.INDEPENDENT -> if (task.source == "他人派发") demoPeople.firstOrNull {
             it.role == DemoRole.DEPARTMENT_MANAGER && it.name != person.name
-        } ?: demoPeople.first { it.role == DemoRole.DEPARTMENT_MANAGER }
+        } ?: person else person
         WorkflowOrigin.UPPER -> {
             val senderRole = when (person.role) {
                 DemoRole.FOUNDER -> DemoRole.FOUNDER
@@ -247,8 +261,7 @@ private fun workflowTaskFromHomeDemo(task: DemoTask, id: Int, person: DemoPerson
         deadline = task.deadline,
         origin = origin,
         status = status,
-        approvalStatus = ApprovalStatus.APPROVED,
-        isCrossDepartment = origin == WorkflowOrigin.CROSS_DEPARTMENT
+        approvalStatus = ApprovalStatus.APPROVED
     )
 }
 
@@ -278,8 +291,12 @@ private fun workViewTargetOptions(person: DemoPerson): List<String> =
         .map { "${it.unit} · ${it.name}（${it.role.label}）" }
 
 private fun taskAssigneeOptions(person: DemoPerson): List<DemoPerson> {
+    if (person.role == DemoRole.FOUNDER) {
+        return demoPeople.distinctBy { it.optionLabel }
+    }
+
     val directReports = when (person.role) {
-        DemoRole.FOUNDER -> demoPeople.filter { it.role == DemoRole.DEPARTMENT_MANAGER }
+        DemoRole.FOUNDER -> emptyList()
         DemoRole.DEPARTMENT_MANAGER -> demoPeople.filter {
             it.role == DemoRole.TEAM_LEADER && it.parentUnit == person.unit
         }
@@ -288,7 +305,12 @@ private fun taskAssigneeOptions(person: DemoPerson): List<DemoPerson> {
         }
         DemoRole.EMPLOYEE -> emptyList()
     }
-    return (listOf(person) + directReports).distinctBy { it.optionLabel }
+    val permittedPeers = if (person.role == DemoRole.DEPARTMENT_MANAGER) {
+        demoPeople.filter { it.role == DemoRole.DEPARTMENT_MANAGER && it.unit != person.unit }
+    } else {
+        emptyList()
+    }
+    return (listOf(person) + directReports + permittedPeers).distinctBy { it.optionLabel }
 }
 
 /**
@@ -300,15 +322,20 @@ private fun taskSourceLabel(task: WorkflowTask, role: DemoRole, actorName: Strin
     return when (role) {
         DemoRole.FOUNDER -> when (task.origin) {
             WorkflowOrigin.UPPER -> "上级分配"
-            WorkflowOrigin.INDEPENDENT -> "自主创建"
-            WorkflowOrigin.CROSS_DEPARTMENT -> "跨部门工作"
+            WorkflowOrigin.INDEPENDENT -> if (task.senderName == actorName) "自主创建" else "他人派发"
         }
         DemoRole.DEPARTMENT_MANAGER -> when (task.origin) {
+            // Founder-created assignments can now target any organization level.
+            // To the assignee, they are still work assigned from above.
+            WorkflowOrigin.INDEPENDENT -> when {
+                task.senderRole == DemoRole.FOUNDER && task.senderName != actorName -> "上级分配"
+                task.senderName != actorName -> "他人派发"
+                else -> "部门自主"
+            }
             WorkflowOrigin.UPPER -> "上级分配"
-            WorkflowOrigin.INDEPENDENT -> "部门自主"
-            WorkflowOrigin.CROSS_DEPARTMENT -> "跨部门工作"
         }
         DemoRole.TEAM_LEADER -> {
+            if (task.senderRole == DemoRole.FOUNDER && task.senderName != actorName) return "上级分配"
             val byId = tasks.associateBy { it.id }
             var current: WorkflowTask? = task
             var receivedFromManager = false
@@ -362,20 +389,20 @@ private val companyTasks = listOf(
     DemoTask("产品路线确认", "部门自主", "未完成", "10月20日", Blue),
     DemoTask("研发协作流程梳理", "部门自主", "未完成", "10月22日", Blue),
     DemoTask("部门月度评审准备", "部门自主", "未完成", "10月24日", Blue),
-    DemoTask("跨部门资料整理", "跨部门工作", "未完成", "10月14日", Blue),
-    DemoTask("市场方案协同确认", "跨部门工作", "未完成", "10月19日", Blue)
+    DemoTask("跨部门资料整理", "他人派发", "未完成", "10月14日", Blue),
+    DemoTask("市场方案协同确认", "他人派发", "未完成", "10月19日", Blue)
 )
 
 private val personalFocusTasks = listOf(
     DemoTask("完成需求评审", "上级分配", "未完成", "10月10日", Blue),
     DemoTask("整理测试计划", "部门自主", "未完成", "10月12日", Blue),
-    DemoTask("跨部门资料整理", "跨部门工作", "未完成", "10月14日", Blue),
+    DemoTask("跨部门资料整理", "他人派发", "未完成", "10月14日", Blue),
     DemoTask("完善产品交付规范", "部门自主", "未完成", "10月16日", Blue),
     DemoTask("确认项目风险清单", "上级分配", "未完成", "10月11日", Blue),
     DemoTask("产品路线确认", "部门自主", "未完成", "10月20日", Blue),
     DemoTask("客户需求复盘", "上级分配", "未完成", "10月18日", Blue),
     DemoTask("研发协作流程梳理", "部门自主", "未完成", "10月22日", Blue),
-    DemoTask("市场方案协同确认", "跨部门工作", "未完成", "10月19日", Blue),
+    DemoTask("市场方案协同确认", "他人派发", "未完成", "10月19日", Blue),
     DemoTask("部门月度评审准备", "部门自主", "未完成", "10月24日", Blue)
 )
 
@@ -383,7 +410,7 @@ private val otherMyTasks = listOf(
     DemoTask("整理团队培训材料", "部门自主", "未完成", "10月27日", Blue),
     DemoTask("复核客户反馈清单", "上级分配", "未完成", "10月26日", Blue),
     DemoTask("准备新员工入职指引", "部门自主", "未完成", "10月30日", Blue),
-    DemoTask("协助财务核对项目预算", "跨部门工作", "未完成", "10月28日", Blue)
+    DemoTask("协助财务核对项目预算", "他人派发", "未完成", "10月28日", Blue)
 )
 
 private fun demoUnfinishedViewTasks(target: String): List<UnfinishedViewTask> {
@@ -403,7 +430,7 @@ private fun demoUnfinishedViewTasks(target: String): List<UnfinishedViewTask> {
         )
     } else {
         listOf(
-            DemoTask("补充跨部门资料", "跨部门工作", "未完成", "10月10日", Blue) to 5,
+            DemoTask("补充跨部门资料", "他人派发", "未完成", "10月10日", Blue) to 5,
             DemoTask("完善产品交付规范", "部门自主", "未完成", "10月15日", Blue) to 6,
             DemoTask("整理新版本评审材料", "上级分配", "未完成", "10月11日", Blue) to 6
         )
@@ -437,14 +464,14 @@ private fun demoWorkEvents(target: String): List<DemoWorkEvent> {
         )
     }
     val assignedTask = DemoTask("公司级工作方案", "上级分配", "未完成", "10月14日", Blue)
-    val crossDepartmentTask = DemoTask("跨部门资料整理", "跨部门工作", "未完成", "10月14日", Blue)
+    val peerAssignedTask = DemoTask("跨部门资料整理", "他人派发", "未完成", "10月14日", Blue)
     val ownTask = DemoTask("部门月度评审准备", "部门自主", "已完成", "10月9日", Teal)
     return listOf(
         DemoWorkEvent(-4, "09:35", assignedTask, WorkEventKind.UPDATE, "补充阶段目标和交付边界，待团队确认。"),
-        DemoWorkEvent(-2, "14:10", crossDepartmentTask, WorkEventKind.UPDATE, "已汇总协作资料，补充缺失的业务口径。"),
+        DemoWorkEvent(-2, "14:10", peerAssignedTask, WorkEventKind.UPDATE, "已汇总协作资料，补充缺失的业务口径。"),
         DemoWorkEvent(-1, "16:45", assignedTask, WorkEventKind.SUBMISSION, "方案及配套材料已提交周总验收。"),
         DemoWorkEvent(0, "10:15", assignedTask, WorkEventKind.ACCEPTANCE, "周总验收通过，任务已完成。"),
-        DemoWorkEvent(0, "10:40", crossDepartmentTask, WorkEventKind.UPDATE, "补齐协作材料中的验收口径、交付清单和遗留问题，等待相关部门确认。"),
+        DemoWorkEvent(0, "10:40", peerAssignedTask, WorkEventKind.UPDATE, "补齐协作材料中的验收口径、交付清单和遗留问题，等待相关部门确认。"),
         DemoWorkEvent(0, "17:20", ownTask, WorkEventKind.SUBMIT_AND_COMPLETE, "本月评审安排已整理并完成。")
     )
 }
@@ -466,7 +493,7 @@ private fun orderedCompanyTasks(): List<DemoTask> {
     fun sourceOrder(source: String) = when (source) {
         "上级分配" -> 0
         "部门自主" -> 1
-        "跨部门工作" -> 2
+        "他人派发" -> 0
         else -> 3
     }
     fun deadlineOrder(deadline: String) = deadline.filter(Char::isDigit).toIntOrNull() ?: Int.MAX_VALUE
@@ -495,15 +522,52 @@ private fun PandoraPrototype() {
     var initialTaskDetailId by remember { mutableStateOf<Int?>(null) }
     var taskDetailReturnPage by remember { mutableStateOf<ChildPage?>(null) }
     var logTarget by remember { mutableStateOf("本人") }
-    var logCompleted by remember { mutableStateOf("") }
-    var logPlan by remember { mutableStateOf("") }
-    var logStatus by remember { mutableStateOf("未填写") }
+    var selectedLogOffset by remember { mutableStateOf(-1) }
+    var logMonthShift by remember { mutableStateOf(0) }
+    var logEditorOffset by remember { mutableStateOf(0) }
+    var dailyLogs by remember {
+        mutableStateOf(
+            mapOf(
+                -3 to DemoDailyLog("整理周会纪要，明确下一阶段的重点", "跟进会议中的行动项。", "已提交"),
+                -2 to DemoDailyLog("完成需求梳理，确认任务分发流程。", "补充页面交互稿。", "已提交"),
+                -1 to DemoDailyLog("完成任务详情页设计并与团队同步。", "继续完善原型。", "已提交")
+            )
+        )
+    }
     var viewTarget by remember { mutableStateOf("本人") }
     var workViewState by remember { mutableStateOf(WorkViewUiState()) }
     var taskDetailReadOnly by remember { mutableStateOf(false) }
     var orderedPersonalTasks by remember { mutableStateOf(personalFocusTasks) }
     var workflowTasks by remember { mutableStateOf(initialWorkflowTasks) }
     var demoPerson by remember { mutableStateOf(demoPeople.first { it.role == DemoRole.DEPARTMENT_MANAGER }) }
+    var readTaskNotificationKeys by remember { mutableStateOf(emptySet<String>()) }
+    val taskNotifications = buildList {
+        workflowTasks.filter {
+            !it.cancelled && it.approvalStatus == ApprovalStatus.PENDING &&
+                it.approverRole == demoPerson.role && it.approverName == demoPerson.name
+        }.forEach { task ->
+            add(TaskInboxNotice("${demoPerson.optionLabel}:approval:${task.id}", TaskNoticeKind.APPROVAL, task))
+        }
+        workflowTasks.filter {
+            !it.cancelled && it.approvalStatus == ApprovalStatus.APPROVED &&
+                it.assigneeRole == demoPerson.role && it.assigneeName == demoPerson.name &&
+                (it.senderRole != demoPerson.role || it.senderName != demoPerson.name)
+        }.forEach { task ->
+            add(TaskInboxNotice("${demoPerson.optionLabel}:assignment:${task.id}", TaskNoticeKind.ASSIGNMENT, task))
+        }
+    }.sortedByDescending { it.task.id }
+
+    fun openTaskNotifications() {
+        readTaskNotificationKeys = readTaskNotificationKeys + taskNotifications.map { it.key }
+        childPage = ChildPage.NOTIFICATIONS
+    }
+
+    fun openNotifiedTask(notice: TaskInboxNotice) {
+        initialTaskDetailId = notice.task.id
+        taskDetailReturnPage = ChildPage.NOTIFICATIONS
+        taskDetailReadOnly = false
+        childPage = ChildPage.TASKS
+    }
 
     fun openHomeTask(
         task: DemoTask,
@@ -570,12 +634,20 @@ private fun PandoraPrototype() {
                     readOnlyDetail = taskDetailReadOnly
                 )
                 ChildPage.LOG_EDITOR -> DailyLogEditorScreen(
-                    completed = logCompleted,
-                    onCompletedChange = { logCompleted = it },
-                    plan = logPlan,
-                    onPlanChange = { logPlan = it },
-                    status = logStatus,
-                    onStatusChange = { logStatus = it },
+                    logDate = demoDate(logEditorOffset),
+                    log = dailyLogs[logEditorOffset],
+                    canEdit = logEditorOffset in -2..0,
+                    onSave = { completed, plan ->
+                        val oldStatus = dailyLogs[logEditorOffset]?.status
+                        dailyLogs = dailyLogs + (logEditorOffset to DemoDailyLog(
+                            completed,
+                            plan,
+                            if (oldStatus == "已提交") "已提交" else "草稿"
+                        ))
+                    },
+                    onSubmit = { completed, plan ->
+                        dailyLogs = dailyLogs + (logEditorOffset to DemoDailyLog(completed, plan, "已提交"))
+                    },
                     onBack = { childPage = null }
                 )
                 ChildPage.COMPANY_MATTERS -> CompanyMattersScreen(onBack = { childPage = null })
@@ -589,11 +661,25 @@ private fun PandoraPrototype() {
                     onBack = { childPage = null },
                     onTaskClick = { openHomeTask(it, ChildPage.PERSONAL_FOCUS) }
                 )
+                ChildPage.NOTIFICATIONS -> TaskNotificationsScreen(
+                    notifications = taskNotifications,
+                    onBack = { childPage = null },
+                    onOpenTask = ::openNotifiedTask
+                )
                 null -> when (selectedTab) {
                     RootTab.HOME -> HomeScreen(
                         personalFocus = orderedPersonalTasks,
+                        hasUnreadTaskNotifications = taskNotifications.any { it.key !in readTaskNotificationKeys },
+                        onNotifications = ::openTaskNotifications,
                         onLogs = { selectedTab = RootTab.LOG },
-                        onWriteLog = { selectedTab = RootTab.LOG; childPage = ChildPage.LOG_EDITOR },
+                        onWriteLog = {
+                            selectedTab = RootTab.LOG
+                            logTarget = "本人"
+                            logMonthShift = 0
+                            selectedLogOffset = 0
+                            logEditorOffset = 0
+                            childPage = ChildPage.LOG_EDITOR
+                        },
                         onCompanyMatters = { childPage = ChildPage.COMPANY_MATTERS },
                         onCompanyTasks = { childPage = ChildPage.COMPANY_TASKS },
                         onPersonalFocus = { childPage = ChildPage.PERSONAL_FOCUS }
@@ -620,8 +706,16 @@ private fun PandoraPrototype() {
                     RootTab.LOG -> LogCalendarScreen(
                         target = logTarget,
                         viewer = demoPerson,
+                        selectedOffset = selectedLogOffset,
+                        monthShift = logMonthShift,
+                        ownLogs = dailyLogs,
+                        onSelectedOffsetChange = { selectedLogOffset = it },
+                        onMonthShiftChange = { logMonthShift = it },
                         onTargetChange = { logTarget = it },
-                        onEditToday = { childPage = ChildPage.LOG_EDITOR }
+                        onEditSelectedDate = { offset ->
+                            logEditorOffset = offset
+                            childPage = ChildPage.LOG_EDITOR
+                        }
                     )
                     RootTab.AI -> AiMapScreen()
                     RootTab.MINE -> MyScreen(onTasks = { openTaskCenter() })
@@ -641,6 +735,8 @@ private fun PandoraPrototype() {
 @Composable
 private fun HomeScreen(
     personalFocus: List<DemoTask>,
+    hasUnreadTaskNotifications: Boolean,
+    onNotifications: () -> Unit,
     onCompanyMatters: () -> Unit,
     onCompanyTasks: () -> Unit,
     onPersonalFocus: () -> Unit,
@@ -650,7 +746,11 @@ private fun HomeScreen(
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)
     ) {
-        BrandHeader(showProfile = true)
+        BrandHeader(
+            showProfile = true,
+            hasUnreadTaskNotifications = hasUnreadTaskNotifications,
+            onNotifications = onNotifications
+        )
         Spacer(Modifier.height(18.dp))
         Text("工作台", color = Ink, fontSize = 29.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(18.dp))
@@ -700,6 +800,65 @@ private fun HomeScreen(
                 footer = "填写今日日志",
                 footerAction = onWriteLog
             )
+        }
+        Spacer(Modifier.height(18.dp))
+    }
+}
+
+@Composable
+private fun TaskNotificationsScreen(
+    notifications: List<TaskInboxNotice>,
+    onBack: () -> Unit,
+    onOpenTask: (TaskInboxNotice) -> Unit
+) {
+    Column(
+        Modifier.fillMaxSize().background(Canvas).verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(top = 11.dp, bottom = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("‹", color = Ink, fontSize = 30.sp, modifier = Modifier.clickable(onClick = onBack).padding(end = 13.dp))
+            Text("任务通知", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        }
+        if (notifications.isEmpty()) {
+            SectionCard("暂无任务通知", "♧", Muted) {
+                Text("需要你处理的审批或新派发任务会显示在这里。", color = Muted, fontSize = 11.sp)
+            }
+        } else {
+            notifications.forEach { notice ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 9.dp).clickable { onOpenTask(notice) },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Paper),
+                    border = BorderStroke(1.dp, Line)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(notice.kind.tint),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(if (notice.kind == TaskNoticeKind.APPROVAL) "✓" else "▤", color = notice.kind.accent, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.width(11.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(notice.kind.title, color = notice.kind.accent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                            Text(notice.task.title, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 3.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            val context = if (notice.kind == TaskNoticeKind.APPROVAL) {
+                                "${notice.task.senderName} 创建 · 截止 ${notice.task.deadline}"
+                            } else {
+                                "${notice.task.senderName} 派发 · 截止 ${notice.task.deadline}"
+                            }
+                            Text(context, color = Muted, fontSize = 9.sp, modifier = Modifier.padding(top = 3.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Text("›", color = Muted, fontSize = 22.sp, modifier = Modifier.padding(start = 7.dp))
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(18.dp))
     }
@@ -963,7 +1122,11 @@ private fun RankedTaskCard(
 }
 
 @Composable
-private fun BrandHeader(showProfile: Boolean) {
+private fun BrandHeader(
+    showProfile: Boolean,
+    hasUnreadTaskNotifications: Boolean = false,
+    onNotifications: (() -> Unit)? = null
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 13.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -973,6 +1136,13 @@ private fun BrandHeader(showProfile: Boolean) {
             Text("智能掌上工作系统", color = Muted, fontSize = 11.sp)
         }
         if (showProfile) {
+            onNotifications?.let { onClick ->
+                TaskNotificationBell(
+                    hasUnread = hasUnreadTaskNotifications,
+                    onClick = onClick
+                )
+                Spacer(Modifier.width(7.dp))
+            }
             Column(horizontalAlignment = Alignment.End) {
                 Text("林经理  ·  部门经理", color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 Text("产品部   ·   周五 10月9日", color = Muted, fontSize = 10.sp)
@@ -981,6 +1151,45 @@ private fun BrandHeader(showProfile: Boolean) {
             Box(Modifier.size(37.dp).clip(CircleShape).background(AmberPale), contentAlignment = Alignment.Center) {
                 Text("林", color = Ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
+        }
+    }
+}
+
+@Composable
+private fun TaskNotificationBell(hasUnread: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        ComposeCanvas(Modifier.size(22.dp)) {
+            val w = size.width
+            val h = size.height
+            val stroke = 1.8.dp.toPx()
+            val bell = Path().apply {
+                moveTo(w * 0.5f, h * 0.12f)
+                cubicTo(w * 0.36f, h * 0.12f, w * 0.27f, h * 0.23f, w * 0.27f, h * 0.4f)
+                lineTo(w * 0.27f, h * 0.64f)
+                cubicTo(w * 0.27f, h * 0.74f, w * 0.2f, h * 0.79f, w * 0.16f, h * 0.84f)
+                lineTo(w * 0.84f, h * 0.84f)
+                cubicTo(w * 0.8f, h * 0.79f, w * 0.73f, h * 0.74f, w * 0.73f, h * 0.64f)
+                lineTo(w * 0.73f, h * 0.4f)
+                cubicTo(w * 0.73f, h * 0.23f, w * 0.64f, h * 0.12f, w * 0.5f, h * 0.12f)
+                close()
+            }
+            drawPath(path = bell, color = Muted, style = Stroke(width = stroke, cap = StrokeCap.Round))
+            drawLine(
+                color = Muted,
+                start = Offset(w * 0.39f, h * 0.9f),
+                end = Offset(w * 0.61f, h * 0.9f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+        }
+        if (hasUnread) {
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp)
+                    .size(8.dp).clip(CircleShape).background(Rose)
+            )
         }
     }
 }
@@ -996,60 +1205,122 @@ private fun WorkViewScreen(
     onOpenTask: (DemoTask) -> Unit
 ) {
     val mode = state.mode
-    val selectedDate = demoDate(state.dayOffset)
-    val selectedMonthShift = (selectedDate.get(Calendar.YEAR) - 2026) * 12 +
-        selectedDate.get(Calendar.MONTH) - Calendar.OCTOBER
     val unfinishedTasks = demoUnfinishedViewTasks(target)
     val taskEvents = demoWorkEvents(target)
+    var showMonthPicker by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var pickerYear by remember { mutableStateOf(DemoBaseYear) }
+    var pickerMonth by remember { mutableStateOf(DemoBaseMonth + 1) }
+    val selectedPeriodDate = when (mode) {
+        ViewMode.MONTH -> monthCalendar(state.monthShift)
+        ViewMode.WEEK -> demoDate(state.dayOffset)
+        ViewMode.DAY -> demoDate(state.dayOffset)
+    }
+    fun openPeriodPicker() {
+        if (mode == ViewMode.MONTH) {
+            pickerYear = selectedPeriodDate.get(Calendar.YEAR)
+            pickerMonth = selectedPeriodDate.get(Calendar.MONTH) + 1
+            showMonthPicker = true
+        } else {
+            showDatePicker = true
+        }
+    }
+    fun selectMonth(year: Int, month: Int) {
+        val monthShift = monthShiftFor(year, month)
+        val selectedMonth = monthCalendar(monthShift)
+        val selectedDay = when (mode) {
+            ViewMode.MONTH, ViewMode.WEEK -> 1
+            ViewMode.DAY -> demoDate(state.dayOffset).get(Calendar.DAY_OF_MONTH)
+                .coerceAtMost(selectedMonth.getActualMaximum(Calendar.DAY_OF_MONTH))
+        }
+        val selectedOffset = dayOffsetFor(year, month, selectedDay)
+        onStateChange(
+            state.copy(
+                monthShift = monthShift,
+                weekShift = weekShiftForDay(selectedOffset),
+                dayOffset = selectedOffset
+            )
+        )
+        showMonthPicker = false
+    }
+    fun selectDate(year: Int, month: Int, day: Int) {
+        val selectedOffset = dayOffsetFor(year, month, day)
+        onStateChange(
+            state.copy(
+                monthShift = monthShiftFor(year, month),
+                weekShift = weekShiftForDay(selectedOffset),
+                dayOffset = selectedOffset
+            )
+        )
+        showDatePicker = false
+    }
+    fun setPeriodDay(dayOffset: Int, nextMode: ViewMode = mode) {
+        val date = demoDate(dayOffset)
+        onStateChange(
+            state.copy(
+                mode = nextMode,
+                dayOffset = dayOffset,
+                weekShift = weekShiftForDay(dayOffset),
+                monthShift = monthShiftFor(date.get(Calendar.YEAR), date.get(Calendar.MONTH) + 1)
+            )
+        )
+    }
     val screenModifier = if (mode == ViewMode.MONTH) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
     } else {
         Modifier.fillMaxSize()
     }
 
-    Column(screenModifier.padding(horizontal = 18.dp)) {
-        BrandHeader(showProfile = false)
-        Spacer(Modifier.height(15.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f)) { PageHeading("工作视图") }
+    Column(screenModifier.padding(horizontal = 14.dp)) {
+        Spacer(Modifier.height(6.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.weight(1f)) {
+                ObjectPicker(
+                    label = "查看对象",
+                    selected = target,
+                    options = workViewTargetOptions(viewer),
+                    onSelected = onTargetChange
+                )
+            }
             OutlinedButton(
                 onClick = onOpenTasks,
-                modifier = Modifier.height(38.dp),
+                modifier = Modifier.height(42.dp),
                 shape = RoundedCornerShape(13.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-            ) { Text("任务中心", color = Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+            ) { Text("任务中心", color = Ink, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
         }
-        Spacer(Modifier.height(14.dp))
-        ObjectPicker(
-            label = "查看对象",
-            selected = target,
-            options = workViewTargetOptions(viewer),
-            onSelected = onTargetChange
-        )
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(7.dp))
         SegmentedChoices(
             values = ViewMode.values().toList(),
             selected = mode,
             label = { it.title },
-            onSelected = { onStateChange(state.copy(mode = it)) }
+            onSelected = {
+                val focusOffset = if (mode == ViewMode.MONTH) {
+                    val month = monthCalendar(state.monthShift)
+                    dayOffsetFor(month.get(Calendar.YEAR), month.get(Calendar.MONTH) + 1, 1)
+                } else state.dayOffset
+                setPeriodDay(focusOffset, it)
+            }
         )
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(5.dp))
         when (mode) {
             ViewMode.WEEK -> {
                 PeriodBar(
                     label = weekLabel(state.weekShift),
                     centerAction = if (state.weekShift == 0) null else "本周",
-                    onPrevious = { onStateChange(state.copy(weekShift = state.weekShift - 1)) },
-                    onNext = { onStateChange(state.copy(weekShift = state.weekShift + 1)) },
-                    onCenter = { onStateChange(state.copy(weekShift = 0)) }
+                    onPrevious = { setPeriodDay(state.dayOffset - 7) },
+                    onNext = { setPeriodDay(state.dayOffset + 7) },
+                    onCenter = { setPeriodDay(0) },
+                    onLabel = ::openPeriodPicker
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(2.dp))
                 WeekScheduleBoard(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     weekShift = state.weekShift,
+                    selectedDayOffset = state.dayOffset,
                     tasks = if (state.weekShift == 0) unfinishedTasks else emptyList(),
                     events = taskEvents,
-                    onSelectDay = { offset -> onStateChange(state.copy(dayOffset = offset, mode = ViewMode.DAY)) },
+                    onSelectDay = { offset -> setPeriodDay(offset, ViewMode.DAY) },
                     onTaskClick = onOpenTask
                 )
             }
@@ -1057,17 +1328,18 @@ private fun WorkViewScreen(
                 PeriodBar(
                     label = dayLabel(state.dayOffset),
                     centerAction = if (state.dayOffset == 0) null else "今天",
-                    onPrevious = { onStateChange(state.copy(dayOffset = state.dayOffset - 1)) },
-                    onNext = { onStateChange(state.copy(dayOffset = state.dayOffset + 1)) },
-                    onCenter = { onStateChange(state.copy(dayOffset = 0)) }
+                    onPrevious = { setPeriodDay(state.dayOffset - 1) },
+                    onNext = { setPeriodDay(state.dayOffset + 1) },
+                    onCenter = { setPeriodDay(0) },
+                    onLabel = ::openPeriodPicker
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(2.dp))
                 DayScheduleBoard(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     dayOffset = state.dayOffset,
                     tasks = if (state.dayOffset == 0) unfinishedTasks else emptyList(),
                     events = taskEvents.filter { it.dayOffset == state.dayOffset },
-                    onSelectDay = { offset -> onStateChange(state.copy(dayOffset = offset)) },
+                    onSelectDay = { offset -> setPeriodDay(offset, ViewMode.DAY) },
                     onTaskClick = onOpenTask
                 )
             }
@@ -1078,21 +1350,44 @@ private fun WorkViewScreen(
                     centerAction = if (state.monthShift == 0) null else "本月",
                     onPrevious = { onStateChange(state.copy(monthShift = state.monthShift - 1)) },
                     onNext = { onStateChange(state.copy(monthShift = state.monthShift + 1)) },
-                    onCenter = { onStateChange(state.copy(monthShift = 0)) }
+                    onCenter = { onStateChange(state.copy(monthShift = 0)) },
+                    onLabel = ::openPeriodPicker
                 )
                 MonthCalendar(
                     month = month,
                     onDaySelected = { day ->
                         val selected = monthCalendar(state.monthShift).apply { set(Calendar.DAY_OF_MONTH, day) }
-                        val today = demoDate(0)
-                        val dayOffset = ((selected.timeInMillis - today.timeInMillis) / (24L * 60L * 60L * 1000L)).toInt()
-                        onStateChange(state.copy(dayOffset = dayOffset, mode = ViewMode.DAY))
+                        val dayOffset = dayOffsetFor(
+                            selected.get(Calendar.YEAR),
+                            selected.get(Calendar.MONTH) + 1,
+                            selected.get(Calendar.DAY_OF_MONTH)
+                        )
+                        onStateChange(state.copy(dayOffset = dayOffset, weekShift = weekShiftForDay(dayOffset), mode = ViewMode.DAY))
                     },
                     onTaskClick = onOpenTask
                 )
             }
         }
-        Spacer(Modifier.height(18.dp))
+        if (mode == ViewMode.MONTH) Spacer(Modifier.height(12.dp))
+    }
+
+    if (showMonthPicker) {
+        QuickMonthPickerDialog(
+            selectedYear = pickerYear,
+            selectedMonth = pickerMonth,
+            onDismiss = { showMonthPicker = false },
+            onYearChange = { pickerYear = it },
+            onMonthSelected = { month -> selectMonth(pickerYear, month) }
+        )
+    }
+    if (showDatePicker) {
+        QuickDatePickerDialog(
+            selectedYear = selectedPeriodDate.get(Calendar.YEAR),
+            selectedMonth = selectedPeriodDate.get(Calendar.MONTH) + 1,
+            selectedDay = selectedPeriodDate.get(Calendar.DAY_OF_MONTH),
+            onDismiss = { showDatePicker = false },
+            onDateSelected = ::selectDate
+        )
     }
 }
 
@@ -1100,6 +1395,7 @@ private fun WorkViewScreen(
 private fun WeekScheduleBoard(
     modifier: Modifier,
     weekShift: Int,
+    selectedDayOffset: Int,
     tasks: List<UnfinishedViewTask>,
     events: List<DemoWorkEvent>,
     onSelectDay: (Int) -> Unit,
@@ -1114,14 +1410,14 @@ private fun WeekScheduleBoard(
                     val dayOffset = mondayOffset + column
                     ScheduleDayHeader(
                         dayOffset = dayOffset,
-                        selected = dayOffset == 0,
+                        selected = dayOffset == selectedDayOffset,
                         compact = true,
                         modifier = Modifier.weight(1f).padding(horizontal = ScheduleColumnGap),
                         onClick = { onSelectDay(dayOffset) }
                     )
                 }
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(2.dp))
             if (weekShift == 0) {
                 Row(verticalAlignment = Alignment.Top) {
                     Text("全天", modifier = Modifier.width(TimeGutterWidth).padding(top = 5.dp), color = Muted, fontSize = 9.sp)
@@ -1133,7 +1429,7 @@ private fun WeekScheduleBoard(
                         }
                     }
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
             }
             ScheduleDivider()
             ScheduleTimelineGrid(
@@ -1173,7 +1469,7 @@ private fun DayScheduleBoard(
                 }
             }
             if (dayOffset == 0) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.Top) {
                     Text("全天", modifier = Modifier.width(TimeGutterWidth).padding(top = 5.dp), color = Muted, fontSize = 9.sp)
                     Column(Modifier.weight(1f)) {
@@ -1209,12 +1505,12 @@ private fun ScheduleDayHeader(
     val date = demoDate(dayOffset)
     val weekday = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")[(date.get(Calendar.DAY_OF_WEEK) + 5) % 7]
     Column(
-        modifier = modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 4.dp),
+        modifier = modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = if (compact) 2.dp else 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(weekday, color = Muted, fontSize = if (compact) 8.sp else 9.sp, fontWeight = FontWeight.Medium, maxLines = 1)
         Box(
-            Modifier.padding(top = 2.dp).size(if (compact) 23.dp else 27.dp).clip(CircleShape)
+            Modifier.padding(top = 1.dp).size(if (compact) 20.dp else 27.dp).clip(CircleShape)
                 .background(if (selected) AmberPale else Color.Transparent),
             contentAlignment = Alignment.Center
         ) {
@@ -1225,7 +1521,7 @@ private fun ScheduleDayHeader(
 
 @Composable
 private fun WeekAllDayTaskBar(item: UnfinishedViewTask, onTaskClick: (DemoTask) -> Unit) {
-    BoxWithConstraints(Modifier.fillMaxWidth().height(29.dp).padding(vertical = 1.dp)) {
+    BoxWithConstraints(Modifier.fillMaxWidth().height(23.dp).padding(vertical = 1.dp)) {
         Row(Modifier.fillMaxSize()) {
             repeat(7) {
                 Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = ScheduleColumnGap).clip(RoundedCornerShape(5.dp)).background(Canvas))
@@ -1233,7 +1529,7 @@ private fun WeekAllDayTaskBar(item: UnfinishedViewTask, onTaskClick: (DemoTask) 
         }
         val spanWidth = maxOf(maxWidth / 7 * (item.weekEndColumn.coerceIn(0, 6) + 1) - ScheduleColumnGap * 2, 20.dp)
         Surface(
-            modifier = Modifier.offset(x = ScheduleColumnGap).width(spanWidth).height(27.dp).align(Alignment.CenterStart)
+            modifier = Modifier.offset(x = ScheduleColumnGap).width(spanWidth).height(21.dp).align(Alignment.CenterStart)
                 .clickable { onTaskClick(item.task) },
             shape = RoundedCornerShape(5.dp),
             color = BluePale,
@@ -1249,7 +1545,7 @@ private fun WeekAllDayTaskBar(item: UnfinishedViewTask, onTaskClick: (DemoTask) 
 @Composable
 private fun DayAllDayTaskBar(item: UnfinishedViewTask, onTaskClick: (DemoTask) -> Unit) {
     Surface(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).height(31.dp).clickable { onTaskClick(item.task) },
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp).height(25.dp).clickable { onTaskClick(item.task) },
         shape = RoundedCornerShape(8.dp),
         color = BluePale,
         border = BorderStroke(1.dp, Blue.copy(alpha = 0.12f))
@@ -1348,7 +1644,7 @@ private fun ScheduleSurface(modifier: Modifier, content: @Composable () -> Unit)
         color = Paper,
         border = BorderStroke(1.dp, Line)
     ) {
-        Column(Modifier.fillMaxSize().padding(8.dp)) { content() }
+        Column(Modifier.fillMaxSize().padding(5.dp)) { content() }
     }
 }
 
@@ -1461,9 +1757,7 @@ private fun MonthCalendar(
                             val span = segmentEnd - segmentStart + 1
                             val startsHere = lane.task.createdOffset in weekStartOffset..weekEndOffset
                             val endsHere = lane.task.endOffset in weekStartOffset..weekEndOffset
-                            val showStatus = startsHere || (rowIndex == 0 && lane.task.createdOffset < weekStartOffset)
-                            val barColor = if (lane.task.completed) Teal else Blue
-                            val statusColor = if (lane.task.completed) TealStatus else BlueStatus
+                            val (barColor, barTint) = monthTaskColors(lane.task.source)
                             val compactBar = span == 1
 
                             Box(
@@ -1472,7 +1766,7 @@ private fun MonthCalendar(
                                     .width(cellWidth * span - 2.dp)
                                     .height(32.dp)
                                     .clip(RoundedCornerShape(6.dp))
-                                    .background(barColor.copy(alpha = 0.13f))
+                                    .background(barTint)
                                     .clickable { onTaskClick(monthBarDemoTask(lane.task, month)) }
                                     .padding(horizontal = 3.dp, vertical = 2.dp),
                                 contentAlignment = Alignment.Center
@@ -1492,19 +1786,6 @@ private fun MonthCalendar(
                                             overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.fillMaxWidth()
                                         )
-                                        if (showStatus) {
-                                            Text(
-                                                if (lane.task.completed) "已完成" else "未完成",
-                                                color = Paper,
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                maxLines = 1,
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(5.dp))
-                                                    .background(statusColor)
-                                                    .padding(horizontal = 3.dp, vertical = 1.dp)
-                                            )
-                                        }
                                     }
                                 } else {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1521,20 +1802,6 @@ private fun MonthCalendar(
                                             overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.weight(1f)
                                         )
-                                        if (showStatus) {
-                                            Spacer(Modifier.width(3.dp))
-                                            Text(
-                                                if (lane.task.completed) "已完成" else "未完成",
-                                                color = Paper,
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                maxLines = 1,
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(5.dp))
-                                                    .background(statusColor)
-                                                    .padding(horizontal = 4.dp, vertical = 2.dp)
-                                            )
-                                        }
                                         if (endsHere) {
                                             Spacer(Modifier.width(2.dp))
                                             Box(Modifier.width(2.dp).height(10.dp).background(barColor))
@@ -1574,16 +1841,8 @@ private fun MonthCalendar(
         }
         Spacer(Modifier.height(2.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(6.dp).clip(CircleShape).background(Blue))
-                Spacer(Modifier.width(4.dp))
-                Text("未完成", color = Muted, fontSize = 9.sp)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(6.dp).clip(CircleShape).background(Teal))
-                Spacer(Modifier.width(4.dp))
-                Text("已完成", color = Muted, fontSize = 9.sp)
-            }
+            MonthSourceLegend(color = Blue, label = "他人派发")
+            MonthSourceLegend(color = Amber, label = "本人创建")
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(2.dp).height(9.dp).background(Blue))
                 Spacer(Modifier.width(4.dp))
@@ -1593,12 +1852,26 @@ private fun MonthCalendar(
     }
 }
 
+@Composable
+private fun MonthSourceLegend(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(color))
+        Spacer(Modifier.width(4.dp))
+        Text(label, color = Muted, fontSize = 8.sp, maxLines = 1)
+    }
+}
+
+private fun monthTaskColors(source: String): Pair<Color, Color> = when (source) {
+    "上级分配", "他人派发" -> Blue to BluePale
+    else -> Amber to AmberPale
+}
+
 private fun monthTaskLanes(month: Calendar): List<MonthTaskLane> {
     val tasks = listOf(
         MonthBarTask("延续中的项目支持", -3, 2, "上级分配", true),
         MonthBarTask("客户需求复盘", 0, 8, "上级分配", false),
         MonthBarTask("完成需求评审", 4, 8, "上级分配", false),
-        MonthBarTask("跨部门资料整理", 6, 13, "跨部门工作", false),
+        MonthBarTask("跨部门资料整理", 6, 13, "他人派发", false),
         MonthBarTask("补充测试验收材料", 6, 8, "上级分配", false),
         MonthBarTask("完善产品交付规范", 10, 16, "部门自主", false),
         MonthBarTask("季度目标拆解", 15, 21, "上级分配", false),
@@ -1641,57 +1914,78 @@ private fun monthDateLabel(month: Calendar, dayOffset: Int): String {
 
 @Composable
 private fun DailyLogEditorScreen(
-    completed: String,
-    onCompletedChange: (String) -> Unit,
-    plan: String,
-    onPlanChange: (String) -> Unit,
-    status: String,
-    onStatusChange: (String) -> Unit,
+    logDate: Calendar,
+    log: DemoDailyLog?,
+    canEdit: Boolean,
+    onSave: (String, String) -> Unit,
+    onSubmit: (String, String) -> Unit,
     onBack: () -> Unit
 ) {
     var message by remember { mutableStateOf("") }
+    var completed by remember(logDate.timeInMillis) { mutableStateOf(log?.completedWork.orEmpty()) }
+    var plan by remember(logDate.timeInMillis) { mutableStateOf(log?.nextDayPlan.orEmpty()) }
+    val dateLabel = SimpleDateFormat("yyyy年M月d日 · EEEE", Locale.CHINA).format(logDate.time)
+    val status = log?.status ?: "未填写"
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-        ChildTopBar("填写今日日志", onBack)
+        ChildTopBar("编辑工作日志", onBack)
         Spacer(Modifier.height(4.dp))
-        SectionCard(title = "今日日志", icon = "▤", accent = Amber, trailing = "10月9日 · 周五") {
+        SectionCard(title = dateLabel, icon = "▤", accent = Amber, trailing = status) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("状态：$status", color = if (status == "已提交") Teal else Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Text(
+                    if (canEdit) "本人可在今天、昨天和前天填写或修改" else "已超过可编辑日期，日志已冻结",
+                    color = if (canEdit) Muted else Rose,
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(1f)
+                )
             }
             Spacer(Modifier.height(10.dp))
-            Text("今日完成  *", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text("当日完成  *", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             OutlinedTextField(
                 value = completed,
-                onValueChange = { onCompletedChange(it); message = "" },
+                onValueChange = { completed = it; message = "" },
                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                 minLines = 4,
+                enabled = canEdit,
                 shape = RoundedCornerShape(16.dp)
             )
             Spacer(Modifier.height(14.dp))
-            Text("明日计划（选填）", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text("次日计划（选填）", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             OutlinedTextField(
                 value = plan,
-                onValueChange = onPlanChange,
+                onValueChange = { plan = it },
                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                 minLines = 3,
+                enabled = canEdit,
                 shape = RoundedCornerShape(16.dp)
             )
             if (message.isNotBlank()) Text(message, color = if (message.startsWith("请")) Rose else Teal, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
-                OutlinedButton(
-                    onClick = { onStatusChange("草稿"); message = "草稿已保存，仅本人可见" },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp)
-                ) { Text("保存草稿", color = Ink, fontSize = 12.sp) }
-                Button(
-                    onClick = {
-                        if (completed.isBlank()) message = "请先填写必填项“今日完成”"
-                        else { onStatusChange("已提交"); message = "日志已提交，授权管理者可查看" }
-                    },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Amber, contentColor = Ink)
-                ) { Text("提交日志", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            if (canEdit) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
+                    if (status == "已提交") {
+                        Button(
+                            onClick = { onSave(completed, plan); message = "已保存修改，日志仍为已提交" },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Amber, contentColor = Ink)
+                        ) { Text("保存修改", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                    } else {
+                        OutlinedButton(
+                            onClick = { onSave(completed, plan); message = "草稿已保存，仅本人可见" },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp)
+                        ) { Text("保存草稿", color = Ink, fontSize = 12.sp) }
+                        Button(
+                            onClick = {
+                                if (completed.isBlank()) message = "请先填写必填项“今日完成”"
+                                else { onSubmit(completed, plan); message = "日志已提交，授权管理者可查看" }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Amber, contentColor = Ink)
+                        ) { Text("提交日志", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                    }
+                }
             }
         }
         Spacer(Modifier.height(16.dp))
@@ -1699,37 +1993,80 @@ private fun DailyLogEditorScreen(
 }
 
 @Composable
-private fun LogCalendarScreen(target: String, viewer: DemoPerson, onTargetChange: (String) -> Unit, onEditToday: () -> Unit) {
-    var selectedDay by remember { mutableStateOf(8) }
-    var monthShift by remember { mutableStateOf(0) }
+private fun LogCalendarScreen(
+    target: String,
+    viewer: DemoPerson,
+    selectedOffset: Int,
+    monthShift: Int,
+    ownLogs: Map<Int, DemoDailyLog>,
+    onSelectedOffsetChange: (Int) -> Unit,
+    onMonthShiftChange: (Int) -> Unit,
+    onTargetChange: (String) -> Unit,
+    onEditSelectedDate: (Int) -> Unit
+) {
     var showMonthPicker by remember { mutableStateOf(false) }
     var pickerYear by remember { mutableStateOf(2026) }
     val month = remember(monthShift) { monthCalendar(monthShift) }
+    val selectedDate = remember(selectedOffset) { demoDate(selectedOffset) }
+    val selectedDay = selectedDate.get(Calendar.DAY_OF_MONTH)
+    val selectedInMonth = selectedDate.get(Calendar.YEAR) == month.get(Calendar.YEAR) &&
+        selectedDate.get(Calendar.MONTH) == month.get(Calendar.MONTH)
+    val canEditSelectedDate = target == "本人" && selectedInMonth && selectedOffset in -2..0
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-            BrandHeader(showProfile = false)
-            Spacer(Modifier.height(14.dp))
-            PageHeading("工作日志")
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             LogTargetPicker(target = target, options = logPersonTargets(viewer), onTargetChange = onTargetChange)
             Spacer(Modifier.height(12.dp))
             PeriodBar(
                 label = SimpleDateFormat("yyyy年M月", Locale.CHINA).format(month.time),
                 centerAction = if (monthShift == 0) null else "本月",
-                onPrevious = { monthShift--; selectedDay = 1 },
-                onNext = { monthShift++; selectedDay = 1 },
-                onCenter = { monthShift = 0; selectedDay = 9 },
+                onPrevious = {
+                    val nextShift = monthShift - 1
+                    onMonthShiftChange(nextShift)
+                    val firstDay = monthCalendar(nextShift)
+                    onSelectedOffsetChange(dayOffsetFor(firstDay.get(Calendar.YEAR), firstDay.get(Calendar.MONTH) + 1, 1))
+                },
+                onNext = {
+                    val nextShift = monthShift + 1
+                    onMonthShiftChange(nextShift)
+                    val firstDay = monthCalendar(nextShift)
+                    onSelectedOffsetChange(dayOffsetFor(firstDay.get(Calendar.YEAR), firstDay.get(Calendar.MONTH) + 1, 1))
+                },
+                onCenter = { onMonthShiftChange(0); onSelectedOffsetChange(0) },
                 onLabel = {
                     pickerYear = month.get(Calendar.YEAR)
                     showMonthPicker = true
                 }
             )
             SectionCard(title = "日志日历", icon = "▦", accent = Amber) {
-                LogHistoryCalendar(month, selectedDay, target) { selectedDay = it }
+                LogHistoryCalendar(month, selectedDay, target, ownLogs) { day ->
+                    onSelectedOffsetChange(dayOffsetFor(month.get(Calendar.YEAR), month.get(Calendar.MONTH) + 1, day))
+                }
             }
             Spacer(Modifier.height(2.dp))
-            if (hasDemoLog(target, month, selectedDay)) {
+            if (target == "本人") {
+                val log = ownLogs[selectedOffset]
+                if (log != null) {
+                    LogEntryCard(
+                        log = log,
+                        title = "${month.get(Calendar.MONTH) + 1}月${selectedDay}日",
+                        canEdit = selectedInMonth && selectedOffset in -2..0,
+                        frozen = selectedInMonth && selectedOffset < -2
+                    )
+                } else {
+                    SectionCard(title = "${month.get(Calendar.MONTH) + 1}月${selectedDay}日", icon = "▤", accent = Blue) {
+                        Text(
+                            if (canEditSelectedDate) "暂无日志，可补写或新建"
+                            else if (selectedOffset < -2) "该日期已冻结，不能补写"
+                            else if (selectedOffset > 0) "未来日期不可填写"
+                            else "暂无日志",
+                            color = if (selectedOffset < -2) Muted else Ink,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            } else if (hasDemoLog(target, month, selectedDay)) {
                 LogReadOnlyCard(target = target, day = selectedDay, month = month)
             } else {
                 SectionCard(title = "${month.get(Calendar.MONTH) + 1}月${selectedDay}日", icon = "▤", accent = Blue) {
@@ -1743,49 +2080,169 @@ private fun LogCalendarScreen(target: String, viewer: DemoPerson, onTargetChange
             Spacer(Modifier.height(76.dp))
         }
 
-        if (target == "本人") {
+        if (canEditSelectedDate) {
             Box(
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 18.dp)
                     .size(56.dp).clip(CircleShape).background(Amber)
-                    .clickable(onClick = onEditToday),
+                    .clickable { onEditSelectedDate(selectedOffset) },
                 contentAlignment = Alignment.Center
             ) {
-                Text("＋", color = Ink, fontSize = 28.sp, fontWeight = FontWeight.Medium)
+                Text(if (ownLogs[selectedOffset] == null) "＋" else "✎", color = Ink, fontSize = 25.sp, fontWeight = FontWeight.Medium)
             }
         }
     }
 
     if (showMonthPicker) {
-        AlertDialog(
-            onDismissRequest = { showMonthPicker = false },
-            title = { Text("快速选择年月", color = Ink, fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
-                        TextButton(onClick = { pickerYear-- }) { Text("‹", color = Blue, fontSize = 22.sp) }
-                        Text("$pickerYear 年", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        TextButton(onClick = { pickerYear++ }) { Text("›", color = Blue, fontSize = 22.sp) }
-                    }
-                    (0..3).forEach { row ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            (1..3).forEach { column ->
-                                val chosenMonth = row * 3 + column
-                                TextButton(
-                                    onClick = {
-                                        monthShift = (pickerYear - 2026) * 12 + (chosenMonth - 10)
-                                        selectedDay = 1
-                                        showMonthPicker = false
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                ) { Text("$chosenMonth 月", color = Ink, fontSize = 12.sp) }
+        QuickMonthPickerDialog(
+            selectedYear = pickerYear,
+            selectedMonth = month.get(Calendar.MONTH) + 1,
+            onDismiss = { showMonthPicker = false },
+            onYearChange = { pickerYear = it },
+            onMonthSelected = { chosenMonth ->
+                val nextShift = monthShiftFor(pickerYear, chosenMonth)
+                onMonthShiftChange(nextShift)
+                onSelectedOffsetChange(dayOffsetFor(pickerYear, chosenMonth, 1))
+                showMonthPicker = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun QuickMonthPickerDialog(
+    selectedYear: Int,
+    selectedMonth: Int,
+    onDismiss: () -> Unit,
+    onYearChange: (Int) -> Unit,
+    onMonthSelected: (Int) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("快速选择年月", color = Ink, fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TextButton(onClick = { onYearChange(selectedYear - 1) }) { Text("‹", color = Blue, fontSize = 22.sp) }
+                    Text("$selectedYear 年", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    TextButton(onClick = { onYearChange(selectedYear + 1) }) { Text("›", color = Blue, fontSize = 22.sp) }
+                }
+                (0..3).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        (1..3).forEach { column ->
+                            val month = row * 3 + column
+                            val selected = month == selectedMonth
+                            Box(
+                                Modifier.weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (selected) AmberPale else Color.Transparent)
+                                    .clickable { onMonthSelected(month) }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "$month 月",
+                                    color = if (selected) Amber else Ink,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                )
                             }
                         }
                     }
                 }
-            },
-            confirmButton = { TextButton(onClick = { showMonthPicker = false }) { Text("取消") } }
-        )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+}
+
+@Composable
+private fun QuickDatePickerDialog(
+    selectedYear: Int,
+    selectedMonth: Int,
+    selectedDay: Int,
+    onDismiss: () -> Unit,
+    onDateSelected: (Int, Int, Int) -> Unit
+) {
+    var displayYear by remember(selectedYear) { mutableStateOf(selectedYear) }
+    var displayMonth by remember(selectedMonth) { mutableStateOf(selectedMonth) }
+    val firstOfMonth = remember(displayYear, displayMonth) {
+        Calendar.getInstance().apply {
+            set(Calendar.YEAR, displayYear)
+            set(Calendar.MONTH, displayMonth - 1)
+            set(Calendar.DAY_OF_MONTH, 1)
+        }
     }
+    val leadingDays = (firstOfMonth.get(Calendar.DAY_OF_WEEK) + 5) % 7
+    val daysInMonth = firstOfMonth.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+    fun shiftMonth(amount: Int) {
+        val shifted = (firstOfMonth.clone() as Calendar).apply { add(Calendar.MONTH, amount) }
+        displayYear = shifted.get(Calendar.YEAR)
+        displayMonth = shifted.get(Calendar.MONTH) + 1
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择日期", color = Ink, fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { shiftMonth(-1) }) { Text("‹", color = Blue, fontSize = 22.sp) }
+                    Text(
+                        "${displayYear}年${displayMonth}月",
+                        color = Ink,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    TextButton(onClick = { shiftMonth(1) }) { Text("›", color = Blue, fontSize = 22.sp) }
+                }
+                Row(Modifier.fillMaxWidth()) {
+                    listOf("一", "二", "三", "四", "五", "六", "日").forEach { weekday ->
+                        Text(
+                            weekday,
+                            modifier = Modifier.weight(1f).padding(vertical = 4.dp),
+                            color = Muted,
+                            fontSize = 10.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+                repeat(6) { row ->
+                    Row(Modifier.fillMaxWidth()) {
+                        repeat(7) { column ->
+                            val day = row * 7 + column - leadingDays + 1
+                            if (day in 1..daysInMonth) {
+                                val selected = displayYear == selectedYear && displayMonth == selectedMonth && day == selectedDay
+                                Box(
+                                    Modifier.weight(1f).aspectRatio(1f).padding(2.dp)
+                                        .clip(CircleShape)
+                                        .background(if (selected) AmberPale else Color.Transparent)
+                                        .clickable { onDateSelected(displayYear, displayMonth, day) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        day.toString(),
+                                        color = if (selected) Ink else Ink.copy(alpha = 0.82f),
+                                        fontSize = 11.sp,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            } else {
+                                Spacer(Modifier.weight(1f).aspectRatio(1f))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
 }
 
 @Composable
@@ -1926,8 +2383,181 @@ private fun SubordinateTaskTargetPicker(
     }
 }
 
+private fun filterDateParts(value: String?): Triple<Int, Int, Int> {
+    if (value != null) {
+        val parts = value.split("-").mapNotNull(String::toIntOrNull)
+        if (parts.size == 3) return Triple(parts[0], parts[1], parts[2])
+    }
+    val today = Calendar.getInstance()
+    return Triple(today.get(Calendar.YEAR), today.get(Calendar.MONTH) + 1, today.get(Calendar.DAY_OF_MONTH))
+}
+
+private fun formatFilterDate(value: String?): String {
+    if (value == null) return "不限"
+    val (year, month, day) = filterDateParts(value)
+    return "${year}年${month}月${day}日"
+}
+
+private fun taskDeadlineDateKey(deadline: String): String? {
+    val match = Regex("(?:(\\d{4})年)?(\\d{1,2})月(\\d{1,2})日").find(deadline) ?: return null
+    val year = match.groupValues[1].toIntOrNull() ?: 2026
+    val month = match.groupValues[2].toIntOrNull() ?: return null
+    val day = match.groupValues[3].toIntOrNull() ?: return null
+    if (month !in 1..12 || day !in 1..31) return null
+    return String.format(Locale.US, "%04d-%02d-%02d", year, month, day)
+}
+
 @Composable
-private fun LogHistoryCalendar(month: Calendar, selectedDay: Int, target: String, onDaySelected: (Int) -> Unit) {
+private fun TaskListFilterDialog(
+    isSubordinateList: Boolean,
+    people: List<DemoPerson>,
+    initialScope: String,
+    initialStatus: String,
+    initialStartDate: String?,
+    initialEndDate: String?,
+    initialTarget: String,
+    initialSubordinateMode: String,
+    onDismiss: () -> Unit,
+    onApply: (String, String, String?, String?, String, String) -> Unit
+) {
+    var scope by remember(isSubordinateList, initialScope) { mutableStateOf(initialScope) }
+    var status by remember(initialStatus) { mutableStateOf(initialStatus) }
+    var startDate by remember(initialStartDate) { mutableStateOf(initialStartDate) }
+    var endDate by remember(initialEndDate) { mutableStateOf(initialEndDate) }
+    var target by remember(initialTarget) { mutableStateOf(initialTarget) }
+    var subordinateMode by remember(initialSubordinateMode) { mutableStateOf(initialSubordinateMode) }
+    var employeeName by remember { mutableStateOf("") }
+    var datePickerTarget by remember { mutableStateOf<String?>(null) }
+    val invalidRange = startDate != null && endDate != null && startDate!! > endDate!!
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("筛选任务", color = Ink, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.heightIn(max = 470.dp).verticalScroll(rememberScrollState())) {
+                if (!isSubordinateList) {
+                    Text("任务范围", color = Muted, fontSize = 11.sp)
+                    Spacer(Modifier.height(6.dp))
+                    SegmentedChoices(listOf("全部", "我的任务", "我创建的"), scope, { it }, { scope = it })
+                    Spacer(Modifier.height(13.dp))
+                } else {
+                    Text("任务范围", color = Muted, fontSize = 11.sp)
+                    Spacer(Modifier.height(6.dp))
+                    SegmentedChoices(listOf("承担的任务", "创建的任务"), subordinateMode, { it }, { subordinateMode = it })
+                    Spacer(Modifier.height(13.dp))
+                }
+
+                Text("截止日期", color = Muted, fontSize = 11.sp)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    OutlinedButton(
+                        onClick = { datePickerTarget = "start" },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("起始：${formatFilterDate(startDate)}", fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    OutlinedButton(
+                        onClick = { datePickerTarget = "end" },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("结束：${formatFilterDate(endDate)}", fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { startDate = null; endDate = null }) { Text("清除日期", color = Blue, fontSize = 11.sp) }
+                }
+                if (invalidRange) {
+                    Text("起始日期不能晚于结束日期", color = Rose, fontSize = 10.sp, modifier = Modifier.padding(bottom = 8.dp))
+                }
+
+                Text("完成状态", color = Muted, fontSize = 11.sp)
+                Spacer(Modifier.height(6.dp))
+                SegmentedChoices(listOf("全部", "未完成", "已完成"), status, { it }, { status = it })
+
+                if (isSubordinateList) {
+                    Spacer(Modifier.height(13.dp))
+                    Text("查看对象 · 仅限授权下属", color = Muted, fontSize = 11.sp)
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = employeeName,
+                        onValueChange = { employeeName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("输入员工姓名", fontSize = 11.sp) },
+                        shape = RoundedCornerShape(13.dp)
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Column(Modifier.heightIn(max = 145.dp).verticalScroll(rememberScrollState())) {
+                        TextButton(
+                            onClick = { target = "全部下属" },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("全部下属", color = if (target == "全部下属") Blue else Ink, fontSize = 11.sp, modifier = Modifier.fillMaxWidth())
+                        }
+                        val matches = people.filter { it.name.contains(employeeName.trim(), ignoreCase = true) }
+                        if (matches.isEmpty() && employeeName.isNotBlank()) {
+                            Text("没有找到匹配姓名的授权下属", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(10.dp))
+                        } else {
+                            matches.forEach { candidate ->
+                                TextButton(
+                                    onClick = { target = candidate.optionLabel },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(Modifier.fillMaxWidth()) {
+                                        Text(candidate.name, color = if (target == candidate.optionLabel) Blue else Ink, fontSize = 11.sp)
+                                        Text("${candidate.role.label} · ${candidate.unit}", color = Muted, fontSize = 9.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onApply(scope, status, startDate, endDate, target, subordinateMode) },
+                enabled = !invalidRange
+            ) { Text("应用", color = if (invalidRange) Muted else Blue) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = {
+                    scope = if (isSubordinateList) scope else "我的任务"
+                    subordinateMode = "承担的任务"
+                    status = "全部"
+                    startDate = null
+                    endDate = null
+                    target = "全部下属"
+                    employeeName = ""
+                }) { Text("重置", color = Muted) }
+                TextButton(onClick = onDismiss) { Text("取消", color = Muted) }
+            }
+        }
+    )
+
+    datePickerTarget?.let { targetDateField ->
+        val initialDate = filterDateParts(if (targetDateField == "start") startDate else endDate)
+        QuickDatePickerDialog(
+            selectedYear = initialDate.first,
+            selectedMonth = initialDate.second,
+            selectedDay = initialDate.third,
+            onDismiss = { datePickerTarget = null },
+            onDateSelected = { year, month, day ->
+                val date = String.format(Locale.US, "%04d-%02d-%02d", year, month, day)
+                if (targetDateField == "start") startDate = date else endDate = date
+                datePickerTarget = null
+            }
+        )
+    }
+}
+
+@Composable
+private fun LogHistoryCalendar(
+    month: Calendar,
+    selectedDay: Int,
+    target: String,
+    ownLogs: Map<Int, DemoDailyLog>,
+    onDaySelected: (Int) -> Unit
+) {
     val first = (month.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, 1) }
     val days = first.getActualMaximum(Calendar.DAY_OF_MONTH)
     val offset = (first.get(Calendar.DAY_OF_WEEK) + 5) % 7
@@ -1953,7 +2583,10 @@ private fun LogHistoryCalendar(month: Calendar, selectedDay: Int, target: String
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text(day.toString(), color = Ink, fontSize = 12.sp, fontWeight = if (day == selectedDay) FontWeight.Bold else FontWeight.Normal)
                             Spacer(Modifier.height(3.dp))
-                            if (hasDemoLog(target, month, day)) Box(Modifier.size(5.dp).clip(CircleShape).background(Teal))
+                            val offset = dayOffsetFor(month.get(Calendar.YEAR), month.get(Calendar.MONTH) + 1, day)
+                            val ownLog = ownLogs[offset]
+                            val hasLog = if (target == "本人") ownLog?.status == "已提交" else hasDemoLog(target, month, day)
+                            if (hasLog) Box(Modifier.size(5.dp).clip(CircleShape).background(Teal))
                             else Spacer(Modifier.height(5.dp))
                         }
                     }
@@ -1966,13 +2599,40 @@ private fun LogHistoryCalendar(month: Calendar, selectedDay: Int, target: String
 private fun hasDemoLog(target: String, month: Calendar, day: Int): Boolean =
     target.isNotBlank() && month.get(Calendar.YEAR) == 2026 && month.get(Calendar.MONTH) == Calendar.OCTOBER && day in 6..8
 
+private data class DemoDailyLog(
+    val completedWork: String,
+    val nextDayPlan: String,
+    val status: String
+)
+
+@Composable
+private fun LogEntryCard(log: DemoDailyLog, title: String, canEdit: Boolean, frozen: Boolean) {
+    SectionCard(
+        title = "$title · ${log.status}",
+        icon = "▤",
+        accent = if (log.status == "已提交") Teal else Amber,
+        trailing = if (frozen) "已冻结" else "本人"
+    ) {
+        Text("当日完成", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        Text(log.completedWork.ifBlank { "暂无内容" }, color = Ink, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp))
+        if (log.nextDayPlan.isNotBlank()) {
+            Spacer(Modifier.height(10.dp))
+            Text("次日计划", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            Text(log.nextDayPlan, color = Ink, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+        }
+        if (!canEdit && frozen) {
+            Text("超过今天、昨天和前天的可编辑范围", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp))
+        }
+    }
+}
+
 @Composable
 private fun LogReadOnlyCard(target: String, day: Int, month: Calendar) {
     SectionCard(title = "${month.get(Calendar.MONTH) + 1}月${day}日 · 已提交", icon = "▤", accent = Teal, trailing = target) {
-        Text("今日完成", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        Text("当日完成", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
         Text("完成产品需求评审，梳理了任务分发流程与页面交互，并整理评审结论。", color = Ink, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(10.dp))
-        Text("明日计划", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        Text("次日计划", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
         Text("完成页面交互稿并与团队确认。", color = Ink, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }
@@ -2106,7 +2766,6 @@ private fun TaskCenterScreen(
     val actorName = person.name
     var section by remember { mutableStateOf("我的任务") }
     var source by remember { mutableStateOf("全部") }
-    var crossMode by remember { mutableStateOf("我发起的") }
     var detailTaskId by remember(initialTaskId) { mutableStateOf(initialTaskId) }
     var showCreateForm by remember { mutableStateOf(false) }
     var assignParentId by remember { mutableStateOf<Int?>(null) }
@@ -2119,13 +2778,13 @@ private fun TaskCenterScreen(
     }
     val recipientOptions = (demoPeople.filter { it.role == nextRole && it.parentUnit == person.unit } + person).distinct()
     val visibleSections = when (role) {
-        DemoRole.DEPARTMENT_MANAGER -> listOf("我的任务", "我派发的", "跨部门协作")
+        DemoRole.DEPARTMENT_MANAGER -> listOf("我的任务", "我派发的")
         DemoRole.FOUNDER, DemoRole.TEAM_LEADER -> listOf("我的任务", "我派发的")
         DemoRole.EMPLOYEE -> listOf("我的任务")
     }
     val sourceOptions = when (role) {
         DemoRole.FOUNDER -> listOf("全部", "自主创建")
-        DemoRole.DEPARTMENT_MANAGER -> listOf("全部", "上级分配", "部门自主", "跨部门工作")
+        DemoRole.DEPARTMENT_MANAGER -> listOf("全部", "上级分配", "他人派发", "部门自主")
         DemoRole.TEAM_LEADER -> listOf("全部", "上级分配", "团队自主")
         DemoRole.EMPLOYEE -> emptyList()
     }
@@ -2308,21 +2967,7 @@ private fun TaskCenterScreen(
                         }
                     }
 
-                    else -> {
-                        SegmentedChoices(
-                            values = listOf("我发起的", "待我处理"),
-                            selected = crossMode,
-                            label = { it },
-                            onSelected = { crossMode = it }
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        if (crossMode == "我发起的") {
-                            TaskListCard("申请市场部协助整理客户资料", "发给市场部经理 · 10月8日", "处理中", Violet)
-                            TaskListCard("申请研发部提供接口支持", "研发部经理已接受", "已接受", Teal)
-                        } else {
-                            TaskListCard("协助测试新版本流程", "来自研发部 · 需要本部门支持", "待处理", Amber)
-                        }
-                    }
+                    else -> EmptyTaskHint("暂无任务")
                 }
             }
         }
@@ -2677,12 +3322,15 @@ private fun TaskCenterV2Screen(
     var section by remember { mutableStateOf("我的任务") }
     var showApprovalCenter by remember { mutableStateOf(false) }
     var approvalSection by remember { mutableStateOf("待你审批") }
-    var departmentTaskFilter by remember { mutableStateOf("全部") }
+    var taskScopeFilter by remember { mutableStateOf("我的任务") }
     var taskStatusFilter by remember { mutableStateOf("全部") }
+    var deadlineStartFilter by remember { mutableStateOf<String?>(null) }
+    var deadlineEndFilter by remember { mutableStateOf<String?>(null) }
     var subordinateObjectFilter by remember { mutableStateOf("全部下属") }
+    var subordinateTaskMode by remember { mutableStateOf("承担的任务") }
+    var showTaskFilter by remember { mutableStateOf(false) }
     var detailId by remember(initialTaskId) { mutableStateOf(initialTaskId) }
     var showCreate by remember { mutableStateOf(false) }
-    var createCrossDepartment by remember { mutableStateOf(false) }
     var editId by remember { mutableStateOf<Int?>(null) }
     var readOnlySelected by remember { mutableStateOf(false) }
     val detail = tasks.firstOrNull { it.id == detailId }
@@ -2690,11 +3338,6 @@ private fun TaskCenterV2Screen(
     val supervisor = directSupervisor(person)
     val canReview = demoPeople.any { directSupervisor(it)?.name == person.name }
     val canInspectDescendants = demoPeople.any { isBelowInHierarchy(it, person) }
-    val sections = buildList {
-        add("我的任务")
-        add("我创建的")
-        if (canInspectDescendants) add("下属任务")
-    }
     val approvalSections = buildList {
         if (canReview) add("待你审批")
         if (supervisor != null) add("待上级审批")
@@ -2721,9 +3364,13 @@ private fun TaskCenterV2Screen(
     val descendantPeople = demoPeople.filter { isBelowInHierarchy(it, person) }
     val activeApprovalSection = approvalSection.takeIf { it in approvalSections }
         ?: approvalSections.firstOrNull().orEmpty()
-    val descendantTasks = tasks.filter {
+    val descendantAssignedTasks = tasks.filter {
         it.approvalStatus == ApprovalStatus.APPROVED &&
             it.assigneeName in descendantNames
+    }.distinctBy { it.id }
+    val descendantCreatedTasks = tasks.filter {
+        it.approvalStatus == ApprovalStatus.APPROVED &&
+            it.senderName in descendantNames
     }.distinctBy { it.id }
 
     fun updateTask(updated: WorkflowTask) {
@@ -2736,8 +3383,7 @@ private fun TaskCenterV2Screen(
         description: String,
         deadline: String,
         deliverables: String,
-        association: String,
-        crossDepartment: Boolean
+        association: String
     ) {
         val approver = directSupervisor(person)
         if (editing != null) {
@@ -2770,20 +3416,18 @@ private fun TaskCenterV2Screen(
                 assigneeRole = assignee.role,
                 assigneeName = assignee.name,
                 deadline = deadline,
-                origin = if (crossDepartment) WorkflowOrigin.CROSS_DEPARTMENT else WorkflowOrigin.INDEPENDENT,
+                origin = WorkflowOrigin.INDEPENDENT,
                 status = WorkflowStatus.UNFINISHED,
                 approvalStatus = if (approver == null) ApprovalStatus.APPROVED else ApprovalStatus.PENDING,
                 approverRole = approver?.role,
                 approverName = approver?.name.orEmpty(),
                 expectedDeliverables = deliverables,
-                associationNote = association,
-                isCrossDepartment = crossDepartment
+                associationNote = association
             )
             onTasksChange(tasks + task)
         }
         showCreate = false
         editId = null
-        createCrossDepartment = false
         detailId = null
         if (approver == null) {
             showApprovalCenter = false
@@ -2795,13 +3439,14 @@ private fun TaskCenterV2Screen(
     }
 
     val pageTitle = when {
-        showCreate -> if (editing != null) "修改并重新提交" else if (createCrossDepartment) "创建跨部门任务" else "创建任务"
+        showCreate -> if (editing != null) "修改并重新提交" else "创建任务"
         detail != null -> "任务详情"
         showApprovalCenter -> "审批中心"
+        section == "下属任务" -> "下属任务"
         else -> "任务中心"
     }
     val back = when {
-        showCreate -> { { showCreate = false; editId = null; createCrossDepartment = false } }
+        showCreate -> { { showCreate = false; editId = null } }
         detail != null -> {
             {
                 if (initialTaskId != null && detailId == initialTaskId) onBack() else detailId = null
@@ -2809,166 +3454,232 @@ private fun TaskCenterV2Screen(
             }
         }
         showApprovalCenter -> { { showApprovalCenter = false } }
+        section == "下属任务" -> { { section = "我的任务"; subordinateObjectFilter = "全部下属" } }
         else -> onBack
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-        ChildTopBar(pageTitle, back)
-        when {
-            showCreate -> StandaloneTaskForm(
-                person = person,
-                initialTask = editing,
-                crossDepartment = createCrossDepartment,
-                onCancel = { showCreate = false; editId = null; createCrossDepartment = false },
-                onSave = ::createOrUpdate
-            )
+    val isSubordinateList = !showApprovalCenter && section == "下属任务"
+    val ordinaryTasks = when (taskScopeFilter) {
+        "全部" -> (myTasks + createdTasks).distinctBy { it.id }
+        "我创建的" -> createdTasks
+        else -> myTasks
+    }
 
-            detail != null -> WorkflowTaskDetailV2(
-                person = person,
-                task = detail,
-                readOnly = readOnlyDetail || readOnlySelected,
-                onTaskChange = ::updateTask,
-                onApprove = { updateTask(detail.copy(approvalStatus = ApprovalStatus.APPROVED, approvalNote = "审批通过")) },
-                onReturnApproval = { reason -> updateTask(detail.copy(approvalStatus = ApprovalStatus.RETURNED, approvalNote = reason)) },
-                onEditResubmit = { editId = detail.id; createCrossDepartment = detail.isCrossDepartment; showCreate = true },
-                onResubmit = { updateTask(detail.copy(approvalStatus = ApprovalStatus.PENDING, approvalNote = "")) }
-            )
-
-            else -> {
-                if (!showApprovalCenter) {
-                    ObjectPicker(
-                        label = "演示身份",
-                        selected = person.optionLabel,
-                        options = demoPeople.map { it.optionLabel },
-                        onSelected = { selected ->
-                            demoPeople.firstOrNull { it.optionLabel == selected }?.let {
-                                onPersonChange(it)
-                                section = "我的任务"
-                                showApprovalCenter = false
-                                departmentTaskFilter = "全部"
-                                taskStatusFilter = "全部"
-                                subordinateObjectFilter = "全部下属"
-                            }
-                        }
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    SegmentedChoices(sections, section, { it }, { section = it })
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp).padding(bottom = 86.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 11.dp, bottom = 13.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("‹", color = Ink, fontSize = 30.sp, modifier = Modifier.clickable(onClick = back).padding(end = 13.dp))
+                Text(pageTitle, color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Spacer(Modifier.weight(1f))
+                if (!showCreate && detail == null && !showApprovalCenter) {
                     if (approvalSections.isNotEmpty()) {
-                        OutlinedButton(
-                            onClick = { showApprovalCenter = true },
-                            modifier = Modifier.fillMaxWidth().padding(top = 9.dp),
-                            shape = RoundedCornerShape(14.dp)
-                        ) { Text("审批中心", color = Blue, fontWeight = FontWeight.SemiBold) }
-                    }
-                    Spacer(Modifier.height(14.dp))
-                } else if (approvalSections.size > 1) {
-                    SegmentedChoices(approvalSections, activeApprovalSection, { it }, { approvalSection = it })
-                    Spacer(Modifier.height(14.dp))
-                }
-
-                val selectedTasks = if (showApprovalCenter) {
-                    if (activeApprovalSection == "待上级审批") awaitingSupervisor else awaitingReview
-                } else when (section) {
-                    "我的任务" -> myTasks
-                    "我创建的" -> createdTasks
-                    else -> descendantTasks
-                }
-                val sectionTitle = if (showApprovalCenter) {
-                    if (activeApprovalSection == "待上级审批") "等待直属上级审批" else "直属下级提交的任务"
-                } else when (section) {
-                    "我的任务" -> "分配给我的任务"
-                    "我创建的" -> "我创建的任务"
-                    else -> "下属承担的任务 · 只读"
-                }
-                SectionHeading(sectionTitle)
-                Spacer(Modifier.height(9.dp))
-                if (!showApprovalCenter && section == "下属任务") {
-                    SubordinateTaskTargetPicker(
-                        selected = subordinateObjectFilter,
-                        people = descendantPeople,
-                        onSelected = { subordinateObjectFilter = it }
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
-                val canFilterDepartmentTasks = !showApprovalCenter && person.role == DemoRole.DEPARTMENT_MANAGER && section in listOf("我的任务", "我创建的")
-                if (canFilterDepartmentTasks) {
-                    Text("任务类型", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(bottom = 5.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.padding(bottom = 9.dp)) {
-                        listOf("全部", "本部门", "跨部门").forEach { filter ->
-                            ChoiceChip(filter, departmentTaskFilter == filter) { departmentTaskFilter = filter }
+                        Surface(
+                            modifier = Modifier.clickable { showApprovalCenter = true },
+                            shape = RoundedCornerShape(11.dp),
+                            color = VioletPale
+                        ) {
+                            Text("审批中心", color = Violet, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp))
                         }
                     }
-                }
-                if (!showApprovalCenter) {
-                    Text("完成状态", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(bottom = 5.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.padding(bottom = 9.dp)) {
-                        listOf("全部", "未完成", "已完成").forEach { filter ->
-                            ChoiceChip(filter, taskStatusFilter == filter) { taskStatusFilter = filter }
+                    if (canInspectDescendants && !isSubordinateList) {
+                        Spacer(Modifier.width(6.dp))
+                        Surface(
+                            modifier = Modifier.clickable {
+                                section = "下属任务"
+                                subordinateObjectFilter = "全部下属"
+                                subordinateTaskMode = "承担的任务"
+                                taskStatusFilter = "全部"
+                                deadlineStartFilter = null
+                                deadlineEndFilter = null
+                            },
+                            shape = RoundedCornerShape(11.dp),
+                            color = BluePale
+                        ) {
+                            Text("下属任务", color = Blue, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp))
                         }
-                    }
-                }
-                val selectedDescendant = descendantPeople.firstOrNull { it.optionLabel == subordinateObjectFilter }
-                val visibleTasks = selectedTasks
-                    .filter { task ->
-                        !canFilterDepartmentTasks || departmentTaskFilter == "全部" ||
-                            task.isCrossDepartment == (departmentTaskFilter == "跨部门")
-                    }
-                    .filter { task ->
-                        showApprovalCenter || taskStatusFilter == "全部" || task.status.label == taskStatusFilter
-                    }
-                    .filter { task ->
-                        showApprovalCenter || section != "下属任务" || selectedDescendant == null ||
-                            task.assigneeName == selectedDescendant.name
-                    }
-                if (visibleTasks.isEmpty()) {
-                    EmptyTaskHint(if (showApprovalCenter) "暂无审批任务" else if (section == "下属任务") "没有符合条件的任务" else "暂无任务")
-                } else {
-                    visibleTasks.sortedBy { it.deadline }.forEach { task ->
-                        val sub = buildString {
-                            append("负责人：${task.assigneeName} · 截止${task.deadline}")
-                            if (!showApprovalCenter && task.approvalStatus != ApprovalStatus.APPROVED) append(" · ${task.approvalStatus.label}")
-                            if (task.cancelled) append(" · 已归档")
-                            if (task.isCrossDepartment) append(" · 跨部门")
-                        }
-                        val cardStatus = if (showApprovalCenter) task.approvalStatus.label else task.status.label
-                        val cardAccent = when {
-                            showApprovalCenter && task.approvalStatus == ApprovalStatus.RETURNED -> Rose
-                            showApprovalCenter -> Amber
-                            task.status == WorkflowStatus.COMPLETED -> Teal
-                            else -> Blue
-                        }
-                        TaskCardV2(task.title, sub, cardStatus, cardAccent) {
-                            if (task.assigneeRole == person.role && task.assigneeName == person.name &&
-                                task.status == WorkflowStatus.UNFINISHED && !task.started &&
-                                task.approvalStatus == ApprovalStatus.APPROVED
-                            ) {
-                                updateTask(task.copy(started = true))
-                            }
-                            detailId = task.id
-                            readOnlySelected = !showApprovalCenter && section == "下属任务"
-                        }
-                    }
-                }
-
-                if (!showApprovalCenter && (section == "我的任务" || section == "我创建的")) {
-                    Spacer(Modifier.height(4.dp))
-                    Button(
-                        onClick = { showCreate = true; createCrossDepartment = false; editId = null },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        shape = RoundedCornerShape(15.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Ink, contentColor = Paper)
-                    ) { Text("＋  创建任务", fontWeight = FontWeight.Bold) }
-                    if (person.role == DemoRole.DEPARTMENT_MANAGER) {
-                        OutlinedButton(
-                            onClick = { showCreate = true; createCrossDepartment = true; editId = null },
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                            shape = RoundedCornerShape(15.dp)
-                        ) { Text("＋  创建跨部门任务", color = Blue, fontWeight = FontWeight.SemiBold) }
                     }
                 }
             }
+            when {
+                showCreate -> StandaloneTaskForm(
+                    person = person,
+                    initialTask = editing,
+                    onCancel = { showCreate = false; editId = null },
+                    onSave = ::createOrUpdate
+                )
+
+                detail != null -> WorkflowTaskDetailV2(
+                    person = person,
+                    task = detail,
+                    readOnly = readOnlyDetail || readOnlySelected,
+                    onTaskChange = ::updateTask,
+                    onApprove = { updateTask(detail.copy(approvalStatus = ApprovalStatus.APPROVED, approvalNote = "审批通过")) },
+                    onReturnApproval = { reason -> updateTask(detail.copy(approvalStatus = ApprovalStatus.RETURNED, approvalNote = reason)) },
+                    onEditResubmit = { editId = detail.id; showCreate = true },
+                    onResubmit = { updateTask(detail.copy(approvalStatus = ApprovalStatus.PENDING, approvalNote = "")) }
+                )
+
+                else -> {
+                    if (!showApprovalCenter) {
+                        ObjectPicker(
+                            label = "演示身份",
+                            selected = person.optionLabel,
+                            options = demoPeople.map { it.optionLabel },
+                            onSelected = { selected ->
+                                demoPeople.firstOrNull { it.optionLabel == selected }?.let {
+                                    onPersonChange(it)
+                                    section = "我的任务"
+                                    showApprovalCenter = false
+                                    taskScopeFilter = "我的任务"
+                                    taskStatusFilter = "全部"
+                                    deadlineStartFilter = null
+                                    deadlineEndFilter = null
+                                    subordinateObjectFilter = "全部下属"
+                                    subordinateTaskMode = "承担的任务"
+                                }
+                            }
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    } else if (approvalSections.size > 1) {
+                        SegmentedChoices(approvalSections, activeApprovalSection, { it }, { approvalSection = it })
+                        Spacer(Modifier.height(14.dp))
+                    }
+
+                    val selectedTasks = if (showApprovalCenter) {
+                        if (activeApprovalSection == "待上级审批") awaitingSupervisor else awaitingReview
+                    } else if (isSubordinateList) {
+                        if (subordinateTaskMode == "创建的任务") descendantCreatedTasks else descendantAssignedTasks
+                    } else {
+                        ordinaryTasks
+                    }
+                    val sectionTitle = if (showApprovalCenter) {
+                        if (activeApprovalSection == "待上级审批") "等待直属上级审批" else "直属下级提交的任务"
+                    } else if (isSubordinateList) {
+                        "下属${subordinateTaskMode} · 只读"
+                    } else {
+                        when (taskScopeFilter) {
+                            "全部" -> "全部任务"
+                            "我创建的" -> "我创建的任务"
+                            else -> "分配给我的任务"
+                        }
+                    }
+
+                    if (showApprovalCenter) {
+                        SectionHeading(sectionTitle)
+                        Spacer(Modifier.height(9.dp))
+                    } else {
+                        val dateSummary = when {
+                            deadlineStartFilter == null && deadlineEndFilter == null -> "截止日期不限"
+                            else -> "${formatFilterDate(deadlineStartFilter)}—${formatFilterDate(deadlineEndFilter)}"
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 9.dp)) {
+                            Column(Modifier.weight(1f)) {
+                                SectionHeading(sectionTitle)
+                                Text(
+                                    if (isSubordinateList) "$subordinateTaskMode · $subordinateObjectFilter · $dateSummary · $taskStatusFilter"
+                                    else "$dateSummary · $taskStatusFilter",
+                                    color = Muted,
+                                    fontSize = 9.sp,
+                                    modifier = Modifier.padding(top = 3.dp),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            OutlinedButton(onClick = { showTaskFilter = true }, shape = RoundedCornerShape(12.dp)) {
+                                Text("筛选", color = Blue, fontSize = 11.sp)
+                            }
+                        }
+                    }
+
+                    val selectedDescendant = descendantPeople.firstOrNull { it.optionLabel == subordinateObjectFilter }
+                    val visibleTasks = selectedTasks
+                        .filter { task ->
+                            showApprovalCenter || taskStatusFilter == "全部" || task.status.label == taskStatusFilter
+                        }
+                        .filter { task ->
+                            if (showApprovalCenter || (deadlineStartFilter == null && deadlineEndFilter == null)) true
+                            else {
+                                val key = taskDeadlineDateKey(task.deadline)
+                                key != null && (deadlineStartFilter == null || key >= deadlineStartFilter!!) &&
+                                    (deadlineEndFilter == null || key <= deadlineEndFilter!!)
+                            }
+                        }
+                        .filter { task ->
+                            showApprovalCenter || !isSubordinateList || subordinateObjectFilter == "全部下属" ||
+                                selectedDescendant?.name == if (subordinateTaskMode == "创建的任务") task.senderName else task.assigneeName
+                        }
+                    if (visibleTasks.isEmpty()) {
+                        EmptyTaskHint(if (showApprovalCenter) "暂无审批任务" else if (isSubordinateList) "没有符合条件的任务" else "暂无任务")
+                    } else {
+                        visibleTasks.sortedBy { it.deadline }.forEach { task ->
+                            val sub = buildString {
+                                append("负责人：${task.assigneeName} · 截止${task.deadline}")
+                                if (!showApprovalCenter && task.approvalStatus != ApprovalStatus.APPROVED) append(" · ${task.approvalStatus.label}")
+                                if (task.cancelled) append(" · 已归档")
+                            }
+                            val cardStatus = if (showApprovalCenter) task.approvalStatus.label else task.status.label
+                            val cardAccent = when {
+                                showApprovalCenter && task.approvalStatus == ApprovalStatus.RETURNED -> Rose
+                                showApprovalCenter -> Amber
+                                task.status == WorkflowStatus.COMPLETED -> Teal
+                                else -> Blue
+                            }
+                            TaskCardV2(task.title, sub, cardStatus, cardAccent) {
+                                if (task.assigneeRole == person.role && task.assigneeName == person.name &&
+                                    task.status == WorkflowStatus.UNFINISHED && !task.started &&
+                                    task.approvalStatus == ApprovalStatus.APPROVED
+                                ) {
+                                    updateTask(task.copy(started = true))
+                                }
+                                detailId = task.id
+                                readOnlySelected = !showApprovalCenter && isSubordinateList
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
         }
-        Spacer(Modifier.height(24.dp))
+
+        if (!showCreate && detail == null && !showApprovalCenter) {
+            Box(
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 18.dp)
+                    .size(56.dp).clip(CircleShape).background(Amber)
+                    .clickable { showCreate = true; editId = null },
+                contentAlignment = Alignment.Center
+            ) {
+                Text("＋", color = Ink, fontSize = 25.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+
+    if (showTaskFilter) {
+        TaskListFilterDialog(
+            isSubordinateList = isSubordinateList,
+            people = descendantPeople,
+            initialScope = taskScopeFilter,
+            initialStatus = taskStatusFilter,
+            initialStartDate = deadlineStartFilter,
+            initialEndDate = deadlineEndFilter,
+            initialTarget = subordinateObjectFilter,
+            initialSubordinateMode = subordinateTaskMode,
+            onDismiss = { showTaskFilter = false },
+            onApply = { scope, status, startDate, endDate, target, subordinateMode ->
+                taskScopeFilter = scope
+                taskStatusFilter = status
+                deadlineStartFilter = startDate
+                deadlineEndFilter = endDate
+                subordinateObjectFilter = target
+                subordinateTaskMode = subordinateMode
+                showTaskFilter = false
+            }
+        )
     }
 }
 
@@ -2976,15 +3687,11 @@ private fun TaskCenterV2Screen(
 private fun StandaloneTaskForm(
     person: DemoPerson,
     initialTask: WorkflowTask?,
-    crossDepartment: Boolean,
     onCancel: () -> Unit,
-    onSave: (DemoPerson, String, String, String, String, String, Boolean) -> Unit
+    onSave: (DemoPerson, String, String, String, String, String) -> Unit
 ) {
-    val normalOptions = taskAssigneeOptions(person)
-    val recipientOptions = if (crossDepartment) demoPeople.filter {
-        it.role == DemoRole.DEPARTMENT_MANAGER && it.unit != person.unit
-    } else normalOptions
-    var recipientLabel by remember(initialTask?.id, crossDepartment, person.name) {
+    val recipientOptions = taskAssigneeOptions(person)
+    var recipientLabel by remember(initialTask?.id, person.name) {
         mutableStateOf((recipientOptions.firstOrNull { it.name == initialTask?.assigneeName } ?: recipientOptions.firstOrNull())?.optionLabel.orEmpty())
     }
     val recipient = recipientOptions.firstOrNull { it.optionLabel == recipientLabel } ?: recipientOptions.firstOrNull()
@@ -2995,10 +3702,16 @@ private fun StandaloneTaskForm(
     var association by remember(initialTask?.id) { mutableStateOf(initialTask?.associationNote.orEmpty()) }
     val supervisor = directSupervisor(person)
     Column {
-        SectionCard(if (crossDepartment) "跨部门任务" else "任务信息", "▤", Blue) {
+        SectionCard("任务信息", "▤", Blue) {
             Text("创建人：${person.name} · ${person.role.label}", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(bottom = 9.dp))
             if (recipient != null) {
                 ObjectPicker("负责人 *", recipient.optionLabel, recipientOptions.map { it.optionLabel }) { recipientLabel = it }
+            }
+            if (person.role == DemoRole.FOUNDER) {
+                Text("可将任务派发给公司任一成员。", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+            if (person.role == DemoRole.DEPARTMENT_MANAGER) {
+                Text("可派发给本人、本部门团队长或其他部门经理。", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 6.dp))
             }
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(title, { title = it }, modifier = Modifier.fillMaxWidth(), label = { Text("任务标题 *") }, singleLine = true)
@@ -3010,7 +3723,6 @@ private fun StandaloneTaskForm(
             OutlinedTextField(deliverables, { deliverables = it }, modifier = Modifier.fillMaxWidth(), label = { Text("完成时需提交的材料（选填）") }, minLines = 2, maxLines = 3)
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(association, { association = it }, modifier = Modifier.fillMaxWidth(), label = { Text("关联说明（选填）") }, minLines = 1, maxLines = 2)
-            if (crossDepartment) Text("接收方审批通过后直接进入其跨部门工作，无需二次接受。", color = Muted, fontSize = 10.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 8.dp))
         }
         if (supervisor != null) {
             Text("提交后由直属上级${supervisor.name}审批；通过后任务才会进入负责人的任务列表。", color = Muted, fontSize = 10.sp, lineHeight = 15.sp, modifier = Modifier.padding(bottom = 10.dp))
@@ -3018,7 +3730,7 @@ private fun StandaloneTaskForm(
             Text("创始人为最高层级，创建的任务无需审批。", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(bottom = 10.dp))
         }
         Button(
-            onClick = { recipient?.let { onSave(it, title.trim(), details.trim(), deadline.trim(), deliverables.trim(), association.trim(), crossDepartment) } },
+            onClick = { recipient?.let { onSave(it, title.trim(), details.trim(), deadline.trim(), deliverables.trim(), association.trim()) } },
             enabled = recipient != null && title.isNotBlank() && details.isNotBlank() && deadline.isNotBlank(),
             modifier = Modifier.fillMaxWidth().height(50.dp),
             shape = RoundedCornerShape(15.dp),
@@ -3061,7 +3773,6 @@ private fun WorkflowTaskDetailV2(
             WorkflowInfoLine("负责人", "${task.assigneeName} · ${task.assigneeRole.label}")
             WorkflowInfoLine("截止时间", task.deadline)
             WorkflowInfoLine("审批状态", task.approvalStatus.label)
-            if (task.isCrossDepartment) WorkflowInfoLine("任务类型", "跨部门")
             if (task.expectedDeliverables.isNotBlank()) {
                 Text("预期提交材料", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 9.dp, bottom = 3.dp))
                 Text(task.expectedDeliverables, color = Ink, fontSize = 11.sp, lineHeight = 16.sp)
@@ -3230,7 +3941,6 @@ private fun ChildTopBar(title: String, onBack: () -> Unit) {
         Text("‹", color = Ink, fontSize = 30.sp, modifier = Modifier.clickable(onClick = onBack).padding(end = 13.dp))
         Text(title, color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.weight(1f))
-        Text("PANDORA", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
     }
 }
 
@@ -3298,7 +4008,7 @@ private fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun PeriodBar(label: String, centerAction: String?, onPrevious: () -> Unit, onNext: () -> Unit, onCenter: () -> Unit, onLabel: (() -> Unit)? = null) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("‹", color = Ink, fontSize = 25.sp, modifier = Modifier.clickable(onClick = onPrevious).padding(horizontal = 5.dp))
@@ -3392,7 +4102,7 @@ private fun BottomSpacer() = Spacer(Modifier.height(12.dp))
 
 private fun demoDate(offset: Int): Calendar = Calendar.getInstance().apply {
     clear()
-    set(2026, Calendar.OCTOBER, 9, 12, 0, 0)
+    set(DemoBaseYear, DemoBaseMonth, 9, 12, 0, 0)
     add(Calendar.DAY_OF_MONTH, offset)
 }
 
@@ -3414,3 +4124,21 @@ private fun dayLabel(offset: Int): String {
     val names = arrayOf("周日", "周一", "周二", "周三", "周四", "周五", "周六")
     return "${names[day.get(Calendar.DAY_OF_WEEK) - 1]} · ${SimpleDateFormat("M月d日", Locale.CHINA).format(day.time)}"
 }
+
+private fun monthShiftFor(year: Int, month: Int): Int =
+    (year - DemoBaseYear) * 12 + (month - (DemoBaseMonth + 1))
+
+private fun dayOffsetFor(year: Int, month: Int, day: Int): Int {
+    val utc = TimeZone.getTimeZone("UTC")
+    val selected = Calendar.getInstance(utc).apply {
+        clear()
+        set(year, month - 1, day, 12, 0, 0)
+    }
+    val base = Calendar.getInstance(utc).apply {
+        clear()
+        set(DemoBaseYear, DemoBaseMonth, 9, 12, 0, 0)
+    }
+    return ((selected.timeInMillis - base.timeInMillis) / (24L * 60L * 60L * 1000L)).toInt()
+}
+
+private fun weekShiftForDay(dayOffset: Int): Int = (mondayOffsetFor(dayOffset) + 4) / 7
