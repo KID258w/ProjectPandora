@@ -1,10 +1,24 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { adminApi, getApiErrorMessage, unwrapResponse } from '../services/http'
+import { getCurrentAdmin, setCurrentAdmin, signOutAdmin } from '../services/adminSession'
 
 const route = useRoute()
 const router = useRouter()
 const pageTitle = computed(() => route.meta.title ?? '工作台')
+const adminName = ref(getCurrentAdmin()?.display_name || getCurrentAdmin()?.username || '系统管理员')
+async function loadAdmin() {
+  try {
+    const response = await adminApi.me()
+    const admin = unwrapResponse(response)
+    setCurrentAdmin(admin)
+    adminName.value = admin.display_name || admin.username || '系统管理员'
+  } catch (error) { ElMessage.error(getApiErrorMessage(error)) }
+}
+function logout() { signOutAdmin(); router.replace('/login') }
+onMounted(loadAdmin)
 </script>
 
 <template>
@@ -55,8 +69,8 @@ const pageTitle = computed(() => route.meta.title ?? '工作台')
         <div class="breadcrumb">Pandora <span>/</span> {{ pageTitle }}</div>
         <div class="admin-chip">
           <div class="avatar">管</div>
-          <span>系统管理员</span>
-          <el-button class="logout-button" text @click="router.push('/login')">退出</el-button>
+          <span>{{ adminName }}</span>
+          <el-button class="logout-button" text @click="logout">退出</el-button>
         </div>
       </el-header>
       <el-main class="page-content">
