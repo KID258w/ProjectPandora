@@ -24,3 +24,11 @@
 - [ ] 4.1 Add unit and API tests for role isolation, uniqueness, organization placement, leader reassignment, and deactivation safeguards.
 - [ ] 4.2 Verify administrator endpoints reject task/log reads and audit responses never expose passwords or log content.
 - [ ] 4.3 Verify successful and rejected management operations produce the specified audit behavior and clear UI feedback.
+
+## 5. Android App account integration (Issue #6, PR 6)
+
+- [x] 5.1 Integrate the App-scoped login, refresh, and current-user APIs using the documented response envelope and backend error responses.
+- [x] 5.2 Securely persist tokens with Android Keystore, restore the session from the current-user endpoint, retry once after access-token expiry, retain sessions on transient failures, and clear tokens on logout or rejected refresh.
+- [x] 5.3 Replace demo authentication/profile data with the backend user response and handle credential, disabled-account, expired-session, and network errors.
+- [x] 5.4 Replace adaptive and legacy launcher icons with the supplied Pandora logo; update Android account-flow documentation from the verified contract and test results.
+- [x] 5.5 Offer retry after temporary startup session-validation failures; preserve a prior token pair until replacement credentials and profile are verified.

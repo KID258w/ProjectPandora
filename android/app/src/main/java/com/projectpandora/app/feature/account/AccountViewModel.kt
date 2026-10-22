@@ -1,35 +1,52 @@
 package com.projectpandora.app.feature.account
 
-import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.projectpandora.app.BuildConfig
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-class DemoSessionStore(private val preferences: SharedPreferences) {
-    fun restore(): BusinessUser? = if (BuildConfig.DEBUG) {
-        DemoAccounts.users.find { it.account == preferences.getString("demo_account", null) }
-    } else null
-
-    fun save(user: BusinessUser) { preferences.edit().putString("demo_account", user.account).apply() }
-    fun clear() { preferences.edit().remove("demo_account").apply() }
-    fun notification(key: String): Boolean = preferences.getBoolean("notification_$key", true)
-    fun setNotification(key: String, enabled: Boolean) {
-        preferences.edit().putBoolean("notification_$key", enabled).apply()
-    }
-}
-
-class AccountViewModel(private val store: DemoSessionStore) : ViewModel() {
-    var user by mutableStateOf(store.restore())
+class AccountViewModel(private val repository: AccountRepository) : ViewModel() {
+    var user by mutableStateOf<BusinessUser?>(null)
         private set
     var loading by mutableStateOf(false)
         private set
+    var initializing by mutableStateOf(true)
+        private set
+    var startupDestination by mutableStateOf(AccountStartupDestination.WELCOME)
+        private set
     var error by mutableStateOf<String?>(null)
         private set
+    var canRetrySessionValidation by mutableStateOf(false)
+        private set
+
+    init {
+        viewModelScope.launch {
+            try {
+                if (repository.hasStoredSession()) {
+                    user = repository.restore()
+                    startupDestination = if (user == null) AccountStartupDestination.WELCOME
+                    else AccountStartupDestination.HOME
+                }
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: AccountException) {
+                user = null
+                startupDestination = AccountStartupDestination.LOGIN
+                error = failure.message
+                canRetrySessionValidation = failure.isRetryableSessionCheck()
+            } catch (_: Exception) {
+                user = null
+                startupDestination = AccountStartupDestination.LOGIN
+                error = AccountMessages.SERVER
+                canRetrySessionValidation = true
+            } finally {
+                initializing = false
+            }
+        }
+    }
 
     fun login(account: String, password: String) {
         if (loading) return
@@ -37,20 +54,69 @@ class AccountViewModel(private val store: DemoSessionStore) : ViewModel() {
             error = if (account.isBlank()) "请输入账号" else "请输入密码"
             return
         }
+
         loading = true
         error = null
         viewModelScope.launch {
-            delay(450)
-            val result = if (BuildConfig.DEBUG) DemoAccounts.authenticate(account, password)
-            else LoginResult.Failure("当前为界面预览阶段，正式登录接口尚未接入。")
-            when (result) {
-                is LoginResult.Success -> { store.save(result.user); user = result.user }
-                is LoginResult.Failure -> error = result.message
+            try {
+                user = repository.login(account.trim(), password)
+                error = null
+                canRetrySessionValidation = false
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: AccountException) {
+                user = null
+                error = failure.message
+            } catch (_: Exception) {
+                user = null
+                error = AccountMessages.SERVER
+            } finally {
+                loading = false
             }
-            loading = false
         }
     }
 
-    fun clearError() { error = null }
-    fun logout() { store.clear(); user = null; error = null }
+    fun clearError() {
+        error = null
+    }
+
+    fun retrySessionValidation() {
+        if (loading || !canRetrySessionValidation) return
+
+        loading = true
+        canRetrySessionValidation = false
+        error = null
+        viewModelScope.launch {
+            try {
+                user = repository.restore()
+                if (user == null) {
+                    error = AccountMessages.SESSION_EXPIRED
+                } else {
+                    startupDestination = AccountStartupDestination.HOME
+                }
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: AccountException) {
+                user = null
+                error = failure.message
+                canRetrySessionValidation = failure.isRetryableSessionCheck()
+            } catch (_: Exception) {
+                user = null
+                error = AccountMessages.SESSION_CHECK
+                canRetrySessionValidation = true
+            } finally {
+                loading = false
+            }
+        }
+    }
+
+    fun logout() {
+        repository.logout()
+        user = null
+        error = null
+        canRetrySessionValidation = false
+    }
+
+    private fun AccountException.isRetryableSessionCheck(): Boolean =
+        kind == AccountFailureKind.NETWORK || kind == AccountFailureKind.SERVER
 }

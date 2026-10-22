@@ -23,6 +23,16 @@ The Web console must provision business accounts and their organization scopes b
 - Write audit records for successful management mutations. Redact secrets such as passwords and exclude business task/log content.
 - Limit the workbench and all admin queries to system-management data. Reject task and employee-log access at the API boundary.
 
+## Android App account integration (Issue #6, PR 6)
+
+- The Android client consumes only the business-user endpoints under `/api/v1/app/`: token obtain, token refresh, and current user. It must not use the removed legacy token routes or the administrator endpoints.
+- Keep access and refresh tokens in an AES-GCM encrypted preference value. Protect the encryption key with Android Keystore, never persist the password, and remove the encrypted value on logout or when refresh is rejected.
+- Attach the access token to protected API requests. On an unauthorized response, serialize refresh attempts, retry the original request once with the new access token, and clear the session if the refresh token is rejected. Network/server failures must not be mistaken for an expired session.
+- Fetch `/app/me/` after login and while restoring a saved session. Use that response as the source for the Home greeting and the Profile/personal-info fields; do not reconstruct identity or organization data from local demo fixtures.
+- If startup validation fails because of a temporary network or server error, retain the saved session and offer an explicit retry action. During reauthentication, keep the prior token pair unless the new credentials and profile have both been verified successfully.
+- Keep the login form usable without a backend connection and show actionable feedback for rejected credentials/disabled accounts, expired sessions, and network failures.
+- Use the provided Pandora app-logo asset for adaptive and legacy launcher icons without changing the in-app Figma brand artwork.
+
 ## Alternatives Considered
 
 - Sharing one account model and relying only on role labels was rejected because administrators must never inherit mobile business access; separate authorization boundaries are easier to audit.

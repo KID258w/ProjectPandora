@@ -14,7 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.projectpandora.app.feature.account.BusinessUser
-import com.projectpandora.app.feature.account.DemoSessionStore
+import com.projectpandora.app.feature.account.AccountPreferences
 import com.projectpandora.app.ui.*
 import com.projectpandora.app.ui.theme.PandoraColors as C
 
@@ -55,7 +55,7 @@ fun PersonalInfoScreen(user: BusinessUser, onBack: () -> Unit) {
 }
 
 @Composable
-fun NotificationScreen(store: DemoSessionStore, onBack: () -> Unit) {
+fun NotificationScreen(store: AccountPreferences, onBack: () -> Unit) {
     val settings = listOf(Triple("task", "任务提醒", "新任务分配、截止时间提醒"),
         Triple("approval", "审批提醒", "任务审批结果和待审批事项"),
         Triple("logs", "日志提醒", "每日工作日志填写提醒"))

@@ -81,3 +81,26 @@ The system SHALL record successful administrator changes to departments, teams, 
 #### Scenario: Administrator filters audit records
 - **WHEN** an administrator filters the audit list by time range, administrator, or module
 - **THEN** the system returns matching management audit records without exposing task or employee-log content
+
+### Requirement: Business users authenticate through the Android App session
+The Android client SHALL authenticate business users only through the App-scoped token and current-user endpoints. It SHALL display identity and organization data returned by the current-user endpoint, protect persisted tokens, and clear local authentication state on logout or when a refresh token is rejected.
+
+#### Scenario: Active business user signs in to the App
+- **WHEN** a business user submits valid credentials to the App login endpoint
+- **THEN** the App stores the returned access and refresh tokens securely, fetches the current user, and enters the main interface using the returned profile data
+
+#### Scenario: Invalid credentials or a disabled account are rejected
+- **WHEN** a business user submits invalid credentials or an inactive account
+- **THEN** the App does not retain the submitted password or rejected tokens, preserves any previously saved session, and shows a login error that directs disabled users to their administrator
+
+#### Scenario: Session validation fails temporarily during startup
+- **WHEN** the App cannot validate a saved session because the network or server is temporarily unavailable
+- **THEN** the App retains the saved tokens, shows a retry-validation action, and restores the session if a later validation succeeds
+
+#### Scenario: Access token expires
+- **WHEN** a protected App request is rejected because its access token expired
+- **THEN** the App attempts one refresh and retries the request once; if refresh is rejected or expired, it clears local authentication state and requires sign-in again
+
+#### Scenario: Business user logs out
+- **WHEN** a signed-in business user confirms logout
+- **THEN** the App removes its local access and refresh tokens and returns to the signed-out flow

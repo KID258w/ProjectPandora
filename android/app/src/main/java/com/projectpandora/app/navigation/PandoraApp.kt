@@ -1,6 +1,5 @@
 package com.projectpandora.app.navigation
 
-import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Scaffold
@@ -12,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.*
+import com.projectpandora.app.core.network.ApiClient
 import com.projectpandora.app.feature.account.*
 import com.projectpandora.app.feature.ai.AiMapScreen
 import com.projectpandora.app.feature.home.HomeScreen
@@ -33,13 +33,20 @@ private object AccountRoute {
 }
 
 @Composable
-fun PandoraApp(startupDelayMillis: Long = 1000L) {
+fun PandoraApp(
+    startupDelayMillis: Long = 1000L,
+    accountRepository: AccountRepository? = null,
+) {
     val context = LocalContext.current.applicationContext
-    val store = remember { DemoSessionStore(context.getSharedPreferences("pandora_demo_ui", Context.MODE_PRIVATE)) }
+    val tokenStorage = remember(context) { AndroidTokenStorage(context) }
+    val preferences = remember(context) { AccountPreferences(context) }
+    val repository = remember(accountRepository, tokenStorage) {
+        accountRepository ?: ApiAccountRepository(ApiClient.createAppAccountApi(tokenStorage), tokenStorage)
+    }
     val factory = remember {
         object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T = AccountViewModel(store) as T
+            override fun <T : ViewModel> create(modelClass: Class<T>): T = AccountViewModel(repository) as T
         }
     }
     val model: AccountViewModel = viewModel(factory = factory)
@@ -61,6 +68,19 @@ fun PandoraApp(startupDelayMillis: Long = 1000L) {
     LaunchedEffect(user, route) {
         if (user != null && route == AccountRoute.LOGIN) resetTo(MainTab.HOME.route)
     }
+    LaunchedEffect(route, model.initializing, model.startupDestination) {
+        if (route == AccountRoute.LAUNCH && !model.initializing) {
+            // Wait for NavHost to install its graph before resetting the initial route.
+            withFrameNanos { }
+            delay(startupDelayMillis)
+            val destination = when (model.startupDestination) {
+                AccountStartupDestination.WELCOME -> AccountRoute.WELCOME
+                AccountStartupDestination.LOGIN -> AccountRoute.LOGIN
+                AccountStartupDestination.HOME -> MainTab.HOME.route
+            }
+            resetTo(destination)
+        }
+    }
     Box(Modifier.fillMaxSize().background(if (route == AccountRoute.LAUNCH) C.Amber else Color.White)
         .windowInsetsPadding(WindowInsets.safeDrawing)) {
         Scaffold(containerColor = Color.White, contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -68,10 +88,6 @@ fun PandoraApp(startupDelayMillis: Long = 1000L) {
             NavHost(nav, startDestination = AccountRoute.LAUNCH, Modifier.padding(padding)) {
                 composable(AccountRoute.LAUNCH) {
                     LaunchScreen()
-                    LaunchedEffect(Unit) {
-                        delay(startupDelayMillis)
-                        resetTo(if (model.user != null) MainTab.HOME.route else AccountRoute.WELCOME)
-                    }
                 }
                 composable(AccountRoute.WELCOME) { WelcomeScreen { nav.navigate(AccountRoute.LOGIN) } }
                 composable(AccountRoute.LOGIN) { LoginScreen(model) }
@@ -86,7 +102,7 @@ fun PandoraApp(startupDelayMillis: Long = 1000L) {
                     }
                 }
                 composable(AccountRoute.INFO) { user?.let { PersonalInfoScreen(it) { nav.popBackStack() } } }
-                composable(AccountRoute.NOTIFICATIONS) { NotificationScreen(store) { nav.popBackStack() } }
+                composable(AccountRoute.NOTIFICATIONS) { NotificationScreen(preferences) { nav.popBackStack() } }
                 composable(AccountRoute.HELP) { HelpScreen { nav.popBackStack() } }
                 composable(AppRoute.TASK_CENTER) { Column { BackButton { nav.popBackStack() }; TaskCenterScreen() } }
             }

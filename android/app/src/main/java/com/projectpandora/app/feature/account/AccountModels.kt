@@ -8,32 +8,44 @@ data class BusinessUser(
     val team: String? = null,
     val supervisor: String? = null,
 ) {
-    val organization: String get() = listOfNotNull(department, team).joinToString(" · ").ifEmpty { "公司" }
+    val organization: String
+        get() = listOfNotNull(department, team).joinToString(" · ").ifEmpty { "公司" }
 }
 
-sealed interface LoginResult {
-    data class Success(val user: BusinessUser) : LoginResult
-    data class Failure(val message: String) : LoginResult
+data class StoredTokens(val access: String, val refresh: String) {
+    override fun toString(): String = "StoredTokens(access=REDACTED, refresh=REDACTED)"
 }
 
-/** UI-stage fixtures only; not backend authentication or authorization. */
-object DemoAccounts {
-    val users = listOf(
-        BusinessUser("chenning", "陈宁", "员工", "产品部", "产品一组", "周晓"),
-        BusinessUser("zhouxiao", "周晓", "团队长", "产品部", "产品一组", "林经理"),
-        BusinessUser("linjingli", "林经理", "部门经理", "产品部", supervisor = "周总"),
-        BusinessUser("zhouzong", "周总", "创始人"),
-    )
-    const val PASSWORD = "Pandora123!"
+enum class AccountFailureKind {
+    INVALID_CREDENTIALS,
+    SESSION_EXPIRED,
+    FORBIDDEN,
+    NETWORK,
+    SERVER,
+    VALIDATION,
+}
 
-    fun authenticate(account: String, password: String): LoginResult {
-        if (account.isBlank()) return LoginResult.Failure("请输入账号")
-        if (password.isEmpty()) return LoginResult.Failure("请输入密码")
-        if (account.trim() == "disabled" && password == PASSWORD) {
-            return LoginResult.Failure("该账号已停用，请联系管理员。")
-        }
-        val user = users.find { it.account == account.trim() }
-        return if (user != null && password == PASSWORD) LoginResult.Success(user)
-        else LoginResult.Failure("账号或密码错误，请检查后重试。")
-    }
+class AccountException(
+    val kind: AccountFailureKind,
+    override val message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
+
+interface AccountRepository {
+    fun hasStoredSession(): Boolean
+    suspend fun restore(): BusinessUser?
+    suspend fun login(account: String, password: String): BusinessUser
+    fun logout()
+}
+
+enum class AccountStartupDestination { WELCOME, LOGIN, HOME }
+
+object AccountMessages {
+    const val INVALID_CREDENTIALS = "账号或密码错误；如果账号已停用，请联系管理员。"
+    const val SESSION_EXPIRED = "登录状态已过期，请重新登录。"
+    const val FORBIDDEN = "该账号无权使用 App，请联系管理员。"
+    const val NETWORK = "暂时无法连接服务器，请检查网络后重试。"
+    const val SESSION_CHECK = "暂时无法验证登录状态，请检查网络或稍后重试。"
+    const val SERVER = "服务暂时不可用，请稍后重试。"
+    const val VALIDATION = "登录信息格式不正确，请检查后重试。"
 }
