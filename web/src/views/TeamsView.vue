@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, fetchAllPages, getApiErrorMessage, unwrapResponse } from '../services/http'
 
 const departments = ref([])
@@ -40,7 +40,7 @@ async function createTeam() {
   try {
     unwrapResponse(await adminApi.createTeam({ name: form.name.trim(), department_id: form.department_id, description: form.description.trim() }))
     ElMessage.success('团队创建成功'); dialogVisible.value = false; await loadData()
-  } catch (error) { ElMessage.error(getApiErrorMessage(error)) }
+  } catch (error) { await ElMessageBox.alert(getApiErrorMessage(error), '无法创建团队', { type: 'error', confirmButtonText: '知道了' }) }
   finally { submitting.value = false }
 }
 watch(filterDepartment, async (departmentId) => {

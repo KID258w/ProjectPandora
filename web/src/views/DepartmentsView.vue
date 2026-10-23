@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, fetchAllPages, getApiErrorMessage, unwrapResponse } from '../services/http'
 
 const departments = ref([])
@@ -44,7 +44,7 @@ async function createDepartment() {
     ElMessage.success('部门创建成功')
     dialogVisible.value = false
     await loadData()
-  } catch (error) { ElMessage.error(getApiErrorMessage(error)) }
+  } catch (error) { await ElMessageBox.alert(getApiErrorMessage(error), '无法创建部门', { type: 'error', confirmButtonText: '知道了' }) }
   finally { submitting.value = false }
 }
 onMounted(loadData)

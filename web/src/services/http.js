@@ -43,13 +43,18 @@ export async function fetchAllPages(request, params = {}) {
 export function getApiErrorMessage(error) {
   const body = error.response?.data
   const details = body?.data
-  const fieldMessages = details && typeof details === 'object'
-    ? Object.entries(details).flatMap(([field, messages]) => {
-        const values = Array.isArray(messages) ? messages : [messages]
-        return values.map((message) => `${field === 'non_field_errors' ? '' : `${field}: `}${message}`)
+  if (typeof details === 'string' && details.trim()) return details
+  if (Array.isArray(details) && details.length) return details.map(String).join('；')
+  if (details && typeof details === 'object') {
+    const fieldMessages = Object.entries(details).flatMap(([field, messages]) => {
+      const values = Array.isArray(messages) ? messages : [messages]
+      return values.map((message) => {
+        const text = typeof message === 'string' ? message : JSON.stringify(message)
+        return `${['non_field_errors', 'detail'].includes(field) ? '' : `${field}: `}${text}`
       })
-    : []
-  if (fieldMessages.length) return fieldMessages.join('；')
+    })
+    if (fieldMessages.length) return fieldMessages.join('；')
+  }
   return body?.message || details?.detail || error.message || '请求失败，请稍后重试。'
 }
 
