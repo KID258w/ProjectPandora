@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, fetchAllPages, getApiErrorMessage, unwrapResponse } from '../services/http'
 import { businessRoles, roleLabel } from '../data/accountManagementDemo'
 
@@ -56,7 +56,13 @@ async function createUser() {
     ElMessage.success(`已创建账号，直属上级：${created.manager_name ?? '无'}`)
     dialogVisible.value = false
     await loadData()
-  } catch (error) { ElMessage.error(getApiErrorMessage(error)) }
+  } catch (error) {
+    const backendMessage = getApiErrorMessage(error)
+    const message = form.business_role === 'department_manager' && backendMessage.includes('已存在经理')
+      ? '该部门已有启用中的部门经理，不允许重复添加。'
+      : backendMessage
+    await ElMessageBox.alert(message, '无法创建账号', { type: 'error', confirmButtonText: '知道了' })
+  }
   finally { submitting.value = false }
 }
 watch(() => form.business_role, (role) => { if (role === 'founder') { form.department_id = ''; form.team_id = '' } else if (!['team_leader', 'employee'].includes(role)) form.team_id = '' })
