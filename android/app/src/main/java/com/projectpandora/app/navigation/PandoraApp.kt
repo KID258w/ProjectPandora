@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.*
+import com.projectpandora.app.BuildConfig
 import com.projectpandora.app.core.network.ApiClient
 import com.projectpandora.app.feature.account.*
 import com.projectpandora.app.feature.ai.AiMapScreen
@@ -42,6 +43,9 @@ fun PandoraApp(
     val preferences = remember(context) { AccountPreferences(context) }
     val repository = remember(accountRepository, tokenStorage) {
         accountRepository ?: ApiAccountRepository(ApiClient.createAppAccountApi(tokenStorage), tokenStorage)
+    }
+    val requiresLocalNetworkPermission = remember(accountRepository) {
+        accountRepository == null && LocalNetworkPermission.isRequired(BuildConfig.API_BASE_URL)
     }
     val factory = remember {
         object : ViewModelProvider.Factory {
@@ -90,7 +94,7 @@ fun PandoraApp(
                     LaunchScreen()
                 }
                 composable(AccountRoute.WELCOME) { WelcomeScreen { nav.navigate(AccountRoute.LOGIN) } }
-                composable(AccountRoute.LOGIN) { LoginScreen(model) }
+                composable(AccountRoute.LOGIN) { LoginScreen(model, requiresLocalNetworkPermission) }
                 composable(MainTab.HOME.route) { user?.let { HomeScreen(it, { selectTab(MainTab.VIEWS) }, { selectTab(MainTab.LOGS) }) } }
                 composable(MainTab.VIEWS.route) { ViewsScreen { nav.navigate(AppRoute.TASK_CENTER) } }
                 composable(MainTab.LOGS.route) { LogsScreen() }

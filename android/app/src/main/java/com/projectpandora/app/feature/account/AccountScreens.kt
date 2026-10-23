@@ -1,5 +1,8 @@
 package com.projectpandora.app.feature.account
 
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -11,9 +14,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -58,13 +63,45 @@ fun WelcomeScreen(onEnter: () -> Unit) {
 }
 
 @Composable
-fun LoginScreen(model: AccountViewModel) {
+fun LoginScreen(model: AccountViewModel, requiresLocalNetworkPermission: Boolean = false) {
     var account by rememberSaveable { mutableStateOf("") }
     // Password must not enter saved state, preferences, logs or navigation arguments.
     var password by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
+    var pendingLogin by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var localNetworkPermissionDenied by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
     val focus = LocalFocusManager.current
-    val submit = { focus.clearFocus(); model.login(account, password) }
+    val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val credentials = pendingLogin
+        pendingLogin = null
+        if (granted) {
+            localNetworkPermissionDenied = false
+            credentials?.let { (pendingAccount, pendingPassword) -> model.login(pendingAccount, pendingPassword) }
+        } else {
+            localNetworkPermissionDenied = true
+        }
+    }
+    val submit = {
+        focus.clearFocus()
+        when {
+            model.loading -> Unit
+            account.isBlank() || password.isEmpty() -> model.login(account, password)
+            requiresLocalNetworkPermission && ContextCompat.checkSelfPermission(
+                context,
+                LocalNetworkPermission.NAME,
+            ) != PackageManager.PERMISSION_GRANTED -> {
+                pendingLogin = account to password
+                localNetworkPermissionLauncher.launch(LocalNetworkPermission.NAME)
+            }
+            else -> {
+                localNetworkPermissionDenied = false
+                model.login(account, password)
+            }
+        }
+    }
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         BrandHeader()
@@ -72,6 +109,9 @@ fun LoginScreen(model: AccountViewModel) {
         PageTitle("欢迎回来")
         Text("使用管理员为你录入的业务账号登录", fontSize = 14.sp, color = C.Muted)
         model.error?.let { Note(it, C.ErrorPale, C.Error) }
+        if (localNetworkPermissionDenied) {
+            Note("需要允许本地网络访问，才能连接当前服务器。请在系统设置中授权后重试。", C.ErrorPale, C.Error)
+        }
         if (model.canRetrySessionValidation) {
             TextButton(
                 onClick = model::retrySessionValidation,
@@ -81,11 +121,11 @@ fun LoginScreen(model: AccountViewModel) {
                 Text("重试验证", color = C.Orange)
             }
         }
-        OutlinedTextField(account, { account = it; model.clearError() }, Modifier.fillMaxWidth().testTag("account"),
+        OutlinedTextField(account, { account = it; model.clearError(); localNetworkPermissionDenied = false }, Modifier.fillMaxWidth().testTag("account"),
             label = { Text("账号") }, singleLine = true, enabled = !model.loading,
             isError = model.error == "请输入账号", shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Next))
-        OutlinedTextField(password, { password = it; model.clearError() }, Modifier.fillMaxWidth().testTag("password"),
+        OutlinedTextField(password, { password = it; model.clearError(); localNetworkPermissionDenied = false }, Modifier.fillMaxWidth().testTag("password"),
             label = { Text("密码") }, singleLine = true, enabled = !model.loading,
             isError = model.error == "请输入密码", shape = RoundedCornerShape(12.dp),
             visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
