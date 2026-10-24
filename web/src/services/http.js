@@ -58,11 +58,19 @@ export const adminApi = {
   refresh: (refresh) => axios.post(`${API_BASE_URL.replace(/\/$/, '')}/api/v1/admin/auth/token/refresh/`, { refresh }, { timeout: 10000 }),
   me: () => http.get('/admin/me/'),
   departments: (params = {}) => http.get('/admin/departments/', { params: { page_size: 100, ...params } }),
+  department: (id) => http.get(`/admin/departments/${id}/`),
+  updateDepartment: (id, data) => http.patch(`/admin/departments/${id}/`, data),
   createDepartment: (data) => http.post('/admin/departments/', data),
   teams: (params = {}) => http.get('/admin/teams/', { params: { page_size: 100, ...params } }),
+  team: (id) => http.get(`/admin/teams/${id}/`),
+  updateTeam: (id, data) => http.patch(`/admin/teams/${id}/`, data),
   createTeam: (data) => http.post('/admin/teams/', data),
   users: (params = {}) => http.get('/admin/users/', { params: { page_size: 100, ...params } }),
+  user: (id) => http.get(`/admin/users/${id}/`),
+  updateUser: (id, data) => http.patch(`/admin/users/${id}/`, data),
   createUser: (data) => http.post('/admin/users/', data),
+  dashboard: () => http.get('/admin/dashboard/'),
+  auditLogs: (params = {}) => http.get('/admin/audit-logs/', { params: { page_size: 100, ...params } }),
 }
 
 let refreshPromise
