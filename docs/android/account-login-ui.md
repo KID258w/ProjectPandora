@@ -78,6 +78,8 @@ Launcher 的 adaptive icon 与 API 24–25 密度图标使用提供的 `Pandoraz
 
 - Android：`./gradlew.bat lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest connectedDebugAndroidTest --no-daemon`，通过。21 项 JVM 测试和 11 项 Android 17 Pixel 6 模拟器仪器测试通过。
 - 覆盖资料姓名/身份证号联合提交、单字段更新请求、未更改字段省略、保存后刷新脱敏资料、手机号更新后使用新手机号登录、改密成功及错误密码的后端反馈、不可恢复会话过期时返回登录页，以及身份证号和密码不写入本地偏好。
+- 后端：`python manage.py test apps.accounts.tests.AccountApiTests.test_app_me_update_and_password --verbosity 2`，Django API 测试通过（1 项）；覆盖真实 API 视图的资料单字段更新、错误当前密码、确认不一致和改密成功。
+- 联调边界：Android Retrofit HTTP 测试使用本地 `HttpServer` 验证线路与序列化；后端 Django 测试通过 test client 调用真实 API 视图。此次未启动后端服务执行模拟器到本机 `runserver` 的端到端网络联调。
 - 验证时使用 `D:\D\JAVA21` 与 `D:\D\AndroidSDK`。本地 `JAVA_HOME` 当前值含尾随分号，构建命令通过进程级临时环境变量去掉该分号；未修改系统环境设置。
 
 Android CI 的标准复现命令为：
