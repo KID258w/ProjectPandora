@@ -1,6 +1,6 @@
 # Issue #6：账号录入与登录契约
 
-关联 Issue：#6、Issue2；OpenSpec：`admin-identity-and-organization`。本文记录后端账号录入、登录和员工账号后续维护契约。Issue #1 遗留修复已完成；下文 Issue2 目标仅作为待实施契约。
+关联 Issue：#6、Issue2；OpenSpec：`admin-identity-and-organization`。本文记录后端账号录入、登录和员工账号后续维护契约。Issue #1 遗留修复已完成；下文 Issue2 契约已在功能02后端 PR 实现。
 
 ## 本次 Issue #1 遗留修复
 
@@ -106,9 +106,9 @@ description 可省略，默认空字符串。部门名全局唯一，团队名�
 
 身份证号加密存储；`GET admin/users/` 和 `GET app/me/` 仅返回 `id_number_masked`，不返回完整值。禁止传入 password、is_active、manager_id、account_type、is_staff、is_superuser 等字段；未知字段返回 400，不静默忽略。录入与关系写入在同一事务内，数据库唯一约束兜底并发重复录入，返回 400 而非 500。
 
-## Issue2：员工账号后续维护目标（尚未实现）
+## Issue2：员工账号后续维护契约（已实现）
 
-以下契约用于 Issue2 开发；不改变上文已完成的账号创建和初始密码交付流程。
+以下契约已在功能02后端 PR 实现；不改变上文已完成的账号创建和初始密码交付流程。
 
 ### 管理端调整员工业务信息
 
@@ -116,6 +116,19 @@ description 可省略，默认空字符串。部门名全局唯一，团队名�
 - `GET admin/users/{id}/` 查看员工脱敏资料。
 - `PATCH admin/users/{id}/` 仅接受 `business_role`、`department_id`、`team_id`、`is_active`。拒绝修改 `display_name`、`username`、`id_number`、`password` 和 `manager_id`；Web 不提供密码重置。
 - 员工身份和组织调整由服务端校验角色与部门/团队的匹配关系；停用员工、部门、团队不能作为调整候选项。直属上级由服务端计算和维护。
+- 身份证号全局唯一：录入或 App 修改时校验，重复返回 400；底层用 `id_number_hash`（HMAC-SHA256，密钥由服务器保管，唯一）兑底并发。
+- 每部门最多一名启用部门经理、每团队最多一名启用团队长，允许暂时空缺。停用/撤销负责人时其直接下属 `manager_id` 置空；任命新启用负责人时重建空缺下属的直属上级关系。
+
+### 组织详情与启停
+
+- `GET, PATCH admin/departments/{id}/`：详情含名称、说明、`is_active`、负责人（可为 null）、下属团队与成员（只读）；PATCH 仅接受 `name`、`description` 或单独 `is_active`。
+- `GET, PATCH admin/teams/{id}/`：详情含名称、说明、`is_active`、所属部门、负责人（可为 null）与成员（只读）；PATCH 仅接受 `name`、`description` 或单独 `is_active`，不接受 `department_id`。
+- 部门仍有启用下属团队或成员、团队仍有启用成员时，`is_active=false` 返回 400。部门/团队含 `updated_at` 时间戳。
+
+### 管理概况与审计
+
+- `GET admin/dashboard/` 返回启用员工、部门、团队数及已发布公司重要事项数（后者当前为 0）。
+- `GET admin/audit-logs/` 按 `start_date`/`end_date`（YYYY-MM-DD）、`actor_id`、`module`（users/departments/teams）筛选；`before_data`/`after_data` 已脱敏，不含明文密码、完整身份证号或日志内容。
 
 ### App 员工本人资料维护
 
@@ -149,6 +162,6 @@ description 可省略，默认空字符串。部门名全局唯一，团队名�
 
 ## 范围及验证
 
-上述“Issue2”小节描述目标契约，不代表已上线。Issue1 已实现账号录入、管理员与业务账号认证隔离、App 登录和当前用户读取；部门/团队/员工维护及 App 个人资料和密码更新仍需按 Issue2 实施。Django `/admin/` 仅作受信任运维入口，业务用户录入必须使用版本化 API。
+上述“Issue2”小节契约已在功能02后端 PR 实现。Issue1 已实现账号录入、管理员与业务账号认证隔离、App 登录和当前用户读取；Issue2 已实现部门/团队详情与启停、员工筛选与身份/组织调整、管理概况与审计、App 个人资料与密码维护。Django `/admin/` 仅作受信任运维入口，业务用户录入必须使用版本化 API。
 
 在 backend 执行 `python manage.py check`、`python manage.py makemigrations --check --dry-run`、`python manage.py migrate --noinput`、`python manage.py test --verbosity 2`、`python manage.py spectacular --validate --fail-on-warn --file <临时目录/schema.yaml>`。Swagger 在 `/api/docs/`。PR 附实际测试证据，本机测试不代表 GitHub CI 已通过。

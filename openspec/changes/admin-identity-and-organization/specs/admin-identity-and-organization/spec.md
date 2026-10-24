@@ -98,6 +98,17 @@ The system SHALL allow an authenticated employee to change only their own passwo
 - **WHEN** the current password is wrong, the confirmation differs, the new password is unchanged, or configured password validation fails
 - **THEN** the system rejects the request and leaves the stored password unchanged
 
+### Requirement: National IDs are unique
+The system SHALL ensure each employee national ID is unique across accounts, while historical accounts may have no national ID recorded.
+
+#### Scenario: Duplicate national ID on account creation
+- **WHEN** an administrator tries to create an account with a national ID already used by another account
+- **THEN** the system rejects the creation and records no account
+
+#### Scenario: Duplicate national ID on profile update
+- **WHEN** an employee tries to change their national ID to one already used by another account
+- **THEN** the system rejects the change and preserves the existing value
+
 ### Requirement: Sensitive account data is protected in management responses and audit records
 The system SHALL mask identity numbers in ordinary reads and exclude plaintext passwords, full identity numbers, and employee-log content from logs and administrator audit records.
 
