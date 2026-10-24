@@ -192,6 +192,7 @@ class UserListView(AdminListCreateView):
 
 @extend_schema_view(get=extend_schema(tags=["组织管理"], summary="部门详情"), patch=extend_schema(tags=["组织管理"], summary="更新部门"))
 class DepartmentDetailView(VersionedMixin, generics.RetrieveUpdateAPIView):
+    http_method_names = ["get", "patch", "head", "options"]
     permission_classes = [IsAdministrator]
     queryset = Department.objects.all()
 
@@ -211,6 +212,7 @@ class DepartmentDetailView(VersionedMixin, generics.RetrieveUpdateAPIView):
 
 @extend_schema_view(get=extend_schema(tags=["组织管理"], summary="团队详情"), patch=extend_schema(tags=["组织管理"], summary="更新团队"))
 class TeamDetailView(VersionedMixin, generics.RetrieveUpdateAPIView):
+    http_method_names = ["get", "patch", "head", "options"]
     permission_classes = [IsAdministrator]
     queryset = Team.objects.all()
 
@@ -230,6 +232,7 @@ class TeamDetailView(VersionedMixin, generics.RetrieveUpdateAPIView):
 
 @extend_schema_view(get=extend_schema(tags=["业务账号管理"], summary="员工详情"), patch=extend_schema(tags=["业务账号管理"], summary="调整员工身份/组织/启用状态"))
 class UserDetailView(VersionedMixin, generics.RetrieveUpdateAPIView):
+    http_method_names = ["get", "patch", "head", "options"]
     permission_classes = [IsAdministrator]
     queryset = User.objects.filter(account_type="business").select_related("department", "team", "manager")
 
@@ -297,6 +300,7 @@ class AuditLogListView(VersionedMixin, generics.ListAPIView):
     patch=extend_schema(tags=["App 认证"], summary="修改本人资料", request=AppMeUpdateSerializer, responses=UserSerializer),
 )
 class AppMeView(VersionedMixin, generics.RetrieveUpdateAPIView):
+    http_method_names = ["get", "patch", "head", "options"]
     permission_classes = [IsBusinessUser]
 
     def get_serializer_class(self):

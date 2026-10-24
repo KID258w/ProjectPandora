@@ -371,3 +371,14 @@ class AccountApiTests(APITestCase):
                 business_role="employee", department=self.department, team=self.team,
                 manager=User.objects.get(username="leader"),
             )
+
+    def test_detail_endpoints_reject_put(self):
+        self.hierarchy()
+        employee = User.objects.get(username="employee")
+        urls = [
+            f"/api/v1/admin/departments/{self.department.pk}/",
+            f"/api/v1/admin/teams/{self.team.pk}/",
+            f"/api/v1/admin/users/{employee.pk}/",
+        ]
+        for url in urls:
+            self.assertEqual(self.client.put(url, {}, format="json").status_code, 405)
