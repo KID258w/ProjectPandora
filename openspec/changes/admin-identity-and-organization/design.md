@@ -18,7 +18,7 @@ Issue #6 已落地账号录入、两端认证与部门/团队/用户列表及创
 
 ## Decisions
 
-- `User` 沿用 `username` 作为手机号；新增 `id_number` 存身份证号，展示一律脱敏。密码仍用 `User.password` 的 Django 哈希。
+- `User` 沿用 `username` 作为手机号；`id_number` 存身份证号（Fernet 加密、展示一律脱敏），并加确定性哈希 `id_number_hash` 唯一约束保证身份证号唯一。密码仍用 `User.password` 的 Django 哈希。
 - `Department`/`Team` 新增 `is_active`，与 `User.is_active` 一致，采用停用保留历史而非物理删除。
 - 负责人唯一性沿用数据库条件唯一约束（仅对 `is_active=True` 生效）；允许组织暂时无负责人，负责人调整不自动指定接任者。
 - 员工更新与录入共用同一套 placement 校验（角色→组织形状、负责人唯一、停用对象排除），避免 create/update 规则漂移。
@@ -50,4 +50,3 @@ App 端（`IsBusinessUser`）：`GET/PATCH /api/v1/app/me/`、`POST /api/v1/app/
 ## Open Questions
 
 - 需求文档 05 场景7「停用负责人须先更换」与 Issue #15「允许暂时没有负责人」的冲突，需产品最终确认（当前实现遵循 Issue #15）。
-- 身份证号是否要求唯一、是否作为录入必填项，待确认（当前为可空、非必填、不唯一）。

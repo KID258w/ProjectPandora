@@ -1,3 +1,5 @@
+import hashlib
+
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import UserManager
 from django.db import models
@@ -47,6 +49,7 @@ class User(AbstractUser):
 
     display_name = models.CharField(max_length=100, blank=True)
     id_number = EncryptedTextField(null=True, blank=True)
+    id_number_hash = models.CharField(max_length=64, unique=True, null=True, blank=True)
     account_type = models.CharField(max_length=16, choices=AccountType.choices, default=AccountType.BUSINESS)
     business_role = models.CharField(max_length=24, choices=Role.choices, blank=True, default="")
     department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.PROTECT, related_name="users")
@@ -54,6 +57,15 @@ class User(AbstractUser):
     manager = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT, related_name="direct_reports")
 
     objects = PandoraUserManager()
+
+    def save(self, *args, **kwargs):
+        # 加密字段无法直接按明文做数据库唯一约束，用确定性哈希保证身份证号唯一。
+        self.id_number_hash = self._hash_id_number(self.id_number) if self.id_number else None
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def _hash_id_number(value):
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
     class Meta:
         constraints = [

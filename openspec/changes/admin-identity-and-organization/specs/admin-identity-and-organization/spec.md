@@ -75,6 +75,17 @@ The system SHALL allow an employee to view their own profile and update their na
 - **WHEN** an employee changes their phone number
 - **THEN** the system stores the new value as the login username used for subsequent App sign-in
 
+### Requirement: National IDs are unique
+The system SHALL ensure each employee national ID is unique across accounts, while still allowing historical accounts to have no national ID recorded.
+
+#### Scenario: Duplicate national ID on account creation
+- **WHEN** an administrator tries to create an account with a national ID already used by another account
+- **THEN** the system rejects the creation and records no account
+
+#### Scenario: Duplicate national ID on profile update
+- **WHEN** an employee tries to change their national ID to one already used by another account
+- **THEN** the system rejects the change and preserves the existing value
+
 ### Requirement: Employees change their own password in the App
 The system SHALL allow an employee to change their own password by providing the current password, a new password, and its confirmation. The new password SHALL be stored as a Django password hash.
 

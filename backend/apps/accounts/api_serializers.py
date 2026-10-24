@@ -260,7 +260,10 @@ class AppMeUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):
     def validate_id_number(self, value):
         if value and not value.strip():
             raise serializers.ValidationError("身份证号不能为空白。")
-        return value.strip()
+        value = value.strip()
+        if value and User.objects.filter(id_number_hash=User._hash_id_number(value)).exclude(pk=self.instance.pk).exists():
+            raise serializers.ValidationError("该身份证号已被使用。")
+        return value
 
 
 class AppPasswordChangeSerializer(StrictInputMixin, serializers.Serializer):
@@ -316,6 +319,9 @@ class BusinessUserCreateSerializer(StrictInputMixin, serializers.ModelSerializer
         validators = []
 
     def validate(self, attrs):
+        id_number = attrs.get("id_number")
+        if id_number and User.objects.filter(id_number_hash=User._hash_id_number(id_number)).exists():
+            raise serializers.ValidationError({"id_number": "该身份证号已被使用。"})
         role = attrs["business_role"]
         department, team = attrs.get("department"), attrs.get("team")
         manager, department, team = resolve_placement(role, department, team, is_active=True)

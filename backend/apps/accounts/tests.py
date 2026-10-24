@@ -350,3 +350,24 @@ class AccountApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         employee.refresh_from_db()
         self.assertTrue(employee.check_password("New-Pass-123!"))
+
+    def test_id_number_uniqueness(self):
+        self.hierarchy()
+        # 录入时身份证号重复
+        dup = self.create_user("dup", "founder", id_number=self.identity_numbers["employee"])
+        self.assertEqual(dup.status_code, 400)
+        self.assertFalse(User.objects.filter(username="dup").exists())
+        # App 本人修改为他人已用身份证号
+        employee = User.objects.get(username="employee")
+        token = self.login("app", employee.username)
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer " + token["access"])
+        response = self.client.patch("/api/v1/app/me/", {"id_number": self.identity_numbers["leader"]}, format="json")
+        self.assertEqual(response.status_code, 400)
+        # 数据库层唯一约束兑底（绕过序列化器）
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            User.objects.create_user(
+                username="dbdup", password=self.password,
+                id_number=self.identity_numbers["manager"],
+                business_role="employee", department=self.department, team=self.team,
+                manager=User.objects.get(username="leader"),
+            )
