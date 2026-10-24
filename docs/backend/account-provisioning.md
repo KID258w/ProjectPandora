@@ -1,6 +1,6 @@
 # Issue #6：账号录入与登录契约
 
-关联 Issue：#6；OpenSpec：`admin-identity-and-organization`。本文记录后端账号录入与登录接口契约，并补充本次 Issue #1 遗留修复内容。
+关联 Issue：#6、Issue2；OpenSpec：`admin-identity-and-organization`。本文记录后端账号录入、登录和员工账号后续维护契约。Issue #1 遗留修复已完成；下文 Issue2 目标仅作为待实施契约。
 
 ## 本次 Issue #1 遗留修复
 
@@ -106,8 +106,49 @@ description 可省略，默认空字符串。部门名全局唯一，团队名�
 
 身份证号加密存储；`GET admin/users/` 和 `GET app/me/` 仅返回 `id_number_masked`，不返回完整值。禁止传入 password、is_active、manager_id、account_type、is_staff、is_superuser 等字段；未知字段返回 400，不静默忽略。录入与关系写入在同一事务内，数据库唯一约束兜底并发重复录入，返回 400 而非 500。
 
+## Issue2：员工账号后续维护目标（尚未实现）
+
+以下契约用于 Issue2 开发；不改变上文已完成的账号创建和初始密码交付流程。
+
+### 管理端调整员工业务信息
+
+- `GET admin/users/` 支持按姓名或手机号关键词、`business_role`、`department_id`、`team_id`、`is_active` 筛选。管理列表可查看停用员工；身份证号仍只返回 `id_number_masked`。
+- `GET admin/users/{id}/` 查看员工脱敏资料。
+- `PATCH admin/users/{id}/` 仅接受 `business_role`、`department_id`、`team_id`、`is_active`。拒绝修改 `display_name`、`username`、`id_number`、`password` 和 `manager_id`；Web 不提供密码重置。
+- 员工身份和组织调整由服务端校验角色与部门/团队的匹配关系；停用员工、部门、团队不能作为调整候选项。直属上级由服务端计算和维护。
+
+### App 员工本人资料维护
+
+员工使用有效的 App 业务账号 access token 调用 `GET app/me/` 读取本人资料。响应继续返回 `id_number_masked`，不返回完整身份证号。
+
+`PATCH app/me/` 允许提交以下一个或多个字段：
+
+```json
+{
+  "display_name": "张三",
+  "username": "13800000002",
+  "id_number": "<本人重新填写的完整身份证号>"
+}
+```
+
+`display_name` 与 `id_number` 可在 App 同一个个人资料表单中一并提交，也可以分别提交；姓名与身份证号不自动联动。后端对两项分别校验，并在一个数据库事务中保存：任一字段校验失败时整次更新回滚。`username` 表示员工的新手机号；后端校验其唯一性后原子更新登录标识。该接口拒绝业务身份、部门/团队、`manager_id`、`is_active` 和密码字段。
+
+### App 员工本人修改密码
+
+`POST app/me/password/` 仅允许当前已认证的启用业务账号修改自己的密码：
+
+```json
+{
+  "current_password": "当前密码",
+  "new_password": "NewStrongPassword!42",
+  "new_password_confirm": "NewStrongPassword!42"
+}
+```
+
+后端校验当前密码、确认字段一致、新密码不同于当前密码，并运行 Django 配置的密码校验器。成功后只更新 `User.password` 哈希，不回显或记录任何密码值。Issue2 MVP 不增加服务端多设备令牌撤销，已签发 JWT 按现有有效期失效；不提供短信验证或密码找回。
+
 ## 范围及验证
 
-本次没有详情更新、删除、密码重置、组织调动、负责人替换、停用操作 API、审计查询和自助注册；OpenSpec 的这些完整管理能力仍待后续实施。Django `/admin/` 仅作受信任运维入口，业务用户录入必须使用版本化 API。
+上述“Issue2”小节描述目标契约，不代表已上线。Issue1 已实现账号录入、管理员与业务账号认证隔离、App 登录和当前用户读取；部门/团队/员工维护及 App 个人资料和密码更新仍需按 Issue2 实施。Django `/admin/` 仅作受信任运维入口，业务用户录入必须使用版本化 API。
 
 在 backend 执行 `python manage.py check`、`python manage.py makemigrations --check --dry-run`、`python manage.py migrate --noinput`、`python manage.py test --verbosity 2`、`python manage.py spectacular --validate --fail-on-warn --file <临时目录/schema.yaml>`。Swagger 在 `/api/docs/`。PR 附实际测试证据，本机测试不代表 GitHub CI 已通过。

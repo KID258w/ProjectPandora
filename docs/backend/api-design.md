@@ -78,7 +78,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 - 部门详情读取负责人、下属团队和成员；团队详情读取所属部门、负责人和成员。没有启用负责人的 `manager`/`leader` 关系返回 `null`。资源 PATCH 可更新 `name`、`description`，或单独更新 `is_active`；列表开关只提交 `is_active`，详情编辑表单只提交 `name`、`description`。团队 PATCH 不接受 `department_id`。
 - 每个部门最多一名启用部门经理，每个团队最多一名启用团队长；负责人允许为空。调整负责人须先撤销原负责人的负责人身份或停用原账号，再调整新负责人的身份及组织归属；已有启用负责人的组织不得再接收第二名启用负责人。后端不自动指定接任者；直属上级 `manager_id` 由后端维护，负责人空缺时允许受影响下属暂时无直属上级，新负责人启用后重建对应关系。
 - 停用组织前仍有启用下级对象时拒绝停用。已停用员工、部门和团队不得作为身份/归属选择器的候选项；管理列表仍可筛选、查看及重新启用。
-- App `GET /api/v1/app/me/` 不返回完整身份证号。`PATCH /api/v1/app/me/` 允许员工本人修改 `display_name`、手机号（请求字段仍为 `username`，成功后更新登录标识）和 `id_number`，不接受身份、组织、直属上级或启用状态。App 密码修改 API 路径与凭据校验字段待接口设计阶段确定；MVP 不要求短信验证，密码找回流程未定。
+- App `GET /api/v1/app/me/` 不返回完整身份证号。`PATCH /api/v1/app/me/` 允许员工本人修改 `display_name`、手机号（请求字段仍为 `username`，成功后更新登录标识）和 `id_number`，不接受身份、组织、直属上级或启用状态。姓名和身份证号可在同一请求中一起提交，也可分别修改；两者作为一个事务保存，任一字段校验失败时均不更新。员工本人通过 `POST /api/v1/app/me/password/` 修改密码，提交当前密码、新密码和新密码确认；MVP 不要求短信验证，密码找回流程未定。密码变更不增加服务端多设备令牌撤销，已签发令牌按现有有效期处理。
 
 ## 3. Android 业务端 API
 
@@ -90,7 +90,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `POST /api/v1/app/auth/token/refresh/` | 刷新业务端令牌 |
 | `GET /api/v1/app/me/` | 当前用户姓名、手机号、业务角色、部门/团队、直属上级等；不返回完整身份证号 |
 | `PATCH /api/v1/app/me/` | 员工本人修改姓名、手机号、身份证号；手机号更新现有 `username` 登录标识 |
-| App 修改本人密码 | 接口路径和凭据校验字段待定；由员工本人调用，不提供 Web 重置入口 |
+| `POST /api/v1/app/me/password/` | 员工本人验证当前密码后修改密码；不提供 Web 重置入口 |
 | `GET /api/v1/app/home/` | 聚合首页四卡摘要及最近日志摘要；每卡最多 5 条 |
 | `GET /api/v1/app/company-items/` | 已发布的公司重要事项列表，最多 10 条 |
 | `GET /api/v1/app/company-items/{id}/` | 公司重要事项详情 |
@@ -722,7 +722,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 }
 ```
 
-Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码由员工本人通过 App 修改；自助密码修改的具体路径和凭据校验字段待接口设计时确定。
+Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码由员工本人通过 App 修改；管理端不能代替员工修改密码。
 
 #### GET /api/v1/admin/company-items/?status=published&page=1&page_size=20
 
@@ -1082,7 +1082,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 }
 ```
 
-`username` 在此请求中表示员工的新手机号。后端必须校验手机号唯一后更新该业务用户的登录标识；该接口不接受业务身份、部门/团队、`manager_id`、`is_active` 或密码。读取当前用户资料时只返回身份证掩码，不返回 `id_number` 完整值。
+`username` 在此请求中表示员工的新手机号。后端必须校验手机号唯一后更新该业务用户的登录标识；该接口不接受业务身份、部门/团队、`manager_id`、`is_active` 或密码。`display_name` 和 `id_number` 可以同次提交，也可以单独提交；二者不自动联动，服务端在单个数据库事务中校验并保存，任何字段校验失败时整个更新回滚。读取当前用户资料时只返回身份证掩码，不返回 `id_number` 完整值。
 
 **响应 JSON**
 
@@ -1102,6 +1102,37 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "requestId": "<uuid>"
 }
 ```
+
+#### POST /api/v1/app/me/password/
+
+**认证与权限：** 必须携带当前有效的 App 业务账号 access token。仅允许已启用的业务账号修改自己的密码；接口不接受用户 ID，不提供代改他人密码的能力。
+
+**请求 JSON**
+
+```json
+{
+  "current_password": "当前密码",
+  "new_password": "NewStrongPassword!42",
+  "new_password_confirm": "NewStrongPassword!42"
+}
+```
+
+后端先校验当前密码，再校验两次新密码完全一致，要求新密码不同于当前密码，并使用 Django 当前配置的密码校验器验证新密码。通过后仅更新当前用户的 Django 密码哈希。密码字段不得出现在任何响应、应用日志或审计记录中。成功变更后不主动吊销此前签发的 access/refresh token；这些令牌按现有有效期失效。本 MVP 不提供短信验证或密码找回。
+
+**成功响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "changed": true
+  },
+  "requestId": "<uuid>"
+}
+```
+
+当前密码错误、新密码与当前密码相同、新密码确认不一致或新密码未通过密码校验器时返回 `400`，在 `data` 中给出对应字段错误；未登录或令牌失效返回 `401`。响应不得回显任何密码。
 
 #### GET /api/v1/app/home/
 

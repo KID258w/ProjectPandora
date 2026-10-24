@@ -1,57 +1,33 @@
-## 1. Issue #1 residual alignment: business account creation
+## PR 1 — Backend (complete first)
 
-These tasks are separated by capability for tracking and acceptance, not by PR boundary. The confirmed PR-related constraint is that backend API work may be combined into one PR; PR count, boundaries for other work, and ordering are undecided.
+- [ ] 1.1 Extend `Department` and `Team` with activation state and update timestamps; preserve existing records and default existing/new organizations to enabled. Relax user placement constraints to support temporary nullable `manager_id` during leader vacancy while retaining zero-or-one active leader uniqueness.
+- [ ] 1.2 Implement department/team detail and update behavior at `GET, PATCH /api/v1/admin/departments/{id}/` and `GET, PATCH /api/v1/admin/teams/{id}/`. Permit name/description edits or standalone activation updates, keep leaders/members read-only, keep team department immutable, and enforce active-descendant deactivation guards.
+- [ ] 1.3 Implement employee filtering and detail/update behavior at `GET /api/v1/admin/users/` and `GET, PATCH /api/v1/admin/users/{id}/`. Support name/phone keyword, role, department, team, and activation filters; allow updates only to `business_role`, `department_id`, `team_id`, and `is_active`; exclude inactive assignment candidates.
+- [ ] 1.4 Enforce zero-or-one active department manager and team leader, permit temporary vacancies, reject second active leaders, keep `manager_id` server-owned, and rebuild direct-report links after valid leader assignment.
+- [ ] 1.5 Implement App self-service `PATCH /api/v1/app/me/` for `display_name`, phone in `username`, and `id_number`. Allow name and identity number to be submitted together or separately, persist a multi-field update atomically, update the unique phone login identifier, and reject role/organization/manager/activation writes.
+- [ ] 1.6 Implement `POST /api/v1/app/me/password/` with current-password verification, confirmation match, configured password validators, password-change hashing, and secret redaction. Return only a success flag; use the current JWT lifetime without adding server-side multi-device revocation.
+- [ ] 1.7 Implement the administrator audit entity/query and management-only dashboard boundaries. Record allowed organization/employee changes without plaintext passwords, full identity numbers, employee-log content, or business-task data.
+- [ ] 1.8 Update `docs/backend/api-design.md`, `docs/backend/database-design.md`, and `docs/backend/account-provisioning.md`; update the relevant requirement and OpenSpec contracts. Verify migrations, API permissions, validation, atomicity, and redaction with backend tests and schema validation.
 
-- [ ] 1.1 Extend the backend business-account model and migration for encrypted identity number; keep existing records nullable for verified backfill. Verify migration against an empty database and representative legacy rows, and update the backend database design.
-- [ ] 1.2 Change business account creation to accept phone in `username`, require identity number, reject client-supplied password/status/manager, generate a strong random password, save only its hash, enable the account, and return the password only once. Verify validation, uniqueness, hashing, no-store headers, and secret-free logs/audit with focused backend tests; update backend API/database docs and the account-provisioning guide.
-- [ ] 1.3 Align the Web creation form with phone-as-login, required identity number, no password/status input, and a one-time phone/password result dialog. Fix the organization navigation disclosure icon. Verify field boundaries, dialog dismissal/secret clearing, and icon alignment; update the requirements document, Web UI guide, and this OpenSpec change.
-- [ ] 1.4 Change Android login labels, hints, and validation copy from account to phone number while continuing to send the phone value in `username`. Verify the request shape and visible login copy; update the requirements document, Android UI guide, and this OpenSpec change.
+## PR 2 — Web management (may proceed in parallel with Android after backend contract is set)
 
-## 2. New Issue2 capability: organization API and rules
+- [ ] 2.1 Add department/team detail screens and list activation controls. Keep details read-only for leaders, members, and team parent; allow editing name/description only. Display “无” when an organization has no active leader.
+- [ ] 2.2 Add employee filters and detail display for name, phone, masked identity number, role, organization, and status. Allow only role, department/team placement, and activation changes; do not add personal-data editing or password reset.
+- [ ] 2.3 Add active-only employee and organization choices, show backend validation for leader conflicts and activation guards, and connect the management summary/audit view to their APIs without exposing tasks or employee logs.
+- [ ] 2.4 Update `docs/web/account-management-ui.md`; verify the rendered field boundaries, list/detail interactions, and API request payloads.
 
-- [ ] 2.1 Add activation state and department/team detail responses for leader, members, and subordinate teams; implement name/description edits and list-triggered activation updates. Keep team department immutable after creation. Verify detail/edit boundaries and activation safeguards with backend API tests; update Swagger and database/API docs.
-- [ ] 2.2 Enforce enabled-descendant and enabled-member checks before deactivation, and exclude inactive departments/teams from assignment choices. Verify rejected and accepted transitions through backend API tests; document user-facing validation outcomes.
-- [ ] 2.3 Enforce zero-or-one active manager per department and zero-or-one active leader per team. Support temporary vacancy, reject a second active leader, keep `manager_id` server-owned, and recalculate direct-report links on valid transitions. Verify vacancy, conflict, and reassignment scenarios with backend tests; update the organization rules documentation.
+## PR 3 — Android App self-service (may proceed in parallel with Web after backend contract is set)
 
-## 3. New Issue2 capability: Web organization maintenance
+- [ ] 3.1 Add a personal-profile form for the employee's own name, phone, and identity number; allow name and identity number to be saved together or independently in one form, with no automatic synchronization.
+- [ ] 3.2 Show the identity number only in masked form when reading the profile; allow the employee to re-enter the full value to change it. Refresh displayed profile values after a successful update.
+- [ ] 3.3 Add current-password, new-password, and confirmation inputs for self-service password change; show backend validation feedback and never persist the plaintext password.
+- [ ] 3.4 Preserve the existing phone login request field `username`; after a phone update, verify subsequent login uses the new phone. Keep role, organization, manager, and activation read-only in the App.
+- [ ] 3.5 Update `docs/android/account-login-ui.md`; verify profile edits, atomic name/identity updates, password validation, and phone login behavior.
 
-- [ ] 3.1 Implement department/team list and detail screens with activation switches in lists and name/description-only editing in details; display parent/leader/member information as read-only. Verify the UI boundaries, empty-leader display, and rejected deactivation feedback; update Web documentation.
+## Acceptance across the three PRs
 
-## 4. New Issue2 capability: employee management API
-
-- [ ] 4.1 Add employee filtering by name/phone keyword, role, department, team, and activation state; return masked identity number only. Verify filters and sensitive-field redaction through API tests; update Swagger and API docs.
-- [ ] 4.2 Allow administrator updates only to business role, department/team placement, and activation state. Reject personal-field, password, and client `manager_id` writes; exclude inactive selection candidates. Verify allowed/rejected fields, role-placement compatibility, and leader uniqueness with API tests; update account-management docs.
-
-## 5. New Issue2 capability: Web employee management
-
-- [ ] 5.1 Implement employee list filters and read-only name/phone/masked identity display. Implement only role, department/team, and activation controls; do not provide personal-data edits or password reset. Verify the rendered controls and API payload boundaries; update Web documentation.
-
-## 6. New Issue2 capability: App self-service API
-
-- [ ] 6.1 Let an authenticated employee update their own name, phone, and identity number; atomically update the unique `username` login identifier on phone change and prevent editing role, organization, manager, or activation state. Verify ownership, uniqueness, validation, and full-ID response redaction with API tests; update Swagger and API docs.
-- [ ] 6.2 Settle the App password-change route and credential-check contract, then allow employees to change only their own password. Verify credential validation, password hashing, and that plaintext credentials are absent from responses/logs; update API documentation.
-
-## 7. New Issue2 capability: Android App self-service
-
-- [ ] 7.1 Implement employee self-edit for name, phone, identity number, and password. Finalize simple screen interaction during implementation while keeping organization/role/manager/activation read-only. Verify successful updates, duplicate phone feedback, and subsequent sign-in with the new phone; update Android documentation.
-
-## 8. Integration and acceptance
-
-- [ ] 8.1 Verify the account-create flow end to end: required phone/identity inputs, automatic activation, one-time initial-password display, and no secret persistence or subsequent disclosure. Record backend, Web, and API schema verification in the implementation PR.
-- [ ] 8.2 Verify organization/member/leader management end to end, including inactive candidate filtering, zero-or-one active leaders, temporary vacancy, server-maintained direct reports, and deactivation guards. Record backend/Web verification in the implementation PR.
-- [ ] 8.3 Verify employee App profile changes and phone login end to end, confirm the App cannot modify Web-owned role/organization/status, and confirm Web cannot edit App-owned personal fields. Record backend/Web/Android verification in the implementation PR.
-
-## 9. Administrator authorization, audit, and workbench
-
-- [ ] 9.1 Verify that only administrators can use management APIs and that administrators cannot read business tasks or employee logs. Add focused permission tests and document the enforced boundaries.
-- [ ] 9.2 Persist successful organization/account management operations with an allowlist of before-and-after fields. Exclude plaintext passwords, full identity numbers, and employee-log content. Verify audit records with backend tests and update the audit contract.
-- [ ] 9.3 Provide filtered administrator audit queries and the Web audit-record view. Verify filters, permission checks, and sensitive-data redaction; update API and Web documentation.
-- [ ] 9.4 Keep the administrator workbench limited to system-management summaries. Verify that task/log metrics and content are absent from dashboard responses and presentation; update the workbench contract.
-
-## 10. Android App account integration (Issue #6, PR 6; completed)
-
-- [x] 10.1 Integrate the App-scoped login, refresh, and current-user APIs using the documented response envelope and backend error responses.
-- [x] 10.2 Securely persist tokens with Android Keystore, restore the session from the current-user endpoint, retry once after access-token expiry, retain sessions on transient failures, and clear tokens on logout or rejected refresh.
-- [x] 10.3 Replace demo authentication/profile data with the backend user response and handle credential, disabled-account, expired-session, and network errors.
-- [x] 10.4 Replace adaptive and legacy launcher icons with the supplied Pandora logo; update Android account-flow documentation from the verified contract and test results.
-- [x] 10.5 Offer retry after temporary startup session-validation failures; preserve a prior token pair until replacement credentials and profile are verified.
+- [ ] 4.1 Verify department/team activation guards, leader vacancy and uniqueness, role-placement rules, and inactive-candidate filtering end to end.
+- [ ] 4.2 Verify Web cannot change employee personal fields and App cannot change administrator-managed role/organization/status fields.
+- [ ] 4.3 Verify a combined name/identity update either saves both values or neither; verify single-field updates preserve the other value.
+- [ ] 4.4 Verify password values and full identity numbers never appear in prohibited responses, application logs, or audit records.
+- [ ] 4.5 Run strict OpenSpec validation, synchronize the main spec after implementation, and archive the change when all three PRs and acceptance checks are complete.

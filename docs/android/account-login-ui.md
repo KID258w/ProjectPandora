@@ -1,6 +1,6 @@
 # Android 账号登录与当前用户
 
-本文记录 Issue #6 的 Android 接口对齐阶段（PR 6），以及本次 Issue #1 遗留修复。界面顺序仍为启动页、欢迎页、登录页、主界面和“我的”；登录及个人资料改由后端业务账号接口提供数据，不再使用本地演示账号。
+本文记录 Issue #6 的 Android 接口对齐阶段、Issue #1 遗留修复，以及 Issue2 待实现的个人资料维护。界面顺序仍为启动页、欢迎页、登录页、主界面和“我的”；登录及个人资料改由后端业务账号接口提供数据，不再使用本地演示账号。
 
 ## 本次 Issue #1 遗留修复
 
@@ -16,8 +16,19 @@ Android 只调用 `/api/v1/app/` 业务用户入口。成功和失败响应都�
 | `POST /api/v1/app/auth/token/` | `{"username":"13800000001","password":"<密码>"}` | `username` 填员工当前手机号；返回 `data.access` 和 `data.refresh`，随后请求当前用户 |
 | `POST /api/v1/app/auth/token/refresh/` | `{"refresh":"<refresh JWT>"}` | 返回新的 `data.access`；若服务端启用轮换，也接受新的 `data.refresh` |
 | `GET /api/v1/app/me/` | `Authorization: Bearer <access JWT>` | 返回当前业务用户的姓名、身份、部门、团队和直属上级 |
+| `PATCH /api/v1/app/me/` | 资料字段的 JSON 子集 | 员工本人更新姓名、手机号和身份证号；手机号放在 `username` 字段 |
+| `POST /api/v1/app/me/password/` | 当前密码、新密码和新密码确认 | 员工本人修改密码；服务端不回传密码 |
 
 当前用户的主要字段为 `username`、`account_type`、`business_role`、`display_name`、`id_number_masked`、`department_name`、`team_name`、`manager_name` 和 `is_active`。其中 `username` 是当前手机号，`id_number_masked` 是身份证脱敏值。App 只接受 `account_type=business` 且启用中的用户，并将 `founder`、`department_manager`、`team_leader`、`employee` 显示为“创始人”“部门经理”“团队长”“员工”。首页问候、“我的”身份卡片及个人资料页均使用 `/app/me/` 的返回值。
+
+## Issue2 个人资料维护目标（尚未实现）
+
+- 员工可在“我的”个人资料页修改自己的姓名、手机号和身份证号，并通过独立的密码修改操作修改本人密码。
+- 姓名和身份证号放在同一个资料编辑表单中，可以一次提交保存；两项不自动联动，只修改其中一项时不要求另一项也发生变化。
+- `/api/v1/app/me/` 只返回身份证脱敏值。修改身份证号时由员工重新输入完整号码；App 不从接口读取或展示完整身份证号。
+- App 提交资料修改后使用后端返回的最新资料刷新页面。手机号变更成功后，后续登录输入新手机号，请求仍将手机号放在 `username` 字段。
+- 密码修改表单要求输入当前密码、新密码和确认密码；密码规则及失败原因以服务端响应为准。密码修改成功后，App 不保存明文密码。
+- App 不提供业务身份、部门/团队归属、直属上级或启用状态的编辑入口。
 
 ## 登录、刷新和退出
 
