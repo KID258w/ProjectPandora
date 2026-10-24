@@ -67,14 +67,45 @@ def resolve_placement(role, department, team, is_active, exclude_pk=None):
     return manager, department, team
 
 
-def maintain_manager_links(user, old_role, old_is_active):
-    """维护直属上级：停用/撤销负责人时置空直接下属，启用新负责人时重建空缺下属。"""
+def maintain_manager_links(user, old_role, old_is_active, old_department_id=None, old_team_id=None):
+    """维护直属上级：停用/撤销/转移负责人时清理旧下属，任命新负责人时重建空缺下属。"""
     was_leader = old_is_active and old_role in (User.Role.DEPARTMENT_MANAGER, User.Role.TEAM_LEADER)
     is_leader = user.is_active and user.business_role in (User.Role.DEPARTMENT_MANAGER, User.Role.TEAM_LEADER)
 
+    # 清理旧组织下仍指向该负责人的直属关系（负责人转移组织或失去身份时）
+    if was_leader and old_role == User.Role.DEPARTMENT_MANAGER and old_department_id:
+        still_manages_old = (
+            is_leader
+            and user.business_role == User.Role.DEPARTMENT_MANAGER
+            and user.department_id == old_department_id
+        )
+        if not still_manages_old:
+            User.objects.filter(
+                account_type=User.AccountType.BUSINESS,
+                business_role=User.Role.TEAM_LEADER,
+                department_id=old_department_id,
+                manager=user,
+            ).update(manager=None)
+    if was_leader and old_role == User.Role.TEAM_LEADER and old_team_id:
+        still_leads_old = (
+            is_leader
+            and user.business_role == User.Role.TEAM_LEADER
+            and user.team_id == old_team_id
+        )
+        if not still_leads_old:
+            User.objects.filter(
+                account_type=User.AccountType.BUSINESS,
+                business_role=User.Role.EMPLOYEE,
+                team_id=old_team_id,
+                manager=user,
+            ).update(manager=None)
+
+    # 彻底失去负责人身份时，清除所有剩余下属
     if was_leader and not is_leader:
         User.objects.filter(manager=user).update(manager=None)
-    elif is_leader and user.business_role == User.Role.DEPARTMENT_MANAGER and user.department_id:
+
+    # 成为（或仍是）负责人时，为新组织重建空缺下属
+    if is_leader and user.business_role == User.Role.DEPARTMENT_MANAGER and user.department_id:
         User.objects.filter(
             account_type=User.AccountType.BUSINESS,
             business_role=User.Role.TEAM_LEADER,
@@ -255,18 +286,20 @@ class UserUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):
     def update(self, instance, validated_data):
         old_role = instance.business_role
         old_is_active = instance.is_active
+        old_department_id = instance.department_id
+        old_team_id = instance.team_id
         for field in ("business_role", "department", "team", "manager", "is_active"):
             if field in validated_data:
                 setattr(instance, field, validated_data[field])
         instance.save()
-        maintain_manager_links(instance, old_role, old_is_active)
+        maintain_manager_links(instance, old_role, old_is_active, old_department_id, old_team_id)
         return instance
 
 
 class AppMeUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):
     username = serializers.CharField(max_length=150, trim_whitespace=True, required=False)
     display_name = serializers.CharField(max_length=100, required=False)
-    id_number = serializers.CharField(max_length=64, trim_whitespace=True, required=False, allow_blank=True)
+    id_number = serializers.CharField(max_length=64, trim_whitespace=True, required=False, allow_blank=False)
 
     class Meta:
         model = User
@@ -286,10 +319,10 @@ class AppMeUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):
         return value.strip()
 
     def validate_id_number(self, value):
-        if value and not value.strip():
-            raise serializers.ValidationError("身份证号不能为空白。")
         value = value.strip()
-        if value and User.objects.filter(id_number_hash=User._hash_id_number(value)).exclude(pk=self.instance.pk).exists():
+        if not value:
+            raise serializers.ValidationError("身份证号不能为空。")
+        if User.objects.filter(id_number_hash=User._hash_id_number(value)).exclude(pk=self.instance.pk).exists():
             raise serializers.ValidationError("该身份证号已被使用。")
         return value
 

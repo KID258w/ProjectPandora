@@ -410,3 +410,16 @@ class AccountApiTests(APITestCase):
         self.client.credentials(HTTP_AUTHORIZATION="Bearer " + token["access"])
         response = self.client.post("/api/v1/app/me/password/", {"current_password": initial, "new_password": initial, "new_password_confirm": initial}, format="json")
         self.assertEqual(response.status_code, 400)
+
+    def test_leader_transfer_clears_old_organization_links(self):
+        users = self.hierarchy()  # founder, manager(D1), leader(D1/T1), employee(D1/T1)
+        manager = users[1]
+        leader = users[2]
+        self.assertEqual(leader.manager_id, manager.pk)
+        d2 = Department.objects.create(name="财务")
+        response = self.client.patch(f"/api/v1/admin/users/{manager.pk}/", {"department_id": d2.pk}, format="json")
+        self.assertEqual(response.status_code, 200)
+        leader.refresh_from_db()
+        manager.refresh_from_db()
+        self.assertIsNone(leader.manager_id)  # 旧组织下属关系已清除
+        self.assertEqual(manager.department_id, d2.pk)

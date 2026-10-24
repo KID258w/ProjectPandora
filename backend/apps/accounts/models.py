@@ -1,5 +1,7 @@
 import hashlib
+import hmac
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import UserManager
 from django.db import models
@@ -67,7 +69,9 @@ class User(AbstractUser):
 
     @staticmethod
     def _hash_id_number(value):
-        return hashlib.sha256(value.encode("utf-8")).hexdigest()
+        # 使用带密钥的 HMAC，避免无密钥哈希可被离线暴力猜测。
+        key = settings.IDENTITY_NUMBER_ENCRYPTION_KEY.encode("ascii")
+        return hmac.new(key, value.encode("utf-8"), hashlib.sha256).hexdigest()
 
     class Meta:
         constraints = [

@@ -116,7 +116,7 @@ description 可省略，默认空字符串。部门名全局唯一，团队名�
 - `GET admin/users/{id}/` 查看员工脱敏资料。
 - `PATCH admin/users/{id}/` 仅接受 `business_role`、`department_id`、`team_id`、`is_active`。拒绝修改 `display_name`、`username`、`id_number`、`password` 和 `manager_id`；Web 不提供密码重置。
 - 员工身份和组织调整由服务端校验角色与部门/团队的匹配关系；停用员工、部门、团队不能作为调整候选项。直属上级由服务端计算和维护。
-- 身份证号全局唯一：录入或 App 修改时校验，重复返回 400；底层用 `id_number_hash`（SHA-256，唯一）兑底并发。
+- 身份证号全局唯一：录入或 App 修改时校验，重复返回 400；底层用 `id_number_hash`（HMAC-SHA256，密钥由服务器保管，唯一）兑底并发。
 - 每部门最多一名启用部门经理、每团队最多一名启用团队长，允许暂时空缺。停用/撤销负责人时其直接下属 `manager_id` 置空；任命新启用负责人时重建空缺下属的直属上级关系。
 
 ### 组织详情与启停

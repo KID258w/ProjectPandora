@@ -200,14 +200,15 @@ class DepartmentDetailView(VersionedMixin, generics.RetrieveUpdateAPIView):
         return DepartmentUpdateSerializer if self.request.method == "PATCH" else DepartmentDetailSerializer
 
     def perform_update(self, serializer):
-        instance = serializer.instance
-        before = {"name": instance.name, "description": instance.description, "is_active": instance.is_active}
-        updated = serializer.save()
-        record_audit(
-            actor=self.request.user, module=AdminAuditLog.Module.DEPARTMENTS, action="update",
-            object_type="department", object_id=updated.pk,
-            before=before, after={"name": updated.name, "description": updated.description, "is_active": updated.is_active},
-        )
+        with transaction.atomic():
+            instance = serializer.instance
+            before = {"name": instance.name, "description": instance.description, "is_active": instance.is_active}
+            updated = serializer.save()
+            record_audit(
+                actor=self.request.user, module=AdminAuditLog.Module.DEPARTMENTS, action="update",
+                object_type="department", object_id=updated.pk,
+                before=before, after={"name": updated.name, "description": updated.description, "is_active": updated.is_active},
+            )
 
 
 @extend_schema_view(get=extend_schema(tags=["组织管理"], summary="团队详情"), patch=extend_schema(tags=["组织管理"], summary="更新团队"))
@@ -220,14 +221,15 @@ class TeamDetailView(VersionedMixin, generics.RetrieveUpdateAPIView):
         return TeamUpdateSerializer if self.request.method == "PATCH" else TeamDetailSerializer
 
     def perform_update(self, serializer):
-        instance = serializer.instance
-        before = {"name": instance.name, "description": instance.description, "is_active": instance.is_active}
-        updated = serializer.save()
-        record_audit(
-            actor=self.request.user, module=AdminAuditLog.Module.TEAMS, action="update",
-            object_type="team", object_id=updated.pk,
-            before=before, after={"name": updated.name, "description": updated.description, "is_active": updated.is_active},
-        )
+        with transaction.atomic():
+            instance = serializer.instance
+            before = {"name": instance.name, "description": instance.description, "is_active": instance.is_active}
+            updated = serializer.save()
+            record_audit(
+                actor=self.request.user, module=AdminAuditLog.Module.TEAMS, action="update",
+                object_type="team", object_id=updated.pk,
+                before=before, after={"name": updated.name, "description": updated.description, "is_active": updated.is_active},
+            )
 
 
 @extend_schema_view(get=extend_schema(tags=["业务账号管理"], summary="员工详情"), patch=extend_schema(tags=["业务账号管理"], summary="调整员工身份/组织/启用状态"))
@@ -248,14 +250,15 @@ class UserDetailView(VersionedMixin, generics.RetrieveUpdateAPIView):
         return Response(UserSerializer(instance).data)
 
     def perform_update(self, serializer):
-        instance = serializer.instance
-        before = _user_audit_summary(instance)
-        updated = serializer.save()
-        record_audit(
-            actor=self.request.user, module=AdminAuditLog.Module.USERS, action="update",
-            object_type="user", object_id=updated.pk,
-            before=before, after=_user_audit_summary(updated),
-        )
+        with transaction.atomic():
+            instance = serializer.instance
+            before = _user_audit_summary(instance)
+            updated = serializer.save()
+            record_audit(
+                actor=self.request.user, module=AdminAuditLog.Module.USERS, action="update",
+                object_type="user", object_id=updated.pk,
+                before=before, after=_user_audit_summary(updated),
+            )
 
 
 @extend_schema(tags=["管理概况"], summary="管理概况", responses={200: {"type": "object", "properties": {"active_users": {"type": "integer"}, "departments": {"type": "integer"}, "teams": {"type": "integer"}, "published_company_items": {"type": "integer"}}}})
@@ -263,6 +266,7 @@ class DashboardView(VersionedMixin, APIView):
     permission_classes = [IsAdministrator]
 
     def get(self, request):
+        # published_company_items 由 company-important-items change 负责，其模型尚未实现，暂返回 0。
         return Response({
             "active_users": User.objects.filter(account_type="business", is_active=True).count(),
             "departments": Department.objects.filter(is_active=True).count(),
