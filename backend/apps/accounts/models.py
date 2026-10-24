@@ -5,7 +5,7 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.models import UserManager
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 
 from .fields import EncryptedTextField
 
@@ -64,14 +64,25 @@ class User(AbstractUser):
 
     def save(self, *args, **kwargs):
         # 加密字段无法直接按明文做数据库唯一约束，用确定性哈希保证身份证号唯一。
+        if self.id_number:
+            self.id_number = self.normalize_id_number(self.id_number)
         self.id_number_hash = self._hash_id_number(self.id_number) if self.id_number else None
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "id_number" in update_fields:
+            kwargs["update_fields"] = set(update_fields) | {"id_number_hash"}
         super().save(*args, **kwargs)
+
+    @staticmethod
+    def normalize_id_number(value):
+        """Canonicalize whitespace and letter case before storing or hashing an ID."""
+        return value.strip().upper() if value is not None else None
 
     @staticmethod
     def _hash_id_number(value):
         # 使用带密钥的 HMAC，避免无密钥哈希可被离线暴力猜测。
         key = settings.IDENTITY_NUMBER_ENCRYPTION_KEY.encode("ascii")
-        return hmac.new(key, value.encode("utf-8"), hashlib.sha256).hexdigest()
+        normalized = User.normalize_id_number(value)
+        return hmac.new(key, normalized.encode("utf-8"), hashlib.sha256).hexdigest()
 
     class Meta:
         constraints = [
@@ -84,6 +95,10 @@ class User(AbstractUser):
                     | Q(account_type="business", business_role__in=["team_leader", "employee"], department__isnull=False, team__isnull=False)
                 ),
                 name="valid_account_placement",
+            ),
+            models.CheckConstraint(
+                condition=~Q(manager_id=F("id")),
+                name="user_cannot_manage_self",
             ),
             models.UniqueConstraint(fields=["business_role"], condition=Q(business_role="founder", is_active=True), name="one_founder"),
             models.UniqueConstraint(fields=["department"], condition=Q(business_role="department_manager", is_active=True), name="one_manager_per_department"),

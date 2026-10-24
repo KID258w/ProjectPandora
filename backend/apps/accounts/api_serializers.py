@@ -9,6 +9,7 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from .authentication import has_complete_supervisor_chain
 from .models import AdminAuditLog, Department, Team, User
 
 
@@ -23,7 +24,7 @@ class StrictInputMixin:
         return super().to_internal_value(data)
 
 
-def resolve_placement(role, department, team, is_active, exclude_pk=None):
+def resolve_placement(role, department, team, is_active, exclude_pk=None, allow_missing_manager=False):
     """校验业务角色→组织归属形状、负责人唯一性，返回规范化后的 (manager, department, team)。
 
     规则与录入共用，保证 create/update 行为一致：创始人无组织；部门经理有部门无团队；
@@ -32,7 +33,11 @@ def resolve_placement(role, department, team, is_active, exclude_pk=None):
     if role == User.Role.FOUNDER:
         if department or team:
             raise serializers.ValidationError("创始人不能指定部门或团队。")
-        if is_active and User.objects.filter(business_role=role, is_active=True).exclude(pk=exclude_pk).exists():
+        if is_active and User.objects.filter(
+            account_type=User.AccountType.BUSINESS,
+            business_role=role,
+            is_active=True,
+        ).exclude(pk=exclude_pk).exists():
             raise serializers.ValidationError({"business_role": "已存在创始人。"})
         return None, None, None
 
@@ -61,64 +66,54 @@ def resolve_placement(role, department, team, is_active, exclude_pk=None):
 
     if not is_active:
         return None, department, team
-    manager = User.objects.filter(account_type=User.AccountType.BUSINESS, is_active=True, **manager_query).first()
+    manager_query_set = User.objects.filter(
+        account_type=User.AccountType.BUSINESS,
+        is_active=True,
+        **manager_query,
+    ).exclude(pk=exclude_pk)
+    manager = manager_query_set.first()
     if manager is None:
+        if allow_missing_manager:
+            return None, department, team
         raise serializers.ValidationError({"business_role": "请先录入启用的直属上级。"})
     return manager, department, team
 
 
-def maintain_manager_links(user, old_role, old_is_active, old_department_id=None, old_team_id=None):
-    """维护直属上级：停用/撤销/转移负责人时清理旧下属，任命新负责人时重建空缺下属。"""
-    was_leader = old_is_active and old_role in (User.Role.DEPARTMENT_MANAGER, User.Role.TEAM_LEADER)
-    is_leader = user.is_active and user.business_role in (User.Role.DEPARTMENT_MANAGER, User.Role.TEAM_LEADER)
+def _direct_reports_for(role, department_id=None, team_id=None):
+    users = User.objects.filter(account_type=User.AccountType.BUSINESS)
+    if role == User.Role.FOUNDER:
+        return users.filter(business_role=User.Role.DEPARTMENT_MANAGER)
+    if role == User.Role.DEPARTMENT_MANAGER:
+        return users.filter(business_role=User.Role.TEAM_LEADER, department_id=department_id)
+    if role == User.Role.TEAM_LEADER:
+        return users.filter(business_role=User.Role.EMPLOYEE, team_id=team_id)
+    return users.none()
 
-    # 清理旧组织下仍指向该负责人的直属关系（负责人转移组织或失去身份时）
-    if was_leader and old_role == User.Role.DEPARTMENT_MANAGER and old_department_id:
-        still_manages_old = (
-            is_leader
-            and user.business_role == User.Role.DEPARTMENT_MANAGER
-            and user.department_id == old_department_id
-        )
-        if not still_manages_old:
-            User.objects.filter(
-                account_type=User.AccountType.BUSINESS,
-                business_role=User.Role.TEAM_LEADER,
-                department_id=old_department_id,
-                manager=user,
-            ).update(manager=None)
-    if was_leader and old_role == User.Role.TEAM_LEADER and old_team_id:
-        still_leads_old = (
-            is_leader
-            and user.business_role == User.Role.TEAM_LEADER
-            and user.team_id == old_team_id
-        )
-        if not still_leads_old:
-            User.objects.filter(
-                account_type=User.AccountType.BUSINESS,
-                business_role=User.Role.EMPLOYEE,
-                team_id=old_team_id,
-                manager=user,
-            ).update(manager=None)
 
-    # 彻底失去负责人身份时，清除所有剩余下属
-    if was_leader and not is_leader:
-        User.objects.filter(manager=user).update(manager=None)
+def maintain_manager_links(user, old_role=None, old_is_active=False, old_department_id=None, old_team_id=None):
+    """清理负责人旧直属关系，并在负责人到位后关联当前范围内的直属下属。"""
+    leader_roles = (User.Role.FOUNDER, User.Role.DEPARTMENT_MANAGER, User.Role.TEAM_LEADER)
+    was_leader = old_is_active and old_role in leader_roles
+    is_leader = user.is_active and user.business_role in leader_roles
 
-    # 成为（或仍是）负责人时，为新组织重建空缺下属
-    if is_leader and user.business_role == User.Role.DEPARTMENT_MANAGER and user.department_id:
-        User.objects.filter(
-            account_type=User.AccountType.BUSINESS,
-            business_role=User.Role.TEAM_LEADER,
-            department_id=user.department_id,
-            manager__isnull=True,
-        ).exclude(pk=user.pk).update(manager=user)
-    elif is_leader and user.business_role == User.Role.TEAM_LEADER and user.team_id:
-        User.objects.filter(
-            account_type=User.AccountType.BUSINESS,
-            business_role=User.Role.EMPLOYEE,
-            team_id=user.team_id,
-            manager__isnull=True,
-        ).exclude(pk=user.pk).update(manager=user)
+    old_scope_changed = (
+        old_role != user.business_role
+        or (old_role == User.Role.DEPARTMENT_MANAGER and old_department_id != user.department_id)
+        or (old_role == User.Role.TEAM_LEADER and old_team_id != user.team_id)
+    )
+    if was_leader and (not is_leader or old_scope_changed):
+        _direct_reports_for(old_role, old_department_id, old_team_id).filter(manager=user).update(manager=None)
+
+    if not is_leader:
+        return
+
+    if user.business_role == User.Role.FOUNDER:
+        reports = _direct_reports_for(User.Role.FOUNDER)
+    elif user.business_role == User.Role.DEPARTMENT_MANAGER:
+        reports = _direct_reports_for(User.Role.DEPARTMENT_MANAGER, department_id=user.department_id)
+    else:
+        reports = _direct_reports_for(User.Role.TEAM_LEADER, team_id=user.team_id)
+    reports.exclude(manager=user).exclude(pk=user.pk).update(manager=user)
 
 
 class DepartmentSerializer(StrictInputMixin, serializers.ModelSerializer):
@@ -194,7 +189,13 @@ class TeamUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):
         validators = []
 
     def validate(self, attrs):
-        if not attrs.get("is_active", self.instance.is_active):
+        name = attrs.get("name", self.instance.name)
+        if Team.objects.filter(department=self.instance.department, name=name).exclude(pk=self.instance.pk).exists():
+            raise serializers.ValidationError({"name": "该部门已存在同名团队。"})
+        if attrs.get("is_active", self.instance.is_active):
+            if not self.instance.department.is_active:
+                raise serializers.ValidationError({"is_active": "所属部门已停用，不能启用团队。"})
+        else:
             if User.objects.filter(account_type=User.AccountType.BUSINESS, team=self.instance, is_active=True).exists():
                 raise serializers.ValidationError({"is_active": "该团队仍有启用的成员，不能停用。"})
         return attrs
@@ -268,6 +269,11 @@ class UserUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):
         department = attrs.get("department", instance.department)
         team = attrs.get("team", instance.team)
         is_active = attrs.get("is_active", instance.is_active)
+        placement_unchanged = (
+            role == instance.business_role
+            and department == instance.department
+            and team == instance.team
+        )
         # 调整角色时清空不适用组织；显式传入不兼容字段则报错。
         if role == User.Role.FOUNDER:
             if department or team:
@@ -277,7 +283,16 @@ class UserUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):
             if "team" in attrs and team is not None:
                 raise serializers.ValidationError({"team_id": "部门经理不能指定团队。"})
             team = None
-        manager, department, team = resolve_placement(role, department, team, is_active, exclude_pk=instance.pk)
+        # Existing active users may remain in place with a null manager while
+        # their supervisor is temporarily vacant. New placements/reactivations
+        # still require an active supervisor.
+        allow_missing_manager = (
+            instance.is_active and is_active and placement_unchanged and instance.manager_id is None
+        )
+        manager, department, team = resolve_placement(
+            role, department, team, is_active, exclude_pk=instance.pk,
+            allow_missing_manager=allow_missing_manager,
+        )
         attrs["manager"] = manager
         attrs["department"] = department
         attrs["team"] = team
@@ -319,7 +334,7 @@ class AppMeUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):
         return value.strip()
 
     def validate_id_number(self, value):
-        value = value.strip()
+        value = User.normalize_id_number(value)
         if not value:
             raise serializers.ValidationError("身份证号不能为空。")
         if User.objects.filter(id_number_hash=User._hash_id_number(value)).exclude(pk=self.instance.pk).exists():
@@ -383,8 +398,11 @@ class BusinessUserCreateSerializer(StrictInputMixin, serializers.ModelSerializer
 
     def validate(self, attrs):
         id_number = attrs.get("id_number")
-        if id_number and User.objects.filter(id_number_hash=User._hash_id_number(id_number)).exists():
-            raise serializers.ValidationError({"id_number": "该身份证号已被使用。"})
+        if id_number:
+            id_number = User.normalize_id_number(id_number)
+            attrs["id_number"] = id_number
+            if User.objects.filter(id_number_hash=User._hash_id_number(id_number)).exists():
+                raise serializers.ValidationError({"id_number": "该身份证号已被使用。"})
         role = attrs["business_role"]
         department, team = attrs.get("department"), attrs.get("team")
         manager, department, team = resolve_placement(role, department, team, is_active=True)
@@ -395,12 +413,14 @@ class BusinessUserCreateSerializer(StrictInputMixin, serializers.ModelSerializer
 
     def create(self, validated_data):
         self.initial_password = token_urlsafe(12)
-        return User.objects.create_user(
+        user = User.objects.create_user(
             account_type=User.AccountType.BUSINESS,
             is_active=True,
             password=self.initial_password,
             **validated_data,
         )
+        maintain_manager_links(user)
+        return user
 
 
 class ScopedTokenSerializer(TokenObtainPairSerializer):
@@ -416,6 +436,8 @@ class ScopedTokenSerializer(TokenObtainPairSerializer):
         data = super().validate(attrs)
         if self.user.account_type != self.account_type:
             raise AuthenticationFailed("账号或密码错误，或账号不可用于此入口。")
+        if self.account_type == User.AccountType.BUSINESS and not has_complete_supervisor_chain(self.user):
+            raise AuthenticationFailed("组织负责人暂缺，App 服务暂不可用。")
         return data
 
 
@@ -434,8 +456,13 @@ class ScopedRefreshSerializer(TokenRefreshSerializer):
         token = RefreshToken(attrs["refresh"])
         if token.get("account_type") != self.account_type:
             raise AuthenticationFailed("刷新令牌不属于此入口。")
-        if not User.objects.filter(pk=token.get("user_id"), account_type=self.account_type, is_active=True).exists():
+        user = User.objects.filter(
+            pk=token.get("user_id"), account_type=self.account_type, is_active=True,
+        ).first()
+        if user is None:
             raise AuthenticationFailed("账号已停用或令牌已失效。")
+        if self.account_type == User.AccountType.BUSINESS and not has_complete_supervisor_chain(user):
+            raise AuthenticationFailed("组织负责人暂缺，App 服务暂不可用。")
         return super().validate(attrs)
 
 

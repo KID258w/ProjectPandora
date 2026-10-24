@@ -9,6 +9,16 @@
 - [x] 1.7 Implement the administrator audit entity/query and management-only dashboard boundaries. Record allowed organization/employee changes without plaintext passwords, full identity numbers, employee-log content, or business-task data.
 - [x] 1.8 Update `docs/backend/api-design.md`, `docs/backend/database-design.md`, and `docs/backend/account-provisioning.md`; update the relevant requirement and OpenSpec contracts. Verify migrations, API permissions, validation, atomicity, and redaction with backend tests and schema validation.
 
+## Backend post-merge corrections on `dev`
+
+- [x] 1.9 Preflight duplicate national IDs before migration 0008 writes hashes; preserve derived hashes on reverse migration and report only conflicting User IDs.
+- [x] 1.10 Include the company Founder in leader-link maintenance; rebuild direct reports when a leader is created, enabled, or assigned, and prevent a user from becoming their own manager.
+- [x] 1.11 Deny App login, token refresh, and App API access while the required active supervisor chain is incomplete; keep administrator access available.
+- [x] 1.12 Require an active parent department before enabling a team and reject a team rename that duplicates another team in that department.
+- [x] 1.13 Align API, database, requirements, OpenSpec, and account-provisioning documentation with the repaired behavior and migration safeguards.
+- [x] 1.14 Run backend tests and migration/API schema checks for the post-merge corrections; record the results before closing backend acceptance.
+- [x] 1.15 Normalize national ID values before storage and hashing; preflight and canonicalize existing values in migration 0010; verify case variants are rejected as duplicates.
+
 ## PR 2 — Web management (may proceed in parallel with Android after backend contract is set)
 
 - [ ] 2.1 Add department/team detail screens and list activation controls. Keep details read-only for leaders, members, and team parent; allow editing name/description only. Display “无” when an organization has no active leader.

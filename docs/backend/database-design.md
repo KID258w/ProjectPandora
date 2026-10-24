@@ -6,14 +6,14 @@
 
 | 实体/表 | 字段和关系 |
 | --- | --- |
-| User / accounts_user | 保留 AbstractUser 字段；username 全局唯一（业务账号保存手机号，管理员保留管理员用户名）、password 仅存 Django 哈希、display_name 最长 100；id_number 使用加密文本字段并允许历史记录暂空，id_number_hash 为 id_number 的 HMAC-SHA256 哈希并全局唯一（密钥由服务器保管；加密字段无法按明文做数据库唯一约束，故用带密钥的确定性哈希保证身份证号唯一）；account_type 为 admin/business；business_role 为 founder/department_manager/team_leader/employee（管理员为空字符串）；department_id、team_id、manager_id 可空外键；is_active 沿用 Django 字段 |
-| Department / accounts_department | id BigAutoField；name 最长 100 且全局唯一；description 文本默认空；is_active 布尔默认启用；created_at 自动时间 |
-| Team / accounts_team | id BigAutoField；name 最长 100；description 默认空；department_id 必填外键；is_active 布尔默认启用；created_at 自动时间；(department_id, name) 唯一 |
+| User / accounts_user | 保留 AbstractUser 字段；username 全局唯一（业务账号保存手机号，管理员保留管理员用户名）、password 仅存 Django 哈希、display_name 最长 100；id_number 使用加密文本字段并允许历史记录暂空，保存前去除首尾空格并将字母转为大写；id_number_hash 为规范化后 id_number 的 HMAC-SHA256 哈希并全局唯一（包括停用账号；密钥由服务器保管；加密字段无法按明文做数据库唯一约束，故用带密钥的确定性哈希保证身份证号唯一）；account_type 为 admin/business；business_role 为 founder/department_manager/team_leader/employee（管理员为空字符串）；department_id、team_id、manager_id 可空外键；is_active 沿用 Django 字段 |
+| Department / accounts_department | id BigAutoField；name 最长 100 且全局唯一；description 文本默认空；is_active 布尔默认启用；created_at、updated_at 自动时间 |
+| Team / accounts_team | id BigAutoField；name 最长 100；description 默认空；department_id 必填外键；is_active 布尔默认启用；created_at、updated_at 自动时间；(department_id, name) 唯一 |
 | AdminAuditLog / accounts_adminauditlog | id BigAutoField；actor 外键 User（PROTECT）；module（users/departments/teams）；action；object_type、object_id；result（success/failure）；before_data、after_data（JSON，脱敏后）；created_at 自动时间 |
 
-用户和组织外键均为 PROTECT，manager_id 自关联 User，反向 direct_reports；本次没有删除 API。数据库 CHECK 校验账号类型与角色组织形状：管理员/创始人没有组织和上级，部门经理有部门无团队，团队长/员工有部门和团队；`manager_id` 允许为空以支持负责人空缺。数据库条件唯一约束保证一位在职创始人、一部门一在职经理、一团队一在职团队长；唯一约束和录入重复校验都过滤 `is_active=True`，停用账号不占用名额。跨表的团队部门一致、上级身份/组织和启用状态由服务端录入校验，manager_id 不接收客户端输入。业务账号不会自动获得 Django staff/superuser 权限。
+用户和组织外键均为 PROTECT，manager_id 自关联 User，反向 direct_reports；本次没有删除 API。数据库 CHECK 校验账号类型与角色组织形状：管理员/创始人没有组织和上级，部门经理有部门无团队，团队长/员工有部门和团队；`manager_id` 允许为空以支持负责人空缺，并通过 `user_cannot_manage_self` CHECK 禁止用户将自己设为直属上级。数据库条件唯一约束保证最多一位启用创始人、一部门一名启用经理、一团队一名启用团队长；允许暂时没有启用负责人，停用账号不占用名额。跨表的团队部门一致、上级身份/组织和启用状态由服务端校验，manager_id 不接收客户端输入。负责人链不完整时，后端拒绝受影响业务用户登录、刷新令牌及访问 App API；管理员 Web 管理接口不受影响。业务账号不会自动获得 Django staff/superuser 权限。
 
-Issue #15（Issue2）已落地：部门/团队 `is_active` 启停（停用前校验无启用的下属团队/成员）、员工身份/组织调整（仅 `business_role`/`department_id`/`team_id`/`is_active`）、App 个人资料与密码、`AdminAuditLog` 审计（`before_data`/`after_data` 已脱敏，不含明文密码或完整身份证号）。组织调动历史表不在 Issue2 范围内。当前 SQLite 支持条件唯一约束；未来 MySQL 迁移必须先重新设计等价约束并验证，不能直接假定条件索引可用。0002 对已有普通账号会停止迁移，要求显式规划身份数据迁移，不会自动提升权限；0003 将创始人/部门经理/团队长唯一约束改为仅对 `is_active=True` 生效；0004 增加可空的加密 `id_number` 字段；0005 增加组织 `is_active` 与 `AdminAuditLog`；0006 增加 `id_number_hash` 唯一列；0007 增加 `updated_at` 并放松 placement 约束允许 `manager_id` 为空；0008 回填 `id_number_hash`。
+Issue #15（Issue2）已落地：部门/团队 `is_active` 启停（停用前校验无启用的下属团队/成员）、员工身份/组织调整（仅 `business_role`/`department_id`/`team_id`/`is_active`）、App 个人资料与密码、`AdminAuditLog` 审计（`before_data`/`after_data` 已脱敏，不含明文密码或完整身份证号）。负责人空缺期间，直属下属的 `manager_id` 可暂时为空；补齐负责人后由服务端恢复直接关系，链路缺失时 App 暂停访问。组织调动历史表不在 Issue2 范围内。当前 SQLite 支持条件唯一约束；未来 MySQL 迁移必须先重新设计等价约束并验证，不能直接假定条件索引可用。0002 对已有普通账号会停止迁移，要求显式规划身份数据迁移，不会自动提升权限；0003 将创始人/部门经理/团队长唯一约束改为仅对 `is_active=True` 生效；0004 增加可空的加密 `id_number` 字段；0005 增加组织 `is_active` 与 `AdminAuditLog`；0006 增加 `id_number_hash` 唯一列；0007 增加 `updated_at` 并放松 placement 约束允许 `manager_id` 为空；0008 在写入前检查历史身份证号重复值并回填 `id_number_hash`，反向迁移保留哈希；0009 检查历史自我上级记录并增加禁止自我上级的数据库约束；0010 在写入规范化结果前检查大小写/空格规范化后的历史身份证号重复值，并规范化身份证号及其唯一哈希。
 
 `id_number` 由自定义 `EncryptedTextField` 以 Fernet token 加密后写入数据库；应用进程通过 `IDENTITY_NUMBER_ENCRYPTION_KEY` 环境变量读取独立密钥。生产环境必须配置并妥善备份该密钥；密钥丢失后，已存储的身份证号将无法解密。开发环境在 `DEBUG=True` 且未配置独立密钥时，使用开发 `SECRET_KEY` 派生密钥。
 
@@ -84,7 +84,7 @@ Issue #6 已落地的用户、部门和团队结构见本文件开头的实际�
 | `date_joined` | 时间 | 创建/加入时间，继承字段 |
 | `created_at`, `updated_at` | 时间 | 业务资料创建、修改时间 |
 
-目标约束：业务角色为单一主角色，且与部门/团队归属联动校验。每个部门最多一名启用部门经理、每个团队最多一名启用团队长，允许暂时没有启用负责人；负责人由用户的业务角色和组织归属推导，不在部门或团队上增加重复负责人外键。负责人撤销或停用后，受影响的直接下属可暂时没有 `manager_id`；新负责人启用后由服务端重建直属关系。不要将 Django `is_staff` 与业务角色混为一谈。`username` 仍全局唯一，不另增重复的账号或手机号字段。
+目标约束：业务角色为单一主角色，且与部门/团队归属联动校验。公司最多一名启用创始人、每个部门最多一名启用部门经理、每个团队最多一名启用团队长，均允许暂时没有启用负责人；负责人由用户的业务角色和组织归属推导，不在部门或团队上增加重复负责人外键。负责人撤销或停用后，受影响的直接下属可暂时没有 `manager_id`；新负责人被创建、启用或任命后由服务端重建其直属关系。普通成员只能转入直属负责人已启用的目标组织。不要将 Django `is_staff` 与业务角色混为一谈。`username` 仍全局唯一，不另增重复的账号或手机号字段。
 
 #### `organization_department`
 
@@ -107,9 +107,13 @@ Issue #6 已落地的用户、部门和团队结构见本文件开头的实际�
 | `is_active` | 布尔值 | 团队启用/停用；新团队默认启用 |
 | `created_at`, `updated_at` | 时间 | 创建及最近维护时间 |
 
+团队启用时所属部门必须处于启用状态；部门停用时不允许重新启用其下属团队。
+
 Issue2 组织约束（已实现）：部门停用前不得存在启用的下属团队或成员；团队停用前不得存在启用成员。停用对象保留在管理列表中供查看和重新启用，但不作为员工转移或身份分配的候选项。团队归属部门只在创建时设置，Issue2 不提供迁移团队所属部门的操作。组织与账号采用停用保留历史，不物理删除；本次不新增组织调动历史表。
 
 Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过渡状态可存在：部门经理、团队长和员工的 `manager_id` 可在负责人空缺期间暂时为空；服务端在新负责人有效启用后重建直属关系。每部门最多一名启用部门经理、每团队最多一名启用团队长，沿用针对 `is_active=True` 的条件唯一约束。App 更新 `display_name` 与 `id_number` 可同次提交；字段分别校验，但必须在同一个数据库事务中保存，任一字段校验失败时回滚整次更新。密码修改仅更新现有 `User.password` 哈希字段，不新增密码实体或明文存储字段。
+
+身份证号比较前统一去除首尾空格并将字母转为大写；数据库中加密保存的身份证号也以该形式规范化，HMAC 唯一列对规范化值计算。迁移 0010 在回写前检查规范化后重复的历史记录，只报告账号 ID；若发现重复，需先核对并处理对应账号再重试。
 
 ### 3.2 任务与处理记录
 

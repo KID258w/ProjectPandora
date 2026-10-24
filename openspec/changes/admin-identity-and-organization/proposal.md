@@ -6,7 +6,8 @@ Issue #1 account-creation and phone-login residuals are complete. The remaining 
 
 - Add department and team detail, name/description editing, activation controls, and server-side safeguards for deactivation. Organization details show leaders and members read-only; a team's department remains fixed after creation.
 - Add employee filtering and detail reads, plus administrator updates limited to business role, department/team placement, and activation state. Web does not edit employee personal fields or reset passwords.
-- Permit zero or one active department manager per department and zero or one active team leader per team. Leader changes happen through employee management; the backend owns direct-manager links and allows a temporary vacancy.
+- Permit zero or one active Founder for the company, zero or one active department manager per department, and zero or one active team leader per team. Leader changes happen through employee management; the backend owns direct-manager links and allows a temporary vacancy.
+- During any missing-leader interval, the backend denies App access for the affected organization subtree and restores access after rebuilding direct-report links. Require an active parent department before enabling a team, and an active direct leader before ordinary user placement or reactivation.
 - Allow an employee to update their own name, phone, identity number, and password in the App. Name and identity number share one editable profile form and may be saved together, while remaining independent fields; a phone change updates the login identifier stored in `username`.
 - Define the corresponding backend model, API, validation, authorization, and sensitive-data requirements. Continue to exclude business tasks and employee logs from administrator access.
 - Update the backend API/database/provisioning docs, requirements, Web and Android interface docs, and this OpenSpec change.

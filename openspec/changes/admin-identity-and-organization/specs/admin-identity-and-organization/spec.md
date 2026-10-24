@@ -26,8 +26,12 @@ The system SHALL let administrators activate and deactivate departments and team
 - **WHEN** the system provides department or team choices for employee placement
 - **THEN** it excludes disabled organizations while retaining them in management lists
 
-### Requirement: Organizations have at most one active leader and may have none
-The system SHALL allow zero or one active Department Manager per department and zero or one active Team Leader per team. Leader changes SHALL be made through employee role and placement management; the system SHALL NOT automatically select a successor.
+#### Scenario: Administrator reactivates a team under a disabled department
+- **WHEN** an administrator tries to enable a team whose department is disabled
+- **THEN** the system rejects the update until the department is enabled
+
+### Requirement: Company and organizations have at most one active leader and may have none
+The system SHALL allow zero or one active Founder for the company, zero or one active Department Manager per department, and zero or one active Team Leader per team. Leader changes SHALL be made through employee role and placement management; the system SHALL NOT automatically select a successor.
 
 #### Scenario: Administrator assigns an available leader role
 - **WHEN** an enabled employee receives a leader role and valid organization placement for an organization with no active leader
@@ -38,12 +42,32 @@ The system SHALL allow zero or one active Department Manager per department and 
 - **THEN** the system rejects the second active leader assignment without changing the existing leader
 
 #### Scenario: Leader is revoked or deactivated
-- **WHEN** an administrator revokes or deactivates the active leader
-- **THEN** the organization may remain without an active leader and affected direct-report links may be null until a valid successor is assigned
+- **WHEN** an administrator revokes or deactivates the active Founder, Department Manager, or Team Leader
+- **THEN** the company, department, or team may remain without an active leader and that leader's direct-report links become null until a valid successor is assigned
 
 #### Scenario: A valid successor is enabled
-- **WHEN** an administrator assigns and enables a valid successor through employee management
+- **WHEN** an administrator creates, enables, or assigns a valid successor through employee management
 - **THEN** the backend recalculates the affected direct-report links
+
+#### Scenario: Company has no active Founder
+- **WHEN** the company has no active Founder
+- **THEN** Department Managers may have a null `manager_id`, and their affected App users cannot log in, refresh a token, or access App APIs until the Founder is restored
+
+#### Scenario: Department or team leader chain is vacant
+- **WHEN** a department has no active Department Manager or a team has no active Team Leader
+- **THEN** affected direct reports may have a null `manager_id`, and App access is denied to users in the affected organization subtree until the required leader is restored
+
+#### Scenario: Administrator assigns a user into a vacant hierarchy
+- **WHEN** an administrator creates, enables, or moves a regular user into an organization whose required direct leader is missing
+- **THEN** the backend rejects the assignment and requires the missing leader to be appointed first; appointing that leader is allowed when the nominee's own required direct leader is active
+
+#### Scenario: Leader appointment requires its own supervisor
+- **WHEN** an administrator appoints a leader to fill a vacancy
+- **THEN** the nominee's own required direct leader must be active before the appointment can succeed
+
+#### Scenario: Administrator restores a leader chain
+- **WHEN** the missing leader is created, enabled, or assigned and the direct-report relationships are rebuilt
+- **THEN** affected App users can authenticate and access App APIs again
 
 ### Requirement: Administrators manage employee placement without editing personal data
 The system SHALL let administrators search and view employees and update only business role, department/team placement, and activation state after account creation. It SHALL reject administrator writes to employee name, phone, identity number, or password.
@@ -99,7 +123,7 @@ The system SHALL allow an authenticated employee to change only their own passwo
 - **THEN** the system rejects the request and leaves the stored password unchanged
 
 ### Requirement: National IDs are unique
-The system SHALL ensure each employee national ID is unique across accounts, while historical accounts may have no national ID recorded.
+The system SHALL ensure each employee national ID is unique across accounts, including disabled accounts, while historical accounts may have no national ID recorded.
 
 #### Scenario: Duplicate national ID on account creation
 - **WHEN** an administrator tries to create an account with a national ID already used by another account
@@ -108,6 +132,14 @@ The system SHALL ensure each employee national ID is unique across accounts, whi
 #### Scenario: Duplicate national ID on profile update
 - **WHEN** an employee tries to change their national ID to one already used by another account
 - **THEN** the system rejects the change and preserves the existing value
+
+#### Scenario: Disabled account retains its national ID reservation
+- **WHEN** an administrator tries to create or update another account with an ID number held by a disabled account
+- **THEN** the system rejects the duplicate and preserves global uniqueness
+
+#### Scenario: National ID case and surrounding whitespace are normalized
+- **WHEN** an account submits an ID number that differs from an existing ID only by surrounding whitespace or letter case
+- **THEN** the system normalizes surrounding whitespace and letter case before storage and uniqueness checks, and rejects the duplicate
 
 ### Requirement: Sensitive account data is protected in management responses and audit records
 The system SHALL mask identity numbers in ordinary reads and exclude plaintext passwords, full identity numbers, and employee-log content from logs and administrator audit records.
