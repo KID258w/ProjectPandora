@@ -1,82 +1,105 @@
+## Purpose
+
+Define Issue2 behavior for Web department, team, and employee maintenance and Android employee self-service, using the existing administrator/business account separation.
+
 ## ADDED Requirements
 
-### Requirement: Admin console access is isolated from business roles
-The system SHALL allow only an active System Administrator account to authenticate to the Web management console and its management APIs. The System Administrator SHALL remain separate from mobile business accounts and SHALL NOT read or modify business tasks or employee logs.
+### Requirement: Administrators inspect and edit department and team details
+The system SHALL provide department and team details with read-only leader and member information. Resource updates SHALL accept name/description changes or a standalone activation change; a team's department SHALL NOT change after creation.
 
-#### Scenario: Active administrator opens the console
-- **WHEN** an active System Administrator authenticates with valid credentials
-- **THEN** the system grants access to authorized Web management functions
+#### Scenario: Administrator views organization details
+- **WHEN** an administrator opens a department or team detail
+- **THEN** the response includes its name, description, activation state, leader or null, and members; department details also include subordinate teams and team details include the parent department
 
-#### Scenario: Business role attempts to use an admin endpoint
-- **WHEN** a Founder, Department Manager, Team Leader, or Employee requests a Web administration route or API
-- **THEN** the system rejects the request and returns no management data
+#### Scenario: Administrator edits organization information
+- **WHEN** an administrator updates a department or team
+- **THEN** the system accepts name and description changes or a standalone `is_active` change, and rejects direct leader, member, or team-parent changes
 
-#### Scenario: Administrator attempts to read tasks or employee logs
-- **WHEN** a System Administrator requests task or employee-log data through a route or API
-- **THEN** the system rejects the request and returns no task or log data
+### Requirement: Organization activation preserves active descendants
+The system SHALL let administrators activate and deactivate departments and teams while retaining their records. Disabled organizations SHALL remain visible in management lists and SHALL NOT be assignment candidates.
 
-### Requirement: Administrators manage departments without deleting history
-The system SHALL allow an administrator to create, view, edit, activate, and deactivate departments, and to set or replace a Department Manager. Deactivation SHALL preserve historical records and SHALL be blocked while active subordinate teams or accounts remain unresolved.
+#### Scenario: Administrator deactivates an organization with active descendants
+- **WHEN** a department has an active subordinate team or member, or a team has an active member
+- **THEN** the system rejects deactivation and returns a user-readable validation error
 
-#### Scenario: Administrator creates or edits a department
-- **WHEN** an administrator submits valid department details
-- **THEN** the system saves the department and makes it available for authorized organization management
+#### Scenario: Administrator selects an organization for employee placement
+- **WHEN** the system provides department or team choices for employee placement
+- **THEN** it excludes disabled organizations while retaining them in management lists
 
-#### Scenario: Administrator deactivates a department with active descendants
-- **WHEN** an administrator tries to deactivate a department that still has active subordinate teams or accounts
-- **THEN** the system rejects the operation and identifies the descendants that must first be reassigned or deactivated
+### Requirement: Organizations have at most one active leader and may have none
+The system SHALL allow zero or one active Department Manager per department and zero or one active Team Leader per team. Leader changes SHALL be made through employee role and placement management; the system SHALL NOT automatically select a successor.
 
-#### Scenario: Department detail shows responsible manager and members read-only
-- **WHEN** an administrator views a department's detail
-- **THEN** the system shows the responsible manager, subordinate teams, and members without allowing them to be edited from the detail view
+#### Scenario: Administrator assigns an available leader role
+- **WHEN** an enabled employee receives a leader role and valid organization placement for an organization with no active leader
+- **THEN** the system assigns that employee as the active leader
 
-### Requirement: Administrators manage teams within departments
-The system SHALL allow an administrator to create, view, edit, activate, and deactivate teams and to set or replace a Team Leader. A team SHALL belong to a department, and deactivation SHALL preserve historical records.
+#### Scenario: Administrator assigns a second active leader
+- **WHEN** an organization already has an active leader
+- **THEN** the system rejects the second active leader assignment without changing the existing leader
 
-#### Scenario: Administrator creates or edits a team
-- **WHEN** an administrator submits valid team details and an active parent department
-- **THEN** the system saves the team under the selected department
+#### Scenario: Leader is revoked or deactivated
+- **WHEN** an administrator revokes or deactivates the active leader
+- **THEN** the organization may remain without an active leader and affected direct-report links may be null until a valid successor is assigned
 
-#### Scenario: Administrator deactivates a team with active members
-- **WHEN** an administrator tries to deactivate a team that still has active members
-- **THEN** the system rejects the operation until those members are reassigned or deactivated
+#### Scenario: A valid successor is enabled
+- **WHEN** an administrator assigns and enables a valid successor through employee management
+- **THEN** the backend recalculates the affected direct-report links
 
-### Requirement: Administrators filter and manage employees
-The system SHALL allow an administrator to filter employees by name/phone, business role, department, team, and activation status, and to adjust an employee's business role, department/team placement, and activation status. Web editing SHALL NOT modify name, phone, national ID, or password.
+### Requirement: Administrators manage employee placement without editing personal data
+The system SHALL let administrators search and view employees and update only business role, department/team placement, and activation state after account creation. It SHALL reject administrator writes to employee name, phone, identity number, or password.
 
 #### Scenario: Administrator filters employees
-- **WHEN** an administrator queries the employee list with name/phone, role, department, team, or activation filters
-- **THEN** the system returns matching active and inactive employees without exposing plaintext passwords or full national IDs
+- **WHEN** an administrator filters employees by name or phone, business role, department, team, or activation state
+- **THEN** the system returns matching employees, including disabled employees when requested for management, with identity numbers masked
 
-#### Scenario: Administrator adjusts role and placement
-- **WHEN** an administrator updates an employee's business role, department, or team
-- **THEN** the system validates placement, leader uniqueness, and active candidates, and persists the change atomically
+#### Scenario: Administrator updates employee placement or role
+- **WHEN** an administrator submits a valid role, organization placement, or activation change
+- **THEN** the system validates role-placement compatibility and applies only the permitted changes
 
-#### Scenario: Employee update rejects non-allowed fields
-- **WHEN** an administrator submits name, phone, national ID, or password fields on the employee update endpoint
-- **THEN** the system rejects those fields and preserves the current values
+#### Scenario: Administrator updates personal information
+- **WHEN** an administrator submits employee name, phone, identity number, or password through Web management
+- **THEN** the system rejects the prohibited fields and leaves those values unchanged
 
-### Requirement: Employees maintain their own profile in the App
-The system SHALL allow an employee to view their own profile and update their name, phone, and national ID. The national ID SHALL be returned masked. When multiple fields are submitted in one request, the update SHALL be atomic so any validation failure rolls back the whole request.
+#### Scenario: Disabled records are offered as placement candidates
+- **WHEN** an administrator opens an employee role or organization placement selector
+- **THEN** disabled employees, departments, and teams are excluded from candidate choices
 
-#### Scenario: Employee views their own profile
-- **WHEN** an authenticated business user requests their own profile
-- **THEN** the system returns name, phone, role, organization, and a masked national ID
+### Requirement: App employees update their own profile atomically
+The system SHALL let an authenticated employee update only their own name, phone, and identity number in the App. Name and identity number SHALL be editable in one profile form, may be submitted together or separately, and SHALL not be automatically synchronized. A failed multi-field update SHALL leave all submitted values unchanged.
 
-#### Scenario: Employee updates name or national ID independently
-- **WHEN** an employee submits only their name or only their national ID
-- **THEN** the system validates and saves that single field without requiring the other
+#### Scenario: Employee updates name and identity number together
+- **WHEN** an employee submits a valid `display_name` and `id_number` in one profile update
+- **THEN** the system saves both values in one transaction
 
-#### Scenario: Employee updates multiple profile fields atomically
-- **WHEN** an employee submits several profile fields in one request and any field fails validation
-- **THEN** the system rolls back the entire update and returns the validation error
+#### Scenario: Employee updates only one personal field
+- **WHEN** an employee submits only a name or only an identity number
+- **THEN** the system updates that field without requiring the other field to change
 
-#### Scenario: Phone change affects subsequent login
-- **WHEN** an employee changes their phone number
-- **THEN** the system stores the new value as the login username used for subsequent App sign-in
+#### Scenario: One submitted profile field is invalid
+- **WHEN** a profile update contains multiple fields and any field fails validation
+- **THEN** the system rejects the update and saves none of the submitted changes
+
+#### Scenario: Employee changes phone number
+- **WHEN** an employee submits an unused valid phone number
+- **THEN** the system atomically updates the unique `username` login identifier and subsequent sign-in uses the new phone number
+
+#### Scenario: Employee attempts to change administrator-managed fields
+- **WHEN** an employee submits a business role, department, team, manager, or activation change from the App
+- **THEN** the system rejects those fields
+
+### Requirement: App employees change their own password
+The system SHALL allow an authenticated employee to change only their own password after verifying the current password, matching confirmation, and configured password validators. It SHALL store only the password hash and SHALL NOT return or log password values.
+
+#### Scenario: Employee changes password with valid credentials
+- **WHEN** an employee submits the correct current password, a valid different new password, and a matching confirmation
+- **THEN** the system changes only that employee's password hash and returns a success flag
+
+#### Scenario: Employee submits invalid password-change data
+- **WHEN** the current password is wrong, the confirmation differs, the new password is unchanged, or configured password validation fails
+- **THEN** the system rejects the request and leaves the stored password unchanged
 
 ### Requirement: National IDs are unique
-The system SHALL ensure each employee national ID is unique across accounts, while still allowing historical accounts to have no national ID recorded.
+The system SHALL ensure each employee national ID is unique across accounts, while historical accounts may have no national ID recorded.
 
 #### Scenario: Duplicate national ID on account creation
 - **WHEN** an administrator tries to create an account with a national ID already used by another account
@@ -86,31 +109,20 @@ The system SHALL ensure each employee national ID is unique across accounts, whi
 - **WHEN** an employee tries to change their national ID to one already used by another account
 - **THEN** the system rejects the change and preserves the existing value
 
-### Requirement: Employees change their own password in the App
-The system SHALL allow an employee to change their own password by providing the current password, a new password, and its confirmation. The new password SHALL be stored as a Django password hash.
+### Requirement: Sensitive account data is protected in management responses and audit records
+The system SHALL mask identity numbers in ordinary reads and exclude plaintext passwords, full identity numbers, and employee-log content from logs and administrator audit records.
 
-#### Scenario: Employee changes password with correct current password
-- **WHEN** an employee submits the correct current password and a valid, matching new password
-- **THEN** the system updates the password hash and invalidates the old credential for future sign-in
+#### Scenario: Administrator reads employee data
+- **WHEN** an administrator reads an employee list or detail
+- **THEN** the response includes only a masked identity number and never includes a password
 
-#### Scenario: Employee submits wrong current password or mismatched confirmation
-- **WHEN** an employee submits an incorrect current password or a confirmation that does not match the new password
-- **THEN** the system rejects the request without changing the stored password
+#### Scenario: Administrator operation is audited
+- **WHEN** an administrator successfully changes organization or employee-management data
+- **THEN** the system records actor, time, module, action, target, result, and allowed before/after values while omitting excluded sensitive data
 
-### Requirement: The admin workbench contains only system-management information
-The system SHALL provide an administrator workbench with organization, account, and administrator-operation summaries, and SHALL exclude task and employee-log counts, status, content, and analytics.
+### Requirement: Administrator summaries and audit access remain within management scope
+The system SHALL limit the administrator workbench and audit APIs to system-management data and SHALL NOT return business tasks or employee logs.
 
-#### Scenario: Administrator opens the workbench
-- **WHEN** an active administrator opens the Web workbench
-- **THEN** the system displays only system-management summaries and no task or employee-log information
-
-### Requirement: Administrator operations are auditable
-The system SHALL record successful administrator changes to departments, teams, accounts, roles, and organization responsibilities, including administrator, time, module, action, target, result, and applicable before-and-after values. Audit records SHALL NOT contain plaintext passwords, full national IDs, or employee-log content.
-
-#### Scenario: Administrator successfully changes an account or organization
-- **WHEN** an administrator successfully creates, edits, activates, deactivates, or reassigns an account or organization record
-- **THEN** the system stores an audit record with the applicable actor, time, target, action, result, and redacted change details
-
-#### Scenario: Administrator filters audit records
-- **WHEN** an administrator filters the audit list by time range, administrator, or module
-- **THEN** the system returns matching management audit records without exposing passwords, full national IDs, or employee-log content
+#### Scenario: Administrator opens the workbench or audit view
+- **WHEN** an administrator requests management summaries or audit records
+- **THEN** the system returns only permitted management data and excludes task and employee-log data
