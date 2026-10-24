@@ -59,10 +59,35 @@ def resolve_placement(role, department, team, is_active, exclude_pk=None):
         else:
             manager_query = {"business_role": User.Role.TEAM_LEADER, "team": team, "department": department}
 
+    if not is_active:
+        return None, department, team
     manager = User.objects.filter(account_type=User.AccountType.BUSINESS, is_active=True, **manager_query).first()
     if manager is None:
         raise serializers.ValidationError({"business_role": "请先录入启用的直属上级。"})
     return manager, department, team
+
+
+def maintain_manager_links(user, old_role, old_is_active):
+    """维护直属上级：停用/撤销负责人时置空直接下属，启用新负责人时重建空缺下属。"""
+    was_leader = old_is_active and old_role in (User.Role.DEPARTMENT_MANAGER, User.Role.TEAM_LEADER)
+    is_leader = user.is_active and user.business_role in (User.Role.DEPARTMENT_MANAGER, User.Role.TEAM_LEADER)
+
+    if was_leader and not is_leader:
+        User.objects.filter(manager=user).update(manager=None)
+    elif is_leader and user.business_role == User.Role.DEPARTMENT_MANAGER and user.department_id:
+        User.objects.filter(
+            account_type=User.AccountType.BUSINESS,
+            business_role=User.Role.TEAM_LEADER,
+            department_id=user.department_id,
+            manager__isnull=True,
+        ).exclude(pk=user.pk).update(manager=user)
+    elif is_leader and user.business_role == User.Role.TEAM_LEADER and user.team_id:
+        User.objects.filter(
+            account_type=User.AccountType.BUSINESS,
+            business_role=User.Role.EMPLOYEE,
+            team_id=user.team_id,
+            manager__isnull=True,
+        ).exclude(pk=user.pk).update(manager=user)
 
 
 class DepartmentSerializer(StrictInputMixin, serializers.ModelSerializer):
@@ -228,10 +253,13 @@ class UserUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):
         return attrs
 
     def update(self, instance, validated_data):
+        old_role = instance.business_role
+        old_is_active = instance.is_active
         for field in ("business_role", "department", "team", "manager", "is_active"):
             if field in validated_data:
                 setattr(instance, field, validated_data[field])
         instance.save()
+        maintain_manager_links(instance, old_role, old_is_active)
         return instance
 
 
@@ -277,6 +305,8 @@ class AppPasswordChangeSerializer(StrictInputMixin, serializers.Serializer):
             raise serializers.ValidationError({"current_password": "当前密码不正确。"})
         if attrs["new_password"] != attrs["new_password_confirm"]:
             raise serializers.ValidationError({"new_password_confirm": "两次输入的新密码不一致。"})
+        if attrs["new_password"] == attrs["current_password"]:
+            raise serializers.ValidationError({"new_password": "新密码不能与当前密码相同。"})
         try:
             validate_password(attrs["new_password"], user)
         except DjangoValidationError as exc:

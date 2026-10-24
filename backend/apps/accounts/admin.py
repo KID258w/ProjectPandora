@@ -29,11 +29,9 @@ def _validate_placement(cleaned_data):
             raise forms.ValidationError("部门经理必须选择部门。")
         if team:
             raise forms.ValidationError("部门经理不能选择团队。")
-        if not manager:
-            raise forms.ValidationError("部门经理必须选择上级。")
     elif business_role in (User.Role.TEAM_LEADER, User.Role.EMPLOYEE):
-        if not department or not team or not manager:
-            raise forms.ValidationError("团队长和员工必须选择部门、团队和上级。")
+        if not department or not team:
+            raise forms.ValidationError("团队长和员工必须选择部门、团队。")
     else:
         raise forms.ValidationError("业务用户必须选择有效的业务角色。")
 

@@ -13,6 +13,7 @@ class Department(models.Model):
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["id"]
@@ -24,6 +25,7 @@ class Team(models.Model):
     department = models.ForeignKey(Department, on_delete=models.PROTECT, related_name="teams")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["id"]
@@ -74,8 +76,8 @@ class User(AbstractUser):
                 condition=(
                     Q(account_type="admin", business_role="", department__isnull=True, team__isnull=True, manager__isnull=True)
                     | Q(account_type="business", business_role="founder", department__isnull=True, team__isnull=True, manager__isnull=True)
-                    | Q(account_type="business", business_role="department_manager", department__isnull=False, team__isnull=True, manager__isnull=False)
-                    | Q(account_type="business", business_role__in=["team_leader", "employee"], department__isnull=False, team__isnull=False, manager__isnull=False)
+                    | Q(account_type="business", business_role="department_manager", department__isnull=False, team__isnull=True)
+                    | Q(account_type="business", business_role__in=["team_leader", "employee"], department__isnull=False, team__isnull=False)
                 ),
                 name="valid_account_placement",
             ),

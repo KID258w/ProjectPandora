@@ -382,3 +382,31 @@ class AccountApiTests(APITestCase):
         ]
         for url in urls:
             self.assertEqual(self.client.put(url, {}, format="json").status_code, 405)
+
+    def test_leader_vacancy_and_successor_rebuild(self):
+        users = self.hierarchy()  # founder, manager, leader, employee
+        employee = users[3]
+        self.create_user("employee2", "employee", self.department, self.team)
+        employee2 = User.objects.get(username="employee2")
+        self.assertEqual(employee2.manager_id, users[2].pk)
+        # 停用团队长：两个员工的直属上级应置空
+        response = self.client.patch(f"/api/v1/admin/users/{users[2].pk}/", {"is_active": False}, format="json")
+        self.assertEqual(response.status_code, 200)
+        employee.refresh_from_db()
+        employee2.refresh_from_db()
+        self.assertIsNone(employee.manager_id)
+        self.assertIsNone(employee2.manager_id)
+        # 将 employee 升任团队长：应重建 employee2 的直属上级
+        response = self.client.patch(f"/api/v1/admin/users/{employee.pk}/", {"business_role": "team_leader"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        employee2.refresh_from_db()
+        self.assertEqual(employee2.manager_id, employee.pk)
+
+    def test_password_change_rejects_same_password(self):
+        users = self.hierarchy()
+        employee = users[3]
+        initial = self.initial_passwords["employee"]
+        token = self.login("app", employee.username, password=initial)
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer " + token["access"])
+        response = self.client.post("/api/v1/app/me/password/", {"current_password": initial, "new_password": initial, "new_password_confirm": initial}, format="json")
+        self.assertEqual(response.status_code, 400)
