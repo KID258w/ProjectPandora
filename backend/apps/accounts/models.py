@@ -9,6 +9,7 @@ from .fields import EncryptedTextField
 class Department(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -19,6 +20,7 @@ class Team(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     department = models.ForeignKey(Department, on_delete=models.PROTECT, related_name="teams")
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -69,3 +71,27 @@ class User(AbstractUser):
             models.UniqueConstraint(fields=["department"], condition=Q(business_role="department_manager", is_active=True), name="one_manager_per_department"),
             models.UniqueConstraint(fields=["team"], condition=Q(business_role="team_leader", is_active=True), name="one_leader_per_team"),
         ]
+
+
+class AdminAuditLog(models.Model):
+    class Module(models.TextChoices):
+        USERS = "users", "用户"
+        DEPARTMENTS = "departments", "部门"
+        TEAMS = "teams", "团队"
+
+    class Result(models.TextChoices):
+        SUCCESS = "success", "成功"
+        FAILURE = "failure", "失败"
+
+    actor = models.ForeignKey(User, on_delete=models.PROTECT, related_name="audit_logs")
+    module = models.CharField(max_length=24, choices=Module.choices)
+    action = models.CharField(max_length=24)
+    object_type = models.CharField(max_length=32)
+    object_id = models.CharField(max_length=64, blank=True)
+    result = models.CharField(max_length=16, choices=Result.choices, default=Result.SUCCESS)
+    before_data = models.JSONField(null=True, blank=True)
+    after_data = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]

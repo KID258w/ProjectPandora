@@ -1,72 +1,53 @@
 ## Context
 
-Issue #1 account creation and phone-login residuals are complete. Issue2 adds the organization, employee-management, and App self-service behavior that was intentionally left out of the first delivery. The current backend has `User`, `Department`, and `Team` models and the initial list/create/login APIs; Issue2 must extend them without changing the completed account-creation contract.
+Issue #6 已落地账号录入、两端认证与部门/团队/用户列表及创建。Issue #15（功能02）在此基础上补齐管理端详情与启停、员工筛选与身份/组织调整、App 个人资料与密码，以及管理操作审计。产品需求明确 Web 管理端不修改/重置员工密码、不查看业务任务与员工日志。
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Let Web administrators view and maintain department, team, and employee records within the agreed field boundaries.
-- Enforce activation, organization-placement, and zero-or-one active-leader rules in the backend.
-- Let an employee update only their own personal profile and password through the Android App.
-- Keep ordinary reads and audit records free of full identity numbers and plaintext passwords.
-- Complete the backend API/database/provisioning docs, requirements, Web/App UI docs, and OpenSpec artifacts needed for implementation.
+- 部门/团队详情查看与更新（名称、说明、启用状态），启停前校验下级对象。
+- 员工按姓名/手机号、身份、部门、团队、启用状态筛选；仅调整 `business_role`、`department_id`、`team_id`、`is_active`。
+- App 员工本人查看脱敏资料、修改姓名/手机号/身份证号（事务）、修改密码（哈希保存）。
+- 管理概况与审计记录接口；审计不保存明文密码、完整身份证号或日志内容。
 
 **Non-Goals:**
-- Reopening Issue #1 account creation, initial-password delivery, Android login wording, or Web navigation layout.
-- Web editing of employee name, phone, identity number, or password; Web password reset; SMS verification; or password recovery.
-- Editing a team's department after creation, automatic leader succession, organization-transfer history, task/log administration, or company-important-item management.
+- 公司重要事项（`company-important-items` change）。
+- Web 端修改/重置员工密码。
+- 业务任务、员工日志、AI 会话的查看或操作。
+- 组织调动历史表、密码复杂度策略等未确认项。
 
 ## Decisions
 
-- **Entities:** Continue using `accounts.User`, `accounts.Department`, and `accounts.Team`; do not add separate Employee, DepartmentManager, or TeamLeader entities. User's existing `password` stores the Django hash. Add the administrator audit model/table for management-operation records.
-- **Business login identifier:** Keep the globally unique `User.username`; its value is the current phone number for business accounts. App login continues to send that value in the `username` JSON field.
-- **Organization maintenance:** Department and team details show name, description, activation state, active leader or null, and read-only member information; department details also show subordinate teams and team details show the parent department. Detail edits accept only `name` and `description`; list activation controls update only `is_active`. A team's department is immutable after creation.
-- **Employee administration:** Admin lists support name/phone keyword, role, department, team, and activation filters, and return masked identity numbers. Admin PATCH accepts only `business_role`, `department_id`, `team_id`, and `is_active`; it rejects personal fields, password, and client-supplied `manager_id`.
-- **Leader cardinality and transitions:** A department may have zero or one active Department Manager; a team may have zero or one active Team Leader. Administrators change leaders through employee role/placement changes. Reject a second active leader and do not auto-appoint a successor. `manager_id` remains backend-owned; affected direct-report links may be null during vacancy and are recalculated when a valid leader is enabled.
-- **Activation safeguards:** Preserve disabled records. Reject department deactivation while active subordinate teams or members remain, and reject team deactivation while active members remain. Disabled employees and organizations remain visible in management lists but are excluded from role/placement candidates. Employee creation or reassignment requires active target organizations.
-- **App profile:** `GET /api/v1/app/me/` returns a masked identity number. `PATCH /api/v1/app/me/` accepts any supported subset of `display_name`, phone in `username`, and `id_number`; it does not accept role, organization, manager, activation, or password writes. Name and identity number appear in the same editable profile form and may be submitted together or separately. They are independent fields, with no automatic real-name synchronization. Save the request atomically so any validation failure rolls back all submitted profile changes. Phone changes atomically update the unique login identifier.
-- **App password:** `POST /api/v1/app/me/password/` accepts `current_password`, `new_password`, and `new_password_confirm`. Verify the current password, require matching confirmation and a value different from the current password, apply configured Django validators, and update only the current user's password hash. Return a success flag only; never log or echo password values. Do not add server-side multi-device JWT revocation in this MVP; issued tokens expire under their current lifetime. SMS verification and recovery are outside scope.
-- **Audit and admin data boundary:** Record successful organization and employee-management changes with an allowlist of before/after fields. Exclude plaintext passwords, full identity numbers, and employee-log content. The administrator workbench contains management summaries only; administrators cannot read business tasks or employee logs.
-- **Compatibility:** Keep existing endpoint paths where possible. The Issue1 account-create contract remains unchanged. Update Swagger and client contracts with Issue2 implementation; existing Issue #6 behavior remains until the relevant Issue2 backend PR is deployed.
+- `User` 沿用 `username` 作为手机号；新增 `id_number` 存身份证号，展示一律脱敏。密码仍用 `User.password` 的 Django 哈希。
+- `Department`/`Team` 新增 `is_active`，与 `User.is_active` 一致，采用停用保留历史而非物理删除。
+- 负责人唯一性沿用数据库条件唯一约束（仅对 `is_active=True` 生效）；允许组织暂时无负责人，负责人调整不自动指定接任者。
+- 员工更新与录入共用同一套 placement 校验（角色→组织形状、负责人唯一、停用对象排除），避免 create/update 规则漂移。
+- App 个人资料多字段提交包在 `transaction.atomic` 中，任一字段校验失败整次回滚；手机号修改即修改 `username`。
+- 审计只记录管理端成功变更，`before_data`/`after_data` 使用字段白名单并脱敏，绝不写入 password、完整 id_number 或日志内容。
 
-## PR Plan
+## Data model
 
-Issue2 has three PRs, all targeting `dev`:
+- `accounts_user` 增列 `id_number`（`CharField(18, blank=True, default="")`）。
+- `accounts_department`、`accounts_team` 各增列 `is_active`（`BooleanField(default=True)`）。
+- 新增 `accounts_adminauditlog`：`actor`（FK User，PROTECT）、`module`（users/departments/teams）、`action`（create/update/deactivate/activate）、`object_type`、`object_id`、`result`（success/failure）、`before_data`/`after_data`（JSON，可空，已脱敏）、`created_at`。
 
-1. **Backend first:** model/migration changes, Web and App APIs, validation, authorization, audit behavior, tests, and backend API/database/account-provisioning docs; update the requirements and OpenSpec contract.
-2. **Web:** organization and employee maintenance screens, admin workbench/audit view as specified, API integration, and `docs/web/account-management-ui.md`.
-3. **Android:** employee profile and password self-service, API integration, and `docs/android/account-login-ui.md`.
+## API surface
 
-The backend PR establishes the API contract first. Web and Android PRs may then be developed and integrated in parallel. No member assignment or branch name is set by this design.
+管理端（`IsAdministrator`）：`GET/PATCH /api/v1/admin/departments/{id}/`、`GET/PATCH /api/v1/admin/teams/{id}/`、`GET /api/v1/admin/users/`（筛选 keyword/business_role/department_id/team_id/is_active）、`GET/PATCH /api/v1/admin/users/{id}/`、`GET /api/v1/admin/dashboard/`、`GET /api/v1/admin/audit-logs/`（start_date/end_date/actor_id/module）。
 
-## Alternatives Considered
-
-- Adding a separate phone field was rejected because `username` is already globally unique and is the App login field; storing the same value twice would introduce synchronization risk.
-- Allowing Web to edit personal information was rejected because employees own their name, phone, identity number, and password in the App.
-- Direct leader editing on organization detail pages was rejected; leader changes use the same employee role/placement validations as other staff changes.
-- Automatic successor selection was rejected; organizations may remain without an active leader until an administrator updates an employee.
-- Coupling name and identity-number values through assumed external identity verification was rejected because the MVP has no verification or OCR integration. The App can submit both fields in one transaction without automatically deriving one from the other.
+App 端（`IsBusinessUser`）：`GET/PATCH /api/v1/app/me/`、`POST /api/v1/app/me/password/`。
 
 ## Risks / Trade-offs
 
-- [Legacy usernames may not be verified phone numbers or may collide] -> Verify existing contact data and resolve collisions before any backfill; do not invent or silently rewrite values.
-- [Identity numbers are sensitive] -> Encrypt at rest, mask standard reads, and exclude full values from logs and audit data.
-- [Leader transitions can temporarily leave employees without a direct manager] -> Allow nullable manager links during the explicit vacancy and rebuild valid links when a new leader is enabled.
-- [Phone changes affect subsequent login] -> Validate global uniqueness and update the login identifier in the same transaction as the profile change.
-- [Multiple profile fields may be submitted together] -> Validate and persist the full PATCH atomically so a failed field cannot leave a partial update.
+- [停用负责人导致组织空缺可能违背早期需求场景7] → 以 Issue #15「允许暂时没有负责人」为准，允许空缺；已记录 Open Question 供产品确认。
+- [审计快照泄露敏感数据] → 字段白名单 + 脱敏，单元测试覆盖。
+- [筛选/更新规则与录入规则漂移] → create/update 复用同一 placement 校验函数。
 
 ## Migration Plan
 
-1. Add `is_active` to departments and teams with an enabled default; preserve existing records and verify the default against current data.
-2. Relax the user role/placement database check as needed to permit a temporary nullable `manager_id` during leader vacancy; retain conditional uniqueness for one active founder, department manager, and team leader.
-3. Add the administrator audit table/model and indexes for time, actor, and module. Audit payload allowlists must omit passwords and full identity numbers.
-4. Keep existing encrypted identity values and password hashes. Do not delete accounts or organizations; do not backfill unverified personal data.
-5. Deploy the backend contract first, then integrate Web and Android against the agreed endpoints.
-
-Rollback must preserve existing accounts, organization data, identity-number encryption keys, and audit history. It must not export or log plaintext credentials.
+在现有 0003 迁移之后新增一列迁移：`id_number`、`Department/Team.is_active`、`AdminAuditLog`。均为可空或带默认值，向后兼容。回滚方式为反向迁移；不删除历史记录。
 
 ## Open Questions
 
-- What exact phone-number format and identity-number validation rules should the backend enforce?
-- Who verifies and backfills phone/identity data for legacy accounts, and what is the approved workflow?
-- Which final layout and interaction details will the Web and Android implementations choose within the documented field boundaries?
+- 需求文档 05 场景7「停用负责人须先更换」与 Issue #15「允许暂时没有负责人」的冲突，需产品最终确认（当前实现遵循 Issue #15）。
+- 身份证号是否要求唯一、是否作为录入必填项，待确认（当前为可空、非必填、不唯一）。

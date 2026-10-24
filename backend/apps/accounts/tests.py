@@ -1,3 +1,4 @@
+import json
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
@@ -5,7 +6,7 @@ from django.test import override_settings
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
-from .models import Department, Team, User
+from .models import AdminAuditLog, Department, Team, User
 
 
 @override_settings(PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"])
@@ -250,3 +251,102 @@ class AccountApiTests(APITestCase):
         self.assertTrue(form.is_valid(), form.errors)
         user = form.save()
         self.assertEqual(user.account_type, "admin")
+
+    def test_department_detail_and_deactivation_guard(self):
+        self.hierarchy()
+        response = self.client.get(f"/api/v1/admin/departments/{self.department.pk}/")
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]
+        self.assertEqual(data["manager"]["display_name"], "manager")
+        self.assertEqual(len(data["members"]), 3)
+        self.assertEqual(len(data["teams"]), 1)
+        response = self.client.patch(f"/api/v1/admin/departments/{self.department.pk}/", {"is_active": False}, format="json")
+        self.assertEqual(response.status_code, 400)
+        response = self.client.patch(f"/api/v1/admin/departments/{self.department.pk}/", {"description": "新说明"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["description"], "新说明")
+
+    def test_team_detail_and_deactivation_guard(self):
+        self.hierarchy()
+        response = self.client.get(f"/api/v1/admin/teams/{self.team.pk}/")
+        self.assertEqual(response.status_code, 200)
+        data = response.data["data"]
+        self.assertEqual(data["leader"]["display_name"], "leader")
+        self.assertEqual(data["department_id"], self.department.pk)
+        self.assertEqual(len(data["members"]), 2)
+        response = self.client.patch(f"/api/v1/admin/teams/{self.team.pk}/", {"is_active": False}, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_user_filtering(self):
+        self.hierarchy()
+        self.assertEqual(self.client.get("/api/v1/admin/users/", {"business_role": "employee"}).data["data"]["count"], 1)
+        self.assertEqual(self.client.get("/api/v1/admin/users/", {"keyword": "manager"}).data["data"]["count"], 1)
+        self.assertEqual(self.client.get("/api/v1/admin/users/", {"department_id": self.department.pk}).data["data"]["count"], 3)
+        self.assertEqual(self.client.get("/api/v1/admin/users/", {"team_id": self.team.pk}).data["data"]["count"], 2)
+        self.assertEqual(self.client.get("/api/v1/admin/users/", {"is_active": "false"}).data["data"]["count"], 0)
+
+    def test_user_update_whitelist_leader_uniqueness_and_vacancy(self):
+        users = self.hierarchy()
+        employee = users[3]
+        leader = users[2]
+        for payload in [{"display_name": "改名"}, {"id_number": "110101199001011234"}, {"password": "xxx"}, {"username": "newname"}]:
+            self.assertEqual(self.client.patch(f"/api/v1/admin/users/{employee.pk}/", payload, format="json").status_code, 400)
+        self.assertEqual(self.client.patch(f"/api/v1/admin/users/{employee.pk}/", {"business_role": "team_leader"}, format="json").status_code, 400)
+        self.assertEqual(self.client.patch(f"/api/v1/admin/users/{leader.pk}/", {"is_active": False}, format="json").status_code, 200)
+        response = self.client.patch(f"/api/v1/admin/users/{employee.pk}/", {"business_role": "team_leader"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["business_role"], "team_leader")
+        self.assertEqual(response.data["data"]["manager_id"], users[1].pk)
+
+    def test_user_update_rejects_inactive_candidates(self):
+        users = self.hierarchy()
+        employee = users[3]
+        other = Department.objects.create(name="销售")
+        other.is_active = False
+        other.save(update_fields=["is_active"])
+        response = self.client.patch(f"/api/v1/admin/users/{employee.pk}/", {"department_id": other.pk}, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_dashboard_counts(self):
+        self.hierarchy()
+        data = self.client.get("/api/v1/admin/dashboard/").data["data"]
+        self.assertEqual(data["active_users"], 4)
+        self.assertEqual(data["departments"], 1)
+        self.assertEqual(data["teams"], 1)
+        self.assertEqual(data["published_company_items"], 0)
+
+    def test_audit_logs_never_contain_sensitive_data(self):
+        self.hierarchy()
+        self.client.post("/api/v1/admin/departments/", {"name": "销售"}, format="json")
+        response = self.client.get("/api/v1/admin/audit-logs/")
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.data["data"]["count"], 1)
+        for log in AdminAuditLog.objects.all():
+            payload = json.dumps({"before": log.before_data, "after": log.after_data}, ensure_ascii=False)
+            self.assertNotIn("id_number", payload)
+            self.assertNotIn("password", payload)
+            self.assertNotIn("initial_password", payload)
+
+    def test_app_me_update_and_password(self):
+        users = self.hierarchy()
+        employee = users[3]
+        initial = self.initial_passwords["employee"]
+        token = self.login("app", employee.username, password=initial)
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer " + token["access"])
+        response = self.client.patch("/api/v1/app/me/", {"display_name": "张三"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["display_name"], "张三")
+        response = self.client.patch("/api/v1/app/me/", {"username": "13900000000"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        employee.refresh_from_db()
+        self.assertEqual(employee.username, "13900000000")
+        response = self.client.patch("/api/v1/app/me/", {"id_number": "110101199001011234"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"]["id_number_masked"], "**************1234")
+        self.assertEqual(self.client.patch("/api/v1/app/me/", {"username": "leader"}, format="json").status_code, 400)
+        self.assertEqual(self.client.post("/api/v1/app/me/password/", {"current_password": "wrong", "new_password": "New-Pass-123!", "new_password_confirm": "New-Pass-123!"}, format="json").status_code, 400)
+        self.assertEqual(self.client.post("/api/v1/app/me/password/", {"current_password": initial, "new_password": "New-Pass-123!", "new_password_confirm": "Different"}, format="json").status_code, 400)
+        response = self.client.post("/api/v1/app/me/password/", {"current_password": initial, "new_password": "New-Pass-123!", "new_password_confirm": "New-Pass-123!"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        employee.refresh_from_db()
+        self.assertTrue(employee.check_password("New-Pass-123!"))

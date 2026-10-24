@@ -1,6 +1,8 @@
 # 后端 API 设计
 
-> **Issue #6 实施更新**：账号录入、组织列表/创建与两端认证已实现。各接口请求/响应示例、错误、分页、身份规则以 [账号录入与登录契约](account-provisioning.md) 为准。以下其它业务内容仍为规划，旧 `/api/auth/token/` 入口已移除。
+> **Issue #6 实施更新**：账号录入、组织列表/创建与两端认证已实现。各接口请求/响应示例、错误、分页、身份规则以 [账号录入与登录契约](account-provisioning.md) 为准。旧 `/api/auth/token/` 入口已移除。
+
+> **Issue #15 实施更新**：部门/团队详情与启停、员工筛选与身份/组织调整、管理概况与操作审计、App 个人资料与密码已实现（见 2.1 节契约）。以下未标注已实现的业务内容仍为规划。
 
 > 维护说明：由项目统筹与后端同学共同维护，作为 API 设计的持续文档。接口路径、字段名和错误格式可随开发协商调整。  
 > 依据：`docs/requirements/01` 至 `06`、`docs/cooperate/swagger-guide.md` 与当前 Django 骨架。需求变化时以最新确认的需求为准。
@@ -16,9 +18,14 @@
 | 健康检查 | `GET /api/health/` |
 | 获取 JWT | `POST /api/v1/admin/auth/token/`、`POST /api/v1/app/auth/token/` |
 | 刷新 JWT | `POST /api/v1/admin/auth/token/refresh/`、`POST /api/v1/app/auth/token/refresh/` |
+| 管理概况 | `GET /api/v1/admin/dashboard/` |
+| 组织详情/启停 | `GET, PATCH /api/v1/admin/departments/{id}/`、`GET, PATCH /api/v1/admin/teams/{id}/` |
+| 员工筛选/详情/调整 | `GET /api/v1/admin/users/`、`GET, PATCH /api/v1/admin/users/{id}/` |
+| 管理操作审计 | `GET /api/v1/admin/audit-logs/` |
+| App 个人资料与密码 | `GET, PATCH /api/v1/app/me/`、`POST /api/v1/app/me/password/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
-下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现，其余仍为建议接口，不代表已上线。
+下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料与密码已实现（契约见 2.1）。其余仍为建议接口，不代表已上线。
 
 ### 1.2 通用约定
 
@@ -70,9 +77,9 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 
 Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `username` 接收手机号，要求身份证号，自动启用账号并只在本次成功响应返回后端生成的初始密码。下文的员工筛选/更新、组织维护和 App 自助资料修改仍是 Issue2 目标，实施前不代表已经上线：列表保留停用对象供管理员查询，但用于员工身份/组织调整的候选项只返回启用员工、部门和团队；用户筛选支持姓名或手机号关键词、`department_id`、`team_id`、`business_role`、`is_active`。组织负责人在员工管理界面通过员工业务身份和组织归属调整，不提供组织详情页直接换负责人或独立负责人写接口。停用部门/团队前后端都要校验没有仍启用的下级组织或成员。团队的所属部门仅在创建时指定。手机号继续使用现有唯一 `username` 字段存储；App 登录 JSON 的 `username` 字段不改名，业务账号的值为手机号。
 
-### 2.1 Issue2 账号与组织管理目标契约（尚未实现）
+### 2.1 Issue2 账号与组织管理契约（已实现）
 
-本节是 Issue2 的目标契约；不得将其误认为当前 Issue #6 API 已支持。现有接口路径尽量沿用，新增字段和行为在后端实施时同步到 Swagger。
+本节是 Issue2 的契约，已在 Issue #15 后端实现并同步到 Swagger。现有接口路径沿用 Issue #6，新增字段和行为与实现一致。
 
 - 管理员员工列表和详情可读手机号、姓名与掩码字段 `id_number_masked`，不返回身份证号完整值或密码。`PATCH /admin/users/{id}/` 仅接受 `business_role`、`department_id`、`team_id`、`is_active`；拒绝姓名、手机号、身份证号、密码以及 `manager_id`。不提供 Web 密码重置接口。
 - 部门详情读取负责人、下属团队和成员；团队详情读取所属部门、负责人和成员。没有启用负责人的 `manager`/`leader` 关系返回 `null`。资源 PATCH 可更新 `name`、`description`，或单独更新 `is_active`；列表开关只提交 `is_active`，详情编辑表单只提交 `name`、`description`。团队 PATCH 不接受 `department_id`。
