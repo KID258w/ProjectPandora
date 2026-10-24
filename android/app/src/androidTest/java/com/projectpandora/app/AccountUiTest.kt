@@ -57,7 +57,7 @@ class AccountUiTest {
         compose.onNodeWithText("进入潘多拉").performScrollTo().performClick()
         screenshot("02-login")
         compose.onNodeWithText("登录").performScrollTo().performClick()
-        compose.onNodeWithText("请输入账号").assertIsDisplayed()
+        compose.onNodeWithText("请输入手机号").assertIsDisplayed()
         compose.onNodeWithTag("account").performTextInput("chenning")
         compose.onNodeWithText("登录").performScrollTo().performClick()
         compose.onNodeWithText("请输入密码").assertIsDisplayed()

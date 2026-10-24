@@ -55,13 +55,12 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 | 刷新令牌 | `POST /api/v1/admin/auth/token/refresh/` | 刷新管理端令牌 |
 | 当前管理员 | `GET /api/v1/admin/me/` | 返回管理账号资料及管理权限 |
 | 管理首页 | `GET /api/v1/admin/dashboard/` | 返回账号、组织、重要事项等管理统计；不汇总任务和日志 |
-| 部门列表/创建 | `GET, POST /api/v1/admin/departments/` | 列出或创建部门 |
-| 部门详情/更新 | `GET, PATCH /api/v1/admin/departments/{id}/` | 查看或修改部门名称、说明、状态等 |
-| 团队列表/创建 | `GET, POST /api/v1/admin/teams/` | 列出或创建团队；创建时指定所属部门 |
-| 团队详情/更新 | `GET, PATCH /api/v1/admin/teams/{id}/` | 修改团队、所属部门或状态 |
-| 员工账号列表/创建 | `GET, POST /api/v1/admin/users/` | 查询或录入业务账号、姓名、业务角色和组织归属 |
-| 员工账号详情/更新 | `GET, PATCH /api/v1/admin/users/{id}/` | 修改姓名、角色、部门/团队、启用状态 |
-| 重置员工密码 | `POST /api/v1/admin/users/{id}/reset-password/` | 重置登录密码；初始密码如何交付待定 |
+| 部门列表/创建 | `GET, POST /api/v1/admin/departments/` | 管理员查看（含停用项）或创建部门；列表承担启停操作入口 |
+| 部门详情/更新 | `GET, PATCH /api/v1/admin/departments/{id}/` | 详情提供负责人、下属团队和成员只读信息；PATCH 只改名称、说明 |
+| 团队列表/创建 | `GET, POST /api/v1/admin/teams/` | 查看或创建团队；创建时指定启用部门；列表承担启停操作入口 |
+| 团队详情/更新 | `GET, PATCH /api/v1/admin/teams/{id}/` | 详情提供所属部门、负责人和成员只读信息；PATCH 只改名称、说明 |
+| 员工账号列表/创建 | `GET, POST /api/v1/admin/users/` | 按姓名/手机号、身份、组织和状态筛选；创建需姓名、手机号、身份证号及组织身份，自动启用并一次性返回初始密码 |
+| 员工账号详情/更新 | `GET, PATCH /api/v1/admin/users/{id}/` | 查看脱敏个人资料；PATCH 只改业务身份、部门/团队归属和启用状态 |
 | 公司重要事项列表/创建 | `GET, POST /api/v1/admin/company-items/` | 查询或新建事项草稿 |
 | 事项详情/更新 | `GET, PATCH /api/v1/admin/company-items/{id}/` | 编辑标题、摘要、正文、附件等 |
 | 发布/下线事项 | `POST /api/v1/admin/company-items/{id}/publish/`、`.../offline/` | 发布或下线事项；发布数量最多 10 条 |
@@ -69,7 +68,17 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 | 上传事项附件 | `POST /api/v1/admin/company-items/{id}/attachments/` | 可选；附件存储方案和限制待定 |
 | 审计记录 | `GET /api/v1/admin/audit-logs/` | 按时间、管理员、模块筛选审计记录；只读 |
 
-建议管理端用户查询支持 `keyword`（姓名/账号）、`department_id`、`team_id`、`business_role`、`is_active` 等筛选；团队查询支持 `department_id`。禁用部门/团队前由后端校验不得仍有启用的下级组织或成员。管理端账号体系与业务账号的具体存储方式（独立用户表或同一认证表加账号类型约束）在数据库实现前确定。
+Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `username` 接收手机号，要求身份证号，自动启用账号并只在本次成功响应返回后端生成的初始密码。下文的员工筛选/更新、组织维护和 App 自助资料修改仍是 Issue2 目标，实施前不代表已经上线：列表保留停用对象供管理员查询，但用于员工身份/组织调整的候选项只返回启用员工、部门和团队；用户筛选支持姓名或手机号关键词、`department_id`、`team_id`、`business_role`、`is_active`。组织负责人在员工管理界面通过员工业务身份和组织归属调整，不提供组织详情页直接换负责人或独立负责人写接口。停用部门/团队前后端都要校验没有仍启用的下级组织或成员。团队的所属部门仅在创建时指定。手机号继续使用现有唯一 `username` 字段存储；App 登录 JSON 的 `username` 字段不改名，业务账号的值为手机号。
+
+### 2.1 Issue2 账号与组织管理目标契约（尚未实现）
+
+本节是 Issue2 的目标契约；不得将其误认为当前 Issue #6 API 已支持。现有接口路径尽量沿用，新增字段和行为在后端实施时同步到 Swagger。
+
+- 管理员员工列表和详情可读手机号、姓名与掩码字段 `id_number_masked`，不返回身份证号完整值或密码。`PATCH /admin/users/{id}/` 仅接受 `business_role`、`department_id`、`team_id`、`is_active`；拒绝姓名、手机号、身份证号、密码以及 `manager_id`。不提供 Web 密码重置接口。
+- 部门详情读取负责人、下属团队和成员；团队详情读取所属部门、负责人和成员。没有启用负责人的 `manager`/`leader` 关系返回 `null`。资源 PATCH 可更新 `name`、`description`，或单独更新 `is_active`；列表开关只提交 `is_active`，详情编辑表单只提交 `name`、`description`。团队 PATCH 不接受 `department_id`。
+- 每个部门最多一名启用部门经理，每个团队最多一名启用团队长；负责人允许为空。调整负责人须先撤销原负责人的负责人身份或停用原账号，再调整新负责人的身份及组织归属；已有启用负责人的组织不得再接收第二名启用负责人。后端不自动指定接任者；直属上级 `manager_id` 由后端维护，负责人空缺时允许受影响下属暂时无直属上级，新负责人启用后重建对应关系。
+- 停用组织前仍有启用下级对象时拒绝停用。已停用员工、部门和团队不得作为身份/归属选择器的候选项；管理列表仍可筛选、查看及重新启用。
+- App `GET /api/v1/app/me/` 不返回完整身份证号。`PATCH /api/v1/app/me/` 允许员工本人修改 `display_name`、手机号（请求字段仍为 `username`，成功后更新登录标识）和 `id_number`，不接受身份、组织、直属上级或启用状态。App 密码修改 API 路径与凭据校验字段待接口设计阶段确定；MVP 不要求短信验证，密码找回流程未定。
 
 ## 3. Android 业务端 API
 
@@ -79,8 +88,9 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 |---|---|
 | `POST /api/v1/app/auth/token/` | 业务账号登录 |
 | `POST /api/v1/app/auth/token/refresh/` | 刷新业务端令牌 |
-| `GET /api/v1/app/me/` | 当前用户姓名、业务角色、部门/团队、直属上级等 |
-| `PATCH /api/v1/app/me/` | 修改允许本人维护的个人资料字段 |
+| `GET /api/v1/app/me/` | 当前用户姓名、手机号、业务角色、部门/团队、直属上级等；不返回完整身份证号 |
+| `PATCH /api/v1/app/me/` | 员工本人修改姓名、手机号、身份证号；手机号更新现有 `username` 登录标识 |
+| App 修改本人密码 | 接口路径和凭据校验字段待定；由员工本人调用，不提供 Web 重置入口 |
 | `GET /api/v1/app/home/` | 聚合首页四卡摘要及最近日志摘要；每卡最多 5 条 |
 | `GET /api/v1/app/company-items/` | 已发布的公司重要事项列表，最多 10 条 |
 | `GET /api/v1/app/company-items/{id}/` | 公司重要事项详情 |
@@ -384,7 +394,7 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
         "id": 10,
         "name": "产品部",
         "description": "产品研发",
-        "status": "active"
+        "is_active": true
       }
     ]
   },
@@ -413,7 +423,7 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
     "id": 10,
     "name": "产品部",
     "description": "产品研发",
-    "status": "active",
+    "is_active": true,
     "created_at": "2026-10-11T10:00:00+08:00"
   },
   "requestId": "<uuid>"
@@ -434,9 +444,12 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
     "id": 10,
     "name": "产品部",
     "description": "产品研发",
-    "status": "active",
-    "teams_count": 2,
-    "active_users_count": 8
+    "is_active": true,
+    "manager": null,
+    "teams": [],
+    "members": [],
+    "teams_count": 0,
+    "active_users_count": 0
   },
   "requestId": "<uuid>"
 }
@@ -462,7 +475,7 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
     "id": 10,
     "name": "产品部",
     "description": "产品与体验设计部",
-    "status": "active",
+    "is_active": true,
     "updated_at": "2026-10-11T10:10:00+08:00"
   },
   "requestId": "<uuid>"
@@ -488,7 +501,7 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
         "id": 21,
         "name": "客户端组",
         "department_id": 10,
-        "status": "active"
+        "is_active": true
       }
     ]
   },
@@ -519,7 +532,7 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
     "name": "客户端组",
     "department_id": 10,
     "description": "安卓与 Web 客户端",
-    "status": "active"
+    "is_active": true
   },
   "requestId": "<uuid>"
 }
@@ -541,21 +554,23 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
     "department_id": 10,
     "department_name": "产品部",
     "description": "安卓与 Web 客户端",
-    "status": "active",
-    "active_users_count": 4
+    "is_active": true,
+    "leader": null,
+    "members": [],
+    "active_users_count": 0
   },
   "requestId": "<uuid>"
 }
 ```
 
-#### PATCH /api/v1/admin/teams/21/
+#### PATCH /api/v1/admin/teams/21/（Issue2 目标；仅名称和说明）
 
 **请求 JSON**
 
 ```json
 {
-  "department_id": 10,
-  "status": "inactive"
+  "name": "客户端研发组",
+  "description": "安卓与 Web 客户端"
 }
 ```
 
@@ -567,10 +582,10 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
   "message": "success",
   "data": {
     "id": 21,
-    "name": "客户端组",
+    "name": "客户端研发组",
     "department_id": 10,
     "description": "安卓与 Web 客户端",
-    "status": "inactive",
+    "is_active": true,
     "updated_at": "2026-10-11T10:10:00+08:00"
   },
   "requestId": "<uuid>"
@@ -594,8 +609,9 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
     "results": [
       {
         "id": 42,
-        "username": "zhangsan",
+        "username": "13800000001",
         "display_name": "张三",
+        "id_number_masked": "***************1234",
         "business_role": "employee",
         "department_id": 10,
         "team_id": 21,
@@ -607,19 +623,18 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 }
 ```
 
-#### POST /api/v1/admin/users/
+#### POST /api/v1/admin/users/（Issue1 账号创建对齐；已实现）
 
 **请求 JSON**
 
 ```json
 {
-  "username": "zhangsan",
-  "initial_password": "临时密码",
+  "username": "13800000001",
+  "id_number": "<身份证号>",
   "display_name": "张三",
   "business_role": "employee",
   "department_id": 10,
-  "team_id": 21,
-  "manager_id": 31
+  "team_id": 21
 }
 ```
 
@@ -627,22 +642,26 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 42,
-    "username": "zhangsan",
+  "username": "13800000001",
     "display_name": "张三",
     "account_type": "business",
     "business_role": "employee",
     "department_id": 10,
     "team_id": 21,
     "manager_id": 31,
-    "is_active": true
+    "is_active": true,
+    "id_number_masked": "***************1234",
+    "initial_password": "<仅本次响应返回的强随机初始密码>"
   },
   "requestId": "<uuid>"
 }
 ```
+
+客户端不得提交 `password`、`is_active` 或 `manager_id`。后端只保存密码哈希；成功响应设置 `Cache-Control: no-store`、`Pragma: no-cache` 和 `Expires: 0`。初始密码仅出现在这次创建响应，不写入后续读取、日志或审计数据。
 
 #### GET /api/v1/admin/users/42/
 
@@ -656,12 +675,13 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
   "message": "success",
   "data": {
     "id": 42,
-    "username": "zhangsan",
+    "username": "13800000001",
     "display_name": "张三",
     "business_role": "employee",
     "department_id": 10,
     "team_id": 21,
     "manager_id": 31,
+    "id_number_masked": "***************1234",
     "is_active": true,
     "created_at": "2026-10-11T10:00:00+08:00"
   },
@@ -669,13 +689,14 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 }
 ```
 
-#### PATCH /api/v1/admin/users/42/
+#### PATCH /api/v1/admin/users/42/（Issue2 目标；覆盖旧草案）
 
 **请求 JSON**
 
 ```json
 {
-  "display_name": "张三",
+  "business_role": "employee",
+  "department_id": 10,
   "team_id": 22,
   "is_active": true
 }
@@ -689,7 +710,7 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
   "message": "success",
   "data": {
     "id": 42,
-    "username": "zhangsan",
+    "username": "13800000001",
     "display_name": "张三",
     "business_role": "employee",
     "department_id": 10,
@@ -701,30 +722,7 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 }
 ```
 
-#### POST /api/v1/admin/users/42/reset-password/
-
-**请求 JSON**
-
-```json
-{
-  "new_password": "新临时密码"
-}
-```
-
-**响应 JSON**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "user_id": 42,
-    "password_reset": true,
-    "changed_at": "2026-10-11T10:20:00+08:00"
-  },
-  "requestId": "<uuid>"
-}
-```
+Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码由员工本人通过 App 修改；自助密码修改的具体路径和凭据校验字段待接口设计时确定。
 
 #### GET /api/v1/admin/company-items/?status=published&page=1&page_size=20
 
@@ -995,7 +993,7 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 
 ```json
 {
-  "username": "zhangsan",
+    "username": "13800000001",
   "password": "示例密码"
 }
 ```
@@ -1011,7 +1009,7 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
     "refresh_token": "<app_refresh_token>",
     "user": {
       "id": 42,
-      "username": "zhangsan",
+      "username": "13800000001",
       "role": "employee",
       "display_name": "张三"
     }
@@ -1055,20 +1053,18 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
   "message": "success",
   "data": {
     "id": 42,
+    "username": "13800000001",
+    "account_type": "business",
     "display_name": "张三",
+    "id_number_masked": "***************1234",
     "business_role": "employee",
-    "department": {
-      "id": 10,
-      "name": "产品部"
-    },
-    "team": {
-      "id": 21,
-      "name": "客户端组"
-    },
-    "manager": {
-      "id": 31,
-      "display_name": "李经理"
-    }
+    "department_id": 10,
+    "department_name": "产品部",
+    "team_id": 21,
+    "team_name": "客户端组",
+    "manager_id": 31,
+    "manager_name": "李经理",
+    "is_active": true
   },
   "requestId": "<uuid>"
 }
@@ -1080,9 +1076,13 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 
 ```json
 {
-  "display_name": "张三"
+  "display_name": "张三",
+  "username": "13800000002",
+  "id_number": "<本人提交的有效身份证号>"
 }
 ```
+
+`username` 在此请求中表示员工的新手机号。后端必须校验手机号唯一后更新该业务用户的登录标识；该接口不接受业务身份、部门/团队、`manager_id`、`is_active` 或密码。读取当前用户资料时只返回身份证掩码，不返回 `id_number` 完整值。
 
 **响应 JSON**
 
@@ -1092,7 +1092,9 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
   "message": "success",
   "data": {
     "id": 42,
+    "username": "13800000002",
     "display_name": "张三",
+    "id_number_masked": "***************1234",
     "business_role": "employee",
     "department_name": "产品部",
     "team_name": "客户端组"

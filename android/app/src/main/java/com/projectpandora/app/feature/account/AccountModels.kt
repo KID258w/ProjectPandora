@@ -7,6 +7,7 @@ data class BusinessUser(
     val department: String? = null,
     val team: String? = null,
     val supervisor: String? = null,
+    val idNumberMasked: String? = null,
 ) {
     val organization: String
         get() = listOfNotNull(department, team).joinToString(" · ").ifEmpty { "公司" }
@@ -41,9 +42,9 @@ interface AccountRepository {
 enum class AccountStartupDestination { WELCOME, LOGIN, HOME }
 
 object AccountMessages {
-    const val INVALID_CREDENTIALS = "账号或密码错误；如果账号已停用，请联系管理员。"
+    const val INVALID_CREDENTIALS = "手机号或密码错误；如果账号已停用，请联系管理员。"
     const val SESSION_EXPIRED = "登录状态已过期，请重新登录。"
-    const val FORBIDDEN = "该账号无权使用 App，请联系管理员。"
+    const val FORBIDDEN = "该手机号对应的账号无权使用 App，请联系管理员。"
     const val NETWORK = "暂时无法连接服务器，请检查网络后重试。"
     const val SESSION_CHECK = "暂时无法验证登录状态，请检查网络或稍后重试。"
     const val SERVER = "服务暂时不可用，请稍后重试。"

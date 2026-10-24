@@ -1,7 +1,6 @@
 from collections.abc import Mapping
+from secrets import token_urlsafe
 
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
@@ -50,14 +49,30 @@ class UserSerializer(serializers.ModelSerializer):
     team_name = serializers.CharField(source="team.name", read_only=True, default=None)
     manager_id = serializers.IntegerField(read_only=True, allow_null=True)
     manager_name = serializers.CharField(source="manager.display_name", read_only=True, default=None)
+    id_number_masked = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "username", "account_type", "business_role", "display_name", "department_id", "department_name", "team_id", "team_name", "manager_id", "manager_name", "is_active"]
+        fields = ["id", "username", "account_type", "business_role", "display_name", "department_id", "department_name", "team_id", "team_name", "manager_id", "manager_name", "is_active", "id_number_masked"]
+
+    def get_id_number_masked(self, obj) -> str | None:
+        value = obj.id_number
+        if not value:
+            return None
+        if len(value) <= 4:
+            return "*" * len(value)
+        return "*" * (len(value) - 4) + value[-4:]
+
+
+class BusinessUserCreateResponseSerializer(UserSerializer):
+    initial_password = serializers.CharField(read_only=True, max_length=128)
+
+    class Meta(UserSerializer.Meta):
+        fields = UserSerializer.Meta.fields + ["initial_password"]
 
 
 class BusinessUserCreateSerializer(StrictInputMixin, serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, trim_whitespace=False, max_length=128)
+    id_number = serializers.CharField(write_only=True, trim_whitespace=True, max_length=64)
     display_name = serializers.CharField(max_length=100)
     business_role = serializers.ChoiceField(choices=User.Role.choices)
     department_id = serializers.PrimaryKeyRelatedField(source="department", queryset=Department.objects.all(), required=False, allow_null=True)
@@ -65,13 +80,13 @@ class BusinessUserCreateSerializer(StrictInputMixin, serializers.ModelSerializer
 
     class Meta:
         model = User
-        fields = ["username", "password", "display_name", "business_role", "department_id", "team_id", "is_active"]
+        fields = ["username", "id_number", "display_name", "business_role", "department_id", "team_id"]
         validators = []
 
     def validate(self, attrs):
         role = attrs["business_role"]
         department, team = attrs.get("department"), attrs.get("team")
-        is_active = attrs.get("is_active", True)
+        is_active = True
         if role == User.Role.FOUNDER:
             if department or team:
                 raise serializers.ValidationError("创始人不能指定部门或团队。")
@@ -100,14 +115,16 @@ class BusinessUserCreateSerializer(StrictInputMixin, serializers.ModelSerializer
             if manager is None:
                 raise serializers.ValidationError({"business_role": "请先录入启用的直属上级。"})
         attrs["manager"] = manager
-        try:
-            validate_password(attrs["password"], User(**{key: value for key, value in attrs.items() if key != "password"}))
-        except DjangoValidationError as exc:
-            raise serializers.ValidationError({"password": exc.messages}) from exc
         return attrs
 
     def create(self, validated_data):
-        return User.objects.create_user(account_type=User.AccountType.BUSINESS, **validated_data)
+        self.initial_password = token_urlsafe(12)
+        return User.objects.create_user(
+            account_type=User.AccountType.BUSINESS,
+            is_active=True,
+            password=self.initial_password,
+            **validated_data,
+        )
 
 
 class ScopedTokenSerializer(TokenObtainPairSerializer):

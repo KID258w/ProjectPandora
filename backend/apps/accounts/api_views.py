@@ -8,7 +8,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from apps.core.api import EnvelopeMixin, EnvelopeSchema, StandardPagination
 from .api_serializers import (
     AdminRefreshSerializer, AdminTokenSerializer, AppRefreshSerializer, AppTokenSerializer,
-    BusinessUserCreateSerializer, DepartmentSerializer, TeamSerializer, UserSerializer,
+    BusinessUserCreateResponseSerializer, BusinessUserCreateSerializer, DepartmentSerializer, TeamSerializer,
+    UserSerializer,
 )
 from .authentication import IsAdministrator, IsBusinessUser, ScopedJWTAuthentication
 from .models import Department, Team, User
@@ -100,7 +101,7 @@ class TeamListView(AdminListCreateView):
 
 @extend_schema_view(
     get=extend_schema(tags=["业务账号管理"], summary="业务用户列表", responses=UserSerializer(many=True)),
-    post=extend_schema(tags=["业务账号管理"], summary="录入业务用户", request=BusinessUserCreateSerializer, responses={201: UserSerializer}),
+    post=extend_schema(tags=["业务账号管理"], summary="录入业务用户", request=BusinessUserCreateSerializer, responses={201: BusinessUserCreateResponseSerializer}),
 )
 class UserListView(AdminListCreateView):
     queryset = User.objects.filter(account_type="business").select_related("department", "team", "manager").order_by("id")
@@ -114,6 +115,16 @@ class UserListView(AdminListCreateView):
                 serializer = self.get_serializer(data=request.data)
                 serializer.is_valid(raise_exception=True)
                 user = serializer.save()
-                return Response(UserSerializer(user).data, status=201)
+                response_data = BusinessUserCreateResponseSerializer(user).data
+                response_data["initial_password"] = serializer.initial_password
+                return Response(
+                    response_data,
+                    status=201,
+                    headers={
+                        "Cache-Control": "no-store, no-cache, max-age=0, private",
+                        "Pragma": "no-cache",
+                        "Expires": "0",
+                    },
+                )
         except IntegrityError as exc:
             raise serializers.ValidationError("账号或负责人已存在，请刷新后重试。") from exc

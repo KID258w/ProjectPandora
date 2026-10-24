@@ -51,7 +51,7 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
     fun login(account: String, password: String) {
         if (loading) return
         if (account.isBlank() || password.isEmpty()) {
-            error = if (account.isBlank()) "请输入账号" else "请输入密码"
+            error = if (account.isBlank()) "请输入手机号" else "请输入密码"
             return
         }
 

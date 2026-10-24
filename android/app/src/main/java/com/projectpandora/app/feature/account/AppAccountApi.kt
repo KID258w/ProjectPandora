@@ -41,6 +41,7 @@ data class AppUserResponse(
     @SerializedName("manager_id") val managerId: Long?,
     @SerializedName("manager_name") val managerName: String?,
     @SerializedName("is_active") val isActive: Boolean,
+    @SerializedName("id_number_masked") val idNumberMasked: String? = null,
 ) {
     fun toBusinessUser(): BusinessUser {
         val roleLabel = when (businessRole) {
@@ -57,6 +58,7 @@ data class AppUserResponse(
             department = departmentName,
             team = teamName,
             supervisor = managerName,
+            idNumberMasked = idNumberMasked,
         )
     }
 }

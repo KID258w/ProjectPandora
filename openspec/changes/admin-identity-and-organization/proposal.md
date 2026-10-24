@@ -1,27 +1,30 @@
 ## Why
 
-Pandora 的移动端业务流程依赖可靠的账号、角色和组织归属；当前没有统一的管理员维护入口，无法稳定创建用户、分配业务角色并确定其组织权限范围。需要先建立独立的 Web 管理基础，同时确保系统管理员不能借此查看或处理业务任务与员工日志。
+Issue #6 provides the initial administrator, organization, and App authentication foundation, but the agreed account-management behavior and the remaining Web/Android login details are not complete. Issue2 must align account creation with phone-number login and required identity data, then provide the organization and employee maintenance workflows needed by administrators without giving the Web console control over employee personal credentials.
 
 ## What Changes
 
-- 新增独立的管理员 Web 登录和管理工作台。
-- 支持部门、团队及负责人关系的新增、查看、编辑、启用和停用，并保留历史数据。
-- 支持创建和维护业务账号、重置密码、启停账号及配置唯一主要业务角色和组织归属。
-- 记录管理员的组织、账号和角色管理操作，供审计查询。
-- 明确管理员 Web/API 无权读取或操作业务任务和员工日志。
-- 公司十大重要事项管理由单独 change 负责，不纳入本变更。
+- Close Issue #1 residuals: align the Web employee form with phone-number login, require an identity number, remove password and activation inputs, show a one-time backend-generated initial password after creation, fix the organization menu disclosure icon, and change Android login wording from account to phone number.
+- Extend department and team maintenance with detail information, name/description editing, activation controls, and active-descendant safeguards. Department/team members and leaders are displayed read-only in organization details; team department placement is chosen at creation and is not editable later.
+- Extend employee management with filtering, masked identity-number display, activation controls, and server-validated changes to business role and department/team placement. Web cannot edit name, phone number, identity number, or password after creation and cannot reset passwords.
+- Use the existing unique `username` field as the business user's phone number. Require identity number when creating a new business account, encrypt it at rest, and avoid exposing its full value in ordinary Web or App profile reads.
+- Generate a strong random initial password on the backend, store only its password hash, automatically activate the new account, and return the plaintext once in the successful creation response for a non-cached Web result dialog. Exclude it from logs, browser storage, audit records, and later reads.
+- Allow zero or one active department manager per department and zero or one active team leader per team. Manage leader changes through employee role/placement changes; keep direct-report relationships server-owned and permit a temporary vacancy.
+- Allow employees to update their own name, phone number, identity number, and password in the Android App. No SMS verification is required for the MVP. Password recovery is not defined by this change.
 
 ## Capabilities
 
 ### New Capabilities
-- `admin-identity-and-organization`: 管理员身份、部门团队、业务账号与角色、组织范围及管理操作审计。
+- `admin-identity-and-organization`: Administrator identity, organization and employee management, account provisioning, and management-operation auditing.
 
 ### Modified Capabilities
 - None.
 
 ## Impact
 
-- Web 管理端登录、组织与人员管理页面及对应服务端接口。
-- 用户、管理员、角色、部门、团队和管理员操作记录的数据模型。
-- JWT/RBAC 授权及组织负责人变更、停用账号后的权限校验。
-- 依据 `docs/requirements/05-web-admin-console.md`；公司重要事项、任务和员工日志查看不属于本 change。
+- `docs/backend/api-design.md`, `docs/backend/database-design.md`, `docs/backend/account-provisioning.md`, `docs/requirements/05-web-admin-console.md`, the Issue #1 sections in `docs/android/account-login-ui.md` and `docs/web/account-management-ui.md`, and this OpenSpec change.
+- Backend account and organization models, migrations, validation, administrator APIs, App self-service APIs, and audit redaction.
+- Web organization and employee management, one-time initial-password presentation, and the organization navigation control.
+- Android login copy and employee self-service account/profile screens.
+- Existing `/api/v1/admin/users/`, `/api/v1/admin/users/{id}/`, `/api/v1/app/auth/token/`, and `/api/v1/app/me/` contracts need the Issue2 changes described in the design and API documents. The App login JSON key remains `username`; for business users its value becomes the current phone number.
+- Company-important-item management remains owned by its separate change. Task and employee-log data remain unavailable to administrators.

@@ -39,8 +39,10 @@ fun PersonalInfoScreen(user: BusinessUser, onBack: () -> Unit) {
         BackButton(onBack)
         PageTitle("个人资料")
         IdentityCard(user)
-        val rows = listOf("姓名" to user.name, "业务身份" to user.role, "部门" to (user.department ?: "—"),
-            "团队" to (user.team ?: "—"), "直属上级" to (user.supervisor ?: "—"))
+        val rows = listOf("姓名" to user.name, "手机号" to user.account,
+            "身份证号" to (user.idNumberMasked ?: "—"), "业务身份" to user.role,
+            "部门" to (user.department ?: "—"), "团队" to (user.team ?: "—"),
+            "直属上级" to (user.supervisor ?: "—"))
         Column(Modifier.fillMaxWidth().border(1.dp, C.Line, RoundedCornerShape(18.dp)).padding(horizontal = 16.dp)) {
             rows.forEachIndexed { index, (label, value) ->
                 Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {

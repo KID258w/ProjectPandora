@@ -107,7 +107,7 @@ fun LoginScreen(model: AccountViewModel, requiresLocalNetworkPermission: Boolean
         BrandHeader()
         Spacer(Modifier.height(24.dp))
         PageTitle("欢迎回来")
-        Text("使用管理员为你录入的业务账号登录", fontSize = 14.sp, color = C.Muted)
+        Text("使用管理员为你录入的手机号和密码登录", fontSize = 14.sp, color = C.Muted)
         model.error?.let { Note(it, C.ErrorPale, C.Error) }
         if (localNetworkPermissionDenied) {
             Note("需要允许本地网络访问，才能连接当前服务器。请在系统设置中授权后重试。", C.ErrorPale, C.Error)
@@ -122,9 +122,9 @@ fun LoginScreen(model: AccountViewModel, requiresLocalNetworkPermission: Boolean
             }
         }
         OutlinedTextField(account, { account = it; model.clearError(); localNetworkPermissionDenied = false }, Modifier.fillMaxWidth().testTag("account"),
-            label = { Text("账号") }, singleLine = true, enabled = !model.loading,
-            isError = model.error == "请输入账号", shape = RoundedCornerShape(12.dp),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Next))
+            label = { Text("手机号") }, placeholder = { Text("请输入手机号") }, singleLine = true, enabled = !model.loading,
+            isError = model.error == "请输入手机号", shape = RoundedCornerShape(12.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next))
         OutlinedTextField(password, { password = it; model.clearError(); localNetworkPermissionDenied = false }, Modifier.fillMaxWidth().testTag("password"),
             label = { Text("密码") }, singleLine = true, enabled = !model.loading,
             isError = model.error == "请输入密码", shape = RoundedCornerShape(12.dp),
@@ -139,7 +139,7 @@ fun LoginScreen(model: AccountViewModel, requiresLocalNetworkPermission: Boolean
         Text("密码可通过右侧显示按钮查看", fontSize = 12.sp, color = C.Muted)
         PrimaryButton(if (model.loading) "正在登录…" else "登录", submit, enabled = !model.loading)
         if (model.loading) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("login_loading"), color = C.Orange)
-        Text("账号由管理员统一创建。登录遇到问题？\n请联系本单位管理员。", fontSize = 12.sp, lineHeight = 20.sp, color = C.Muted)
+        Text("手机号由管理员统一录入。登录遇到问题？\n请联系本单位管理员。", fontSize = 12.sp, lineHeight = 20.sp, color = C.Muted)
         Spacer(Modifier.height(76.dp))
         Text("让每一项工作，都有清晰的进展。", fontSize = 12.sp, color = C.Muted)
     }

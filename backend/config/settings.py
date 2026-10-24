@@ -1,15 +1,29 @@
 """Django settings for the Pandora backend scaffold."""
 
+import base64
+import hashlib
 import os
 from pathlib import Path
 
+from cryptography.fernet import Fernet
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key-change-before-deploy")
 DEBUG = os.getenv("DJANGO_DEBUG", "True").strip().lower() in {"1", "true", "yes", "on"}
+IDENTITY_NUMBER_ENCRYPTION_KEY = os.getenv("IDENTITY_NUMBER_ENCRYPTION_KEY", "").strip()
+if not IDENTITY_NUMBER_ENCRYPTION_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured("IDENTITY_NUMBER_ENCRYPTION_KEY is required when DEBUG is disabled.")
+    derived_key = hashlib.sha256(f"ProjectPandora:id-number:{SECRET_KEY}".encode("utf-8")).digest()
+    IDENTITY_NUMBER_ENCRYPTION_KEY = base64.urlsafe_b64encode(derived_key).decode("ascii")
+try:
+    Fernet(IDENTITY_NUMBER_ENCRYPTION_KEY.encode("ascii"))
+except (UnicodeEncodeError, TypeError, ValueError) as exc:
+    raise ImproperlyConfigured("IDENTITY_NUMBER_ENCRYPTION_KEY must be a URL-safe base64 Fernet key.") from exc
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")

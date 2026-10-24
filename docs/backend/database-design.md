@@ -2,17 +2,19 @@
 
 ## Issue #6 已落地的数据模型
 
-本节是本次迁移的真实结构，后文其余模块仍为目标设计。初始化与旧数据库升级见 [账号录入契约](account-provisioning.md)。
+本节记录 Issue #6 已落地及 Issue1 账号创建对齐后的真实结构，后文其余模块仍为目标设计。初始化与旧数据库升级见 [账号录入契约](account-provisioning.md)。
 
 | 实体/表 | 字段和关系 |
 | --- | --- |
-| User / accounts_user | 保留 AbstractUser 字段；username 全局唯一、password 仅存 Django 哈希、display_name 最长 100；account_type 为 admin/business；business_role 为 founder/department_manager/team_leader/employee（管理员为空字符串）；department_id、team_id、manager_id 可空外键；is_active 沿用 Django 字段 |
+| User / accounts_user | 保留 AbstractUser 字段；username 全局唯一（业务账号保存手机号，管理员保留管理员用户名）、password 仅存 Django 哈希、display_name 最长 100；id_number 使用加密文本字段并允许历史记录暂空；account_type 为 admin/business；business_role 为 founder/department_manager/team_leader/employee（管理员为空字符串）；department_id、team_id、manager_id 可空外键；is_active 沿用 Django 字段 |
 | Department / accounts_department | id BigAutoField；name 最长 100 且全局唯一；description 文本默认空；created_at 自动时间 |
 | Team / accounts_team | id BigAutoField；name 最长 100；description 默认空；department_id 必填外键；created_at 自动时间；(department_id, name) 唯一 |
 
 用户和组织外键均为 PROTECT，manager_id 自关联 User，反向 direct_reports；本次没有删除 API。数据库 CHECK 校验账号类型与角色组织形状：管理员/创始人没有组织和上级，部门经理有部门/上级无团队，团队长/员工有部门、团队和上级。数据库条件唯一约束保证一位在职创始人、一部门一在职经理、一团队一在职团队长；唯一约束和录入重复校验都过滤 `is_active=True`，停用账号不占用名额。跨表的团队部门一致、上级身份/组织和启用状态由服务端录入校验，manager_id 不接收客户端输入。业务账号不会自动获得 Django staff/superuser 权限。
 
-本次没有组织 status、负责人替换/停用工作流、审计表。下文的 status、审计、调动历史和其它业务实体不能视为已落地。当前 SQLite 支持条件唯一约束；未来 MySQL 迁移必须先重新设计等价约束并验证，不能直接假定条件索引可用。0002 对已有普通账号会停止迁移，要求显式规划身份数据迁移，不会自动提升权限；0003 将创始人/部门经理/团队长唯一约束改为仅对 `is_active=True` 生效。
+本次没有组织 status、负责人替换/停用工作流、审计表。下文的 status、审计、调动历史和其它业务实体不能视为已落地。当前 SQLite 支持条件唯一约束；未来 MySQL 迁移必须先重新设计等价约束并验证，不能直接假定条件索引可用。0002 对已有普通账号会停止迁移，要求显式规划身份数据迁移，不会自动提升权限；0003 将创始人/部门经理/团队长唯一约束改为仅对 `is_active=True` 生效；0004 增加可空的加密 `id_number` 字段，历史账号可暂空，新建账号由 API 强制必填。
+
+`id_number` 由自定义 `EncryptedTextField` 以 Fernet token 加密后写入数据库；应用进程通过 `IDENTITY_NUMBER_ENCRYPTION_KEY` 环境变量读取独立密钥。生产环境必须配置并妥善备份该密钥；密钥丢失后，已存储的身份证号将无法解密。开发环境在 `DEBUG=True` 且未配置独立密钥时，使用开发 `SECRET_KEY` 派生密钥。
 
 > 维护说明：由项目统筹与后端同学共同维护，作为数据库设计的持续文档。本文描述逻辑模型，字段、类型、索引及历史策略可随实现和需求协商调整。  
 > 当前后端使用 SQLite 开发；下表按 Django ORM 可实现、未来可迁移 MySQL 的关系模型设计。  
@@ -61,26 +63,27 @@ erDiagram
 
 ### 3.1 用户、部门与团队
 
-当前代码已有 `accounts.User(AbstractUser)`，实际只额外增加了 `display_name`；下列业务组织字段为拟议扩展，尚未落地。
+Issue #6 已落地的用户、部门和团队结构见本文件开头的实际模型摘要。下表用于记录业务关系；Issue2 尚未实现的字段和约束会明确标记为目标，不能据此认为迁移已完成。
 
 #### `accounts_user`（Django 自定义用户表）
 
 | 字段 | 类型 / 约束 | 说明 |
 |---|---|---|
 | `id` | 主键 | 用户 ID |
-| `username` | 唯一字符串 | 登录账号；继承 Django `AbstractUser` |
+| `username` | 唯一字符串 | 唯一登录标识；管理员账号保留管理员用户名，业务账号保存手机号 |
 | `password` | 哈希字符串 | Django 密码哈希，不存明文 |
-| `display_name` | 字符串，必填 | 姓名/显示名称；当前模型允许空，正式账号建议必填 |
+| `display_name` | 字符串 | 姓名/显示名称；创建业务账号时必填 |
+| `id_number` | 加密文本（Issue1 账号创建对齐已实现） | 加密后持久化；新建业务账号由 API 强制必填；历史账号可在经核实的补录期间暂空；完整值不得出现在普通列表、App 资料读取、日志或审计响应中 |
 | `account_type` | 枚举 | `business` / `admin`；若拆分认证模型则无需该列 |
 | `business_role` | 可空枚举 | `founder`、`department_manager`、`team_leader`、`employee`；管理员账号为空 |
 | `department_id` | 可空外键 | 业务用户所属部门 |
 | `team_id` | 可空外键 | 所属团队；需与部门归属一致 |
-| `manager_id` | 可空自关联外键 | 直属上级；用于审批和下属范围，组织变更规则需明确 |
-| `is_active` | 布尔值 | 启用/停用账号；停用不物理删除 |
+| `manager_id` | 可空自关联外键 | 直属上级；负责人空缺或变更过渡期间允许为空；由服务端按当前身份与组织关系维护 |
+| `is_active` | 布尔值 | 启用/停用账号；新建业务账号自动启用；停用不物理删除 |
 | `date_joined` | 时间 | 创建/加入时间，继承字段 |
 | `created_at`, `updated_at` | 时间 | 业务资料创建、修改时间 |
 
-约束：业务角色为单一主角色；负责人必须是自己或符合当前派发规则的下属。创始人无上级审批。不要将 Django `is_staff` 与业务角色混为一谈。若把管理员和业务用户拆成独立模型，登录名唯一范围、密码重置和审计外键需一并调整。
+目标约束：业务角色为单一主角色，且与部门/团队归属联动校验。每个部门最多一名启用部门经理、每个团队最多一名启用团队长，允许暂时没有启用负责人；负责人由用户的业务角色和组织归属推导，不在部门或团队上增加重复负责人外键。负责人撤销或停用后，受影响的直接下属可暂时没有 `manager_id`；新负责人启用后由服务端重建直属关系。不要将 Django `is_staff` 与业务角色混为一谈。`username` 仍全局唯一，不另增重复的账号或手机号字段。
 
 #### `organization_department`
 
@@ -89,7 +92,7 @@ erDiagram
 | `id` | 主键 | 部门 ID |
 | `name` | 字符串，唯一 | 部门名称 |
 | `description` | 可空文本 | 说明 |
-| `status` | 枚举 | `active` / `inactive` |
+| `is_active` | 布尔值（Issue2 目标） | 部门启用/停用；新部门默认启用 |
 | `created_at`, `updated_at` | 时间 | 维护时间 |
 
 #### `organization_team`
@@ -100,10 +103,10 @@ erDiagram
 | `department_id` | 外键，必填 | 所属部门 |
 | `name` | 字符串 | 团队名称；是否要求部门内唯一待实现时确定 |
 | `description` | 可空文本 | 说明 |
-| `status` | 枚举 | `active` / `inactive` |
+| `is_active` | 布尔值（Issue2 目标） | 团队启用/停用；新团队默认启用 |
 | `created_at`, `updated_at` | 时间 | 维护时间 |
 
-停用组织前校验没有启用的下级组织或成员；组织与账号采用停用保留历史，不物理删除。是否需要独立组织调动历史表待定。
+Issue2 组织约束：部门停用前不得存在启用的下属团队或成员；团队停用前不得存在启用成员。停用对象保留在管理列表中供查看和重新启用，但不作为员工转移或身份分配的候选项。团队归属部门只在创建时设置，Issue2 不提供迁移团队所属部门的操作。组织与账号采用停用保留历史，不物理删除。是否需要独立组织调动历史表未作决定，本次不新增该表。
 
 ### 3.2 任务与处理记录
 

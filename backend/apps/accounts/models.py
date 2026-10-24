@@ -3,6 +3,8 @@ from django.contrib.auth.models import UserManager
 from django.db import models
 from django.db.models import Q
 
+from .fields import EncryptedTextField
+
 
 class Department(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -42,6 +44,7 @@ class User(AbstractUser):
         EMPLOYEE = "employee", "员工"
 
     display_name = models.CharField(max_length=100, blank=True)
+    id_number = EncryptedTextField(null=True, blank=True)
     account_type = models.CharField(max_length=16, choices=AccountType.choices, default=AccountType.BUSINESS)
     business_role = models.CharField(max_length=24, choices=Role.choices, blank=True, default="")
     department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.PROTECT, related_name="users")
