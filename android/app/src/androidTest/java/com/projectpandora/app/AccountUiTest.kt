@@ -152,6 +152,76 @@ class AccountUiTest {
         compose.onNodeWithText("公司").assertExists()
     }
 
+    @Test fun profileCanUpdateNameAndIdentityTogetherAndShowMaskedValue() {
+        repository.seed(TestUsers.EMPLOYEE.copy(idNumberMasked = "**************5678"))
+        start()
+        compose.onNodeWithText("我的").performClick()
+        compose.onNodeWithText("个人资料").performScrollTo().performClick()
+        compose.onNodeWithText("**************5678").assertIsDisplayed()
+        compose.onNodeWithText("编辑个人资料").performScrollTo().performClick()
+        compose.onNodeWithTag("profile_name").performTextReplacement("陈宁新")
+        compose.onNodeWithTag("profile_id_number").performTextInput("110101199001011234")
+        compose.onNodeWithTag("save_personal_info").performScrollTo().performClick()
+
+        compose.onAllNodesWithText("资料已保存").onFirst().assertIsDisplayed()
+        assertEquals("陈宁新", repository.lastProfileUpdate?.displayName)
+        assertEquals("110101199001011234", repository.lastProfileUpdate?.idNumber)
+        assertNull("Unchanged phone must be omitted", repository.lastProfileUpdate?.username)
+        assertEquals("**************1234", repository.latestUser?.idNumberMasked)
+        compose.onNodeWithText("返回个人资料").performClick()
+        compose.onAllNodesWithText("陈宁新").onFirst().assertIsDisplayed()
+        compose.onNodeWithText("**************1234").assertIsDisplayed()
+
+        val persistedValues = context.getSharedPreferences("pandora_secure_session", Context.MODE_PRIVATE).all.values
+            .filterIsInstance<String>()
+        assertTrue(persistedValues.none { it.contains("110101199001011234") })
+        val ordinaryPreferences = context.getSharedPreferences("pandora_preferences", Context.MODE_PRIVATE).all.values
+            .filterIsInstance<String>()
+        assertTrue(ordinaryPreferences.none { it.contains("110101199001011234") })
+    }
+
+    @Test fun passwordFormShowsBackendErrorAndDoesNotPersistPlaintext() {
+        repository.seed(TestUsers.EMPLOYEE)
+        repository.passwordFailure = AccountException(AccountFailureKind.VALIDATION, "当前密码不正确。")
+        start()
+        compose.onNodeWithText("我的").performClick()
+        compose.onNodeWithText("个人资料").performScrollTo().performClick()
+        compose.onNodeWithText("修改密码").performScrollTo().performClick()
+        compose.onNodeWithTag("current_password").performTextInput("wrong-current")
+        compose.onNodeWithTag("new_password").performTextInput("new-secret-938!")
+        compose.onNodeWithTag("new_password_confirm").performTextInput("new-secret-938!")
+        compose.onNodeWithTag("submit_password_change").performScrollTo().performClick()
+        compose.waitUntil(10000) {
+            compose.onAllNodesWithText("当前密码不正确。").fetchSemanticsNodes().isNotEmpty()
+        }
+        assertEquals("wrong-current", repository.lastPasswordChange?.currentPassword)
+        assertEquals("new-secret-938!", repository.lastPasswordChange?.newPassword)
+
+        val persistedValues = context.getSharedPreferences("pandora_secure_session", Context.MODE_PRIVATE).all.values
+            .filterIsInstance<String>()
+        assertTrue(persistedValues.none { it.contains("wrong-current") || it.contains("new-secret-938!") })
+        val ordinaryPreferences = context.getSharedPreferences("pandora_preferences", Context.MODE_PRIVATE).all.values
+            .filterIsInstance<String>()
+        assertTrue(ordinaryPreferences.none { it.contains("wrong-current") || it.contains("new-secret-938!") })
+    }
+
+    @Test fun expiredSessionDuringProfileUpdateReturnsToLoginAndClearsLocalState() {
+        repository.seed(TestUsers.EMPLOYEE)
+        repository.profileFailure = AccountException(AccountFailureKind.SESSION_EXPIRED, AccountMessages.SESSION_EXPIRED)
+        start()
+        compose.onNodeWithText("我的").performClick()
+        compose.onNodeWithText("个人资料").performScrollTo().performClick()
+        compose.onNodeWithText("编辑个人资料").performScrollTo().performClick()
+        compose.onNodeWithTag("profile_name").performTextReplacement("陈宁新")
+        compose.onNodeWithTag("save_personal_info").performScrollTo().performClick()
+
+        compose.waitUntil(10000) {
+            compose.onAllNodesWithText("欢迎回来").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText(AccountMessages.SESSION_EXPIRED).assertIsDisplayed()
+        assertFalse(repository.hasStoredSession())
+    }
+
     @Test fun tokenStorageEncryptsAndClearsCredentialsWithoutSavingPasswords() {
         val tokens = StoredTokens("access-secret-value", "refresh-secret-value")
         val store = AndroidTokenStorage(context)
@@ -179,6 +249,13 @@ private object TestUsers {
 
 private class FakeAccountRepository(initialUser: BusinessUser? = null) : AccountRepository {
     private var user: BusinessUser? = initialUser
+    val latestUser get() = user
+    var lastProfileUpdate: ProfileUpdateRequest? = null
+        private set
+    var lastPasswordChange: PasswordChangeRequest? = null
+        private set
+    var profileFailure: AccountException? = null
+    var passwordFailure: AccountException? = null
     var restoreFailuresRemaining = 0
 
     override fun hasStoredSession(): Boolean = user != null
@@ -196,6 +273,25 @@ private class FakeAccountRepository(initialUser: BusinessUser? = null) : Account
         }
         user = TestUsers.EMPLOYEE
         return user!!
+    }
+
+    override suspend fun updateProfile(request: ProfileUpdateRequest): BusinessUser {
+        profileFailure?.let { throw it }
+        lastProfileUpdate = request
+        val current = checkNotNull(user)
+        user = current.copy(
+            account = request.username ?: current.account,
+            name = request.displayName ?: current.name,
+            idNumberMasked = request.idNumber?.let {
+                if (it.length <= 4) "*".repeat(it.length) else "*".repeat(it.length - 4) + it.takeLast(4)
+            } ?: current.idNumberMasked,
+        )
+        return user!!
+    }
+
+    override suspend fun changePassword(request: PasswordChangeRequest) {
+        lastPasswordChange = request
+        passwordFailure?.let { throw it }
     }
 
     override fun logout() {

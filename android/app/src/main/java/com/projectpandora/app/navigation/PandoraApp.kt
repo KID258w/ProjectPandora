@@ -29,6 +29,10 @@ private object AccountRoute {
     const val WELCOME = "welcome"
     const val LOGIN = "login"
     const val INFO = "personal-info"
+    const val EDIT_INFO = "edit-personal-info"
+    const val PROFILE_SAVED = "personal-info-saved"
+    const val CHANGE_PASSWORD = "change-password"
+    const val PASSWORD_CHANGED = "password-changed"
     const val NOTIFICATIONS = "notifications"
     const val HELP = "help"
 }
@@ -69,8 +73,15 @@ fun PandoraApp(
             restoreState = true
         }
     }
-    LaunchedEffect(user, route) {
-        if (user != null && route == AccountRoute.LOGIN) resetTo(MainTab.HOME.route)
+    LaunchedEffect(user, route, model.initializing) {
+        if (user != null && route == AccountRoute.LOGIN) {
+            resetTo(MainTab.HOME.route)
+        } else if (
+            user == null && !model.initializing &&
+            route !in setOf(AccountRoute.LAUNCH, AccountRoute.WELCOME, AccountRoute.LOGIN)
+        ) {
+            resetTo(AccountRoute.LOGIN)
+        }
     }
     LaunchedEffect(route, model.initializing, model.startupDestination) {
         if (route == AccountRoute.LAUNCH && !model.initializing) {
@@ -105,7 +116,57 @@ fun PandoraApp(
                             { nav.navigate(AccountRoute.HELP) }, { model.logout(); resetTo(AccountRoute.LOGIN) })
                     }
                 }
-                composable(AccountRoute.INFO) { user?.let { PersonalInfoScreen(it) { nav.popBackStack() } } }
+                composable(AccountRoute.INFO) {
+                    user?.let {
+                        PersonalInfoScreen(
+                            user = it,
+                            onBack = { nav.popBackStack() },
+                            onEdit = { nav.navigate(AccountRoute.EDIT_INFO) },
+                            onChangePassword = { nav.navigate(AccountRoute.CHANGE_PASSWORD) },
+                        )
+                    }
+                }
+                composable(AccountRoute.EDIT_INFO) {
+                    LaunchedEffect(Unit) { model.clearProfileError() }
+                    user?.let {
+                        EditPersonalInfoScreen(
+                            user = it,
+                            saving = model.profileSaving,
+                            error = model.profileError,
+                            onBack = { nav.popBackStack() },
+                            onErrorDismiss = model::clearProfileError,
+                            onSave = { request ->
+                                model.updateProfile(request) {
+                                    nav.navigate(AccountRoute.PROFILE_SAVED) {
+                                        popUpTo(AccountRoute.EDIT_INFO) { inclusive = true }
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
+                composable(AccountRoute.PROFILE_SAVED) {
+                    user?.let { ProfileSavedScreen(it) { nav.popBackStack(AccountRoute.INFO, false) } }
+                }
+                composable(AccountRoute.CHANGE_PASSWORD) {
+                    LaunchedEffect(Unit) { model.clearPasswordError() }
+                    ChangePasswordScreen(
+                        saving = model.passwordSaving,
+                        error = model.passwordError,
+                        onBack = { nav.popBackStack() },
+                        onErrorDismiss = model::clearPasswordError,
+                        onChangePassword = { request ->
+                            model.changePassword(request) {
+                                nav.navigate(AccountRoute.PASSWORD_CHANGED) {
+                                    popUpTo(AccountRoute.CHANGE_PASSWORD) { inclusive = true }
+                                }
+                            }
+                        },
+                    )
+                }
+                composable(AccountRoute.PASSWORD_CHANGED) {
+                    PasswordChangedScreen { nav.popBackStack(AccountRoute.INFO, false) }
+                }
                 composable(AccountRoute.NOTIFICATIONS) { NotificationScreen(preferences) { nav.popBackStack() } }
                 composable(AccountRoute.HELP) { HelpScreen { nav.popBackStack() } }
                 composable(AppRoute.TASK_CENTER) { Column { BackButton { nav.popBackStack() }; TaskCenterScreen() } }

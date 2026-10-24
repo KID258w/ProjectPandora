@@ -16,11 +16,7 @@ class ApiAccountRepository(
         return try {
             fetchCurrentUser()
         } catch (failure: AccountException) {
-            val resolved = resolveRefreshFailure(failure)
-            if (resolved.kind == AccountFailureKind.SESSION_EXPIRED || resolved.kind == AccountFailureKind.FORBIDDEN) {
-                tokenStorage.clear()
-            }
-            throw resolved
+            throw resolveProtectedFailure(failure)
         }
     }
 
@@ -48,6 +44,29 @@ class ApiAccountRepository(
 
     override fun logout() = tokenStorage.clear()
 
+    override suspend fun updateProfile(request: ProfileUpdateRequest): BusinessUser {
+        val hasUpdate = request.displayName != null || request.username != null || request.idNumber != null
+        if (!hasUpdate) {
+            throw AccountException(AccountFailureKind.VALIDATION, "请至少修改一项个人资料。")
+        }
+        return try {
+            this.request(isLogin = false) { api.updateCurrentUser(request) }.data.toBusinessUser()
+        } catch (failure: AccountException) {
+            throw resolveProtectedFailure(failure)
+        }
+    }
+
+    override suspend fun changePassword(request: PasswordChangeRequest) {
+        try {
+            val changed = this.request(isLogin = false) { api.changePassword(request) }.data.passwordChanged
+            if (!changed) {
+                throw AccountException(AccountFailureKind.SERVER, AccountMessages.PASSWORD_CHANGE_FAILED)
+            }
+        } catch (failure: AccountException) {
+            throw resolveProtectedFailure(failure)
+        }
+    }
+
     private suspend fun fetchCurrentUser(): BusinessUser {
         val user = request(isLogin = false) { api.currentUser() }.data
         if (user.accountType != "business" || !user.isActive) {
@@ -61,6 +80,14 @@ class ApiAccountRepository(
         // The authenticator clears tokens after a definitive refresh rejection. If they remain,
         // refresh could not be verified because of a transport or temporary server failure.
         return AccountException(AccountFailureKind.NETWORK, AccountMessages.SESSION_CHECK, failure)
+    }
+
+    private fun resolveProtectedFailure(failure: AccountException): AccountException {
+        val resolved = resolveRefreshFailure(failure)
+        if (resolved.kind == AccountFailureKind.SESSION_EXPIRED || resolved.kind == AccountFailureKind.FORBIDDEN) {
+            tokenStorage.clear()
+        }
+        return resolved
     }
 
     private fun restorePreviousSession(tokens: StoredTokens?) {

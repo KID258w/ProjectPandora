@@ -5,6 +5,7 @@ import retrofit2.Call
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 
 data class ApiEnvelope<T>(
@@ -17,6 +18,22 @@ data class ApiEnvelope<T>(
 data class LoginRequest(
     val username: String,
     val password: String,
+)
+
+data class ProfileUpdateRequest(
+    @SerializedName("display_name") val displayName: String? = null,
+    val username: String? = null,
+    @SerializedName("id_number") val idNumber: String? = null,
+)
+
+data class PasswordChangeRequest(
+    @SerializedName("current_password") val currentPassword: String,
+    @SerializedName("new_password") val newPassword: String,
+    @SerializedName("new_password_confirm") val newPasswordConfirm: String,
+)
+
+data class PasswordChangeResponse(
+    @SerializedName("password_changed") val passwordChanged: Boolean,
 )
 
 data class RefreshRequest(
@@ -59,6 +76,7 @@ data class AppUserResponse(
             team = teamName,
             supervisor = managerName,
             idNumberMasked = idNumberMasked,
+            isActive = isActive,
         )
     }
 }
@@ -69,6 +87,12 @@ interface AppAccountApi {
 
     @GET("api/v1/app/me/")
     suspend fun currentUser(): Response<ApiEnvelope<AppUserResponse>>
+
+    @PATCH("api/v1/app/me/")
+    suspend fun updateCurrentUser(@Body request: ProfileUpdateRequest): Response<ApiEnvelope<AppUserResponse>>
+
+    @POST("api/v1/app/me/password/")
+    suspend fun changePassword(@Body request: PasswordChangeRequest): Response<ApiEnvelope<PasswordChangeResponse>>
 }
 
 interface AppTokenRefreshApi {

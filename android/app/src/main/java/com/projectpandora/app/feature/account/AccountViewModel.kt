@@ -21,6 +21,14 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
         private set
     var canRetrySessionValidation by mutableStateOf(false)
         private set
+    var profileSaving by mutableStateOf(false)
+        private set
+    var profileError by mutableStateOf<String?>(null)
+        private set
+    var passwordSaving by mutableStateOf(false)
+        private set
+    var passwordError by mutableStateOf<String?>(null)
+        private set
 
     init {
         viewModelScope.launch {
@@ -80,6 +88,62 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
         error = null
     }
 
+    fun clearProfileError() {
+        profileError = null
+    }
+
+    fun clearPasswordError() {
+        passwordError = null
+    }
+
+    fun updateProfile(request: ProfileUpdateRequest, onSuccess: () -> Unit) {
+        if (profileSaving) return
+        profileSaving = true
+        profileError = null
+        viewModelScope.launch {
+            try {
+                user = repository.updateProfile(request)
+                onSuccess()
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: AccountException) {
+                if (failure.kind == AccountFailureKind.SESSION_EXPIRED || failure.kind == AccountFailureKind.FORBIDDEN) {
+                    clearSessionAfterProtectedRequestFailure(failure)
+                } else {
+                    profileError = failure.message ?: AccountMessages.PROFILE_UPDATE_FAILED
+                }
+            } catch (_: Exception) {
+                profileError = AccountMessages.PROFILE_UPDATE_FAILED
+            } finally {
+                profileSaving = false
+            }
+        }
+    }
+
+    fun changePassword(request: PasswordChangeRequest, onSuccess: () -> Unit) {
+        if (passwordSaving) return
+        passwordSaving = true
+        passwordError = null
+        viewModelScope.launch {
+            try {
+                repository.changePassword(request)
+                onSuccess()
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: AccountException) {
+                if (failure.kind == AccountFailureKind.SESSION_EXPIRED || failure.kind == AccountFailureKind.FORBIDDEN) {
+                    clearSessionAfterProtectedRequestFailure(failure)
+                } else {
+                    passwordError = failure.message ?: AccountMessages.PASSWORD_CHANGE_FAILED
+                }
+            } catch (_: Exception) {
+                passwordError = AccountMessages.PASSWORD_CHANGE_FAILED
+            } finally {
+                passwordSaving = false
+            }
+        }
+    }
+
     fun retrySessionValidation() {
         if (loading || !canRetrySessionValidation) return
 
@@ -114,6 +178,14 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
         repository.logout()
         user = null
         error = null
+        canRetrySessionValidation = false
+    }
+
+    private fun clearSessionAfterProtectedRequestFailure(failure: AccountException) {
+        repository.logout()
+        user = null
+        startupDestination = AccountStartupDestination.LOGIN
+        error = failure.message
         canRetrySessionValidation = false
     }
 
