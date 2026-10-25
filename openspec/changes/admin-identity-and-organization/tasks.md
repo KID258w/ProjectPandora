@@ -21,10 +21,10 @@
 
 ## PR 2 — Web management (may proceed in parallel with Android after backend contract is set)
 
-- [ ] 2.1 Add department/team detail screens and list activation controls. Keep details read-only for leaders, members, and team parent; allow editing name/description only. Display “无” when an organization has no active leader.
-- [ ] 2.2 Add employee filters and detail display for name, phone, masked identity number, role, organization, and status. Allow only role, department/team placement, and activation changes; do not add personal-data editing or password reset.
-- [ ] 2.3 Add active-only employee and organization choices, show backend validation for leader conflicts and activation guards, and connect the management summary/audit view to their APIs without exposing tasks or employee logs.
-- [ ] 2.4 Update `docs/web/account-management-ui.md`; verify the rendered field boundaries, list/detail interactions, and API request payloads.
+- [x] 2.1 Add department/team detail screens and list activation controls. Keep details read-only for leaders, members, and team parent; allow editing name/description only. Display “无” when an organization has no active leader.
+- [x] 2.2 Add employee filters and detail display for name, phone, masked identity number, role, organization, and status. Allow only role, department/team placement, and activation changes; do not add personal-data editing or password reset.
+- [x] 2.3 Add active-only employee and organization choices, show backend validation for leader conflicts and activation guards, and connect the management summary/audit view to their APIs without exposing tasks or employee logs.
+- [x] 2.4 Update `docs/web/account-management-ui.md`; verify the rendered field boundaries, list/detail interactions, and API request payloads.
 
 ## PR 3 — Android App self-service (may proceed in parallel with Web after backend contract is set)
 

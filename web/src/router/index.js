@@ -5,6 +5,7 @@ import DashboardView from '../views/DashboardView.vue'
 import DepartmentsView from '../views/DepartmentsView.vue'
 import TeamsView from '../views/TeamsView.vue'
 import UsersView from '../views/UsersView.vue'
+import AuditLogsView from '../views/AuditLogsView.vue'
 import PlaceholderView from '../views/PlaceholderView.vue'
 import { ACCESS_TOKEN_KEY } from '../services/http'
 
@@ -24,7 +25,7 @@ const router = createRouter({
         { path: 'organization/users', name: 'users', component: UsersView, meta: { title: '用户管理', requiresAdmin: true } },
         { path: 'organization/roles', name: 'roles', component: PlaceholderView, meta: { title: '角色与权限' } },
         { path: 'company-items', name: 'company-items', component: PlaceholderView, meta: { title: '公司重要事项' } },
-        { path: 'system/audit-logs', name: 'audit-logs', component: PlaceholderView, meta: { title: '管理员操作记录' } },
+        { path: 'system/audit-logs', name: 'audit-logs', component: AuditLogsView, meta: { title: '管理员操作记录', requiresAdmin: true } },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/login' },
