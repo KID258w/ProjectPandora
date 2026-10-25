@@ -34,25 +34,55 @@ fun IdentityCard(user: BusinessUser) {
 }
 
 @Composable
-fun PersonalInfoScreen(user: BusinessUser, onBack: () -> Unit) {
+fun PersonalInfoScreen(
+    user: BusinessUser,
+    onBack: () -> Unit,
+    onEdit: () -> Unit,
+    onChangePassword: () -> Unit,
+) {
     PageColumn {
         BackButton(onBack)
         PageTitle("个人资料")
         IdentityCard(user)
-        val rows = listOf("姓名" to user.name, "手机号" to user.account,
-            "身份证号" to (user.idNumberMasked ?: "—"), "业务身份" to user.role,
-            "部门" to (user.department ?: "—"), "团队" to (user.team ?: "—"),
-            "直属上级" to (user.supervisor ?: "—"))
-        Column(Modifier.fillMaxWidth().border(1.dp, C.Line, RoundedCornerShape(18.dp)).padding(horizontal = 16.dp)) {
-            rows.forEachIndexed { index, (label, value) ->
-                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(label, Modifier.width(90.dp), fontSize = 14.sp, color = C.Muted)
-                    Text(value, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                }
-                if (index != rows.lastIndex) HorizontalDivider(color = C.Line)
-            }
+        PageTitle("基本资料", small = true)
+        val personalRows = listOf(
+            "姓名" to user.name,
+            "手机号" to user.account,
+            "身份证号" to (user.idNumberMasked ?: "未设置"),
+        )
+        InfoRows(personalRows)
+        PageTitle("组织信息 · 只读", small = true)
+        val organizationRows = listOf(
+            "业务身份" to user.role,
+            "部门" to (user.department ?: "—"),
+            "团队" to (user.team ?: "—"),
+            "直属上级" to (user.supervisor ?: "—"),
+            "账号状态" to if (user.isActive) "启用中" else "已停用",
+        )
+        InfoRows(organizationRows)
+        PrimaryButton("编辑个人资料", onEdit, Modifier.testTag("edit_personal_info"))
+        OutlinedButton(
+            onClick = onChangePassword,
+            modifier = Modifier.fillMaxWidth().height(52.dp).testTag("change_password"),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = C.Ink),
+        ) {
+            Text("修改密码", fontSize = 16.sp, fontWeight = FontWeight.Medium)
         }
-        Note("组织信息由管理员维护，如需变更请联系管理员。")
+        Note("业务身份、部门、团队、直属上级和账号状态由管理员维护。")
+    }
+}
+
+@Composable
+private fun InfoRows(rows: List<Pair<String, String>>) {
+    Column(Modifier.fillMaxWidth().border(1.dp, C.Line, RoundedCornerShape(18.dp)).padding(horizontal = 16.dp)) {
+        rows.forEachIndexed { index, (label, value) ->
+            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, Modifier.width(90.dp), fontSize = 14.sp, color = C.Muted)
+                Text(value, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+            if (index != rows.lastIndex) HorizontalDivider(color = C.Line)
+        }
     }
 }
 

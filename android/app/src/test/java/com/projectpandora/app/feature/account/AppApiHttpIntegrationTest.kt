@@ -166,7 +166,116 @@ class AppApiHttpIntegrationTest {
         }
     }
 
-    private data class RecordedRequest(val path: String, val authorization: String?, val body: String)
+    @Test fun profileUpdateUsesPatchAndNewPhoneIsUsedOnNextLogin() {
+        var currentProfile = profile
+        val server = LocalApiServer { request ->
+            when {
+                request.path == "/api/v1/app/auth/token/" -> HttpResult(
+                    200,
+                    envelope("""{"access":"access-${request.body.hashCode()}","refresh":"refresh"}"""),
+                )
+                request.path == "/api/v1/app/me/" && request.method == "GET" -> HttpResult(200, envelope(currentProfile))
+                request.path == "/api/v1/app/me/" && request.method == "PATCH" -> {
+                    if (request.body.contains("\"display_name\":\"新姓名\"")) {
+                        currentProfile = currentProfile.replace("张三", "新姓名")
+                    }
+                    if (request.body.contains("\"username\":\"13800138421\"")) {
+                        currentProfile = currentProfile.replace("employee01", "13800138421")
+                    }
+                    if (request.body.contains("\"id_number\":")) {
+                        currentProfile = currentProfile.replace(
+                            "\"is_active\":true",
+                            "\"is_active\":true,\"id_number_masked\":\"**************1234\"",
+                        )
+                    }
+                    HttpResult(200, envelope(currentProfile))
+                }
+                else -> HttpResult(404, envelope("{}"))
+            }
+        }
+        try {
+            val tokens = MemoryTokenStorage()
+            val repository = ApiAccountRepository(ApiClient.createAppAccountApi(tokens, server.baseUrl), tokens)
+            val original = runBlocking { repository.login("employee01", "Pandora-test-938!") }
+            val updatedNameAndId = runBlocking {
+                repository.updateProfile(ProfileUpdateRequest(displayName = "新姓名", idNumber = "110101199001011234"))
+            }
+
+            assertEquals("张三", original.name)
+            assertEquals("新姓名", updatedNameAndId.name)
+            assertEquals("**************1234", updatedNameAndId.idNumberMasked)
+            val patches = server.requests.filter { it.method == "PATCH" }
+            assertEquals(1, patches.size)
+            assertEquals("Bearer ${tokens.read()?.access}", patches[0].authorization)
+            assertTrue(patches[0].body.contains("\"display_name\":\"新姓名\""))
+            assertTrue(patches[0].body.contains("\"id_number\":\"110101199001011234\""))
+            assertFalse(patches[0].body.contains("username"))
+
+            val updatedPhone = runBlocking {
+                repository.updateProfile(ProfileUpdateRequest(username = "13800138421"))
+            }
+            assertEquals("13800138421", updatedPhone.account)
+            assertTrue(patches[0].body.contains("display_name") && patches[0].body.contains("id_number"))
+            val phonePatch = server.requests.filter { it.method == "PATCH" }[1]
+            assertTrue(phonePatch.body.contains("\"username\":\"13800138421\""))
+            assertFalse(phonePatch.body.contains("display_name"))
+            assertFalse(phonePatch.body.contains("id_number"))
+
+            repository.logout()
+            runBlocking { repository.login("13800138421", "Pandora-test-938!") }
+            val loginBodies = server.requests.filter { it.path == "/api/v1/app/auth/token/" }.map { it.body }
+            assertTrue(loginBodies.any { it.contains("\"username\":\"employee01\"") })
+            assertTrue(loginBodies.any { it.contains("\"username\":\"13800138421\"") })
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test fun passwordUpdateUsesTheSelfServiceEndpointAndDisplaysBackendValidation() {
+        val server = LocalApiServer { request ->
+            when {
+                request.path == "/api/v1/app/me/password/" && request.method == "POST" -> HttpResult(
+                    if (request.body.contains("\"current_password\":\"correct-current\"")) 200 else 400,
+                    if (request.body.contains("\"current_password\":\"correct-current\"")) {
+                        envelope("""{"password_changed":true}""")
+                    } else {
+                        """{"code":400,"message":"请求失败","data":{"current_password":["当前密码不正确。"]},"requestId":"r"}"""
+                    },
+                )
+                else -> HttpResult(404, envelope("{}"))
+            }
+        }
+        try {
+            val tokens = MemoryTokenStorage().apply { write(StoredTokens("access", "refresh")) }
+            val repository = ApiAccountRepository(ApiClient.createAppAccountApi(tokens, server.baseUrl), tokens)
+            runBlocking {
+                repository.changePassword(PasswordChangeRequest("correct-current", "new-secret", "new-secret"))
+            }
+            assertEquals(StoredTokens("access", "refresh"), tokens.read())
+
+            var failure: AccountException? = null
+            try {
+                runBlocking {
+                    repository.changePassword(PasswordChangeRequest("wrong-current", "new-secret", "new-secret"))
+                }
+            } catch (expected: AccountException) {
+                failure = expected
+            }
+
+            assertTrue(server.requests.all { it.method == "POST" })
+            assertTrue(server.requests.all { it.path == "/api/v1/app/me/password/" })
+            assertTrue(server.requests.all { it.authorization == "Bearer access" })
+            assertTrue(server.requests.any { it.body.contains("\"current_password\":\"wrong-current\"") })
+            assertTrue(server.requests.any { it.body.contains("\"new_password_confirm\":\"new-secret\"") })
+            assertEquals(AccountFailureKind.VALIDATION, failure?.kind)
+            assertEquals("当前密码不正确。", failure?.message)
+            assertEquals(StoredTokens("access", "refresh"), tokens.read())
+        } finally {
+            server.close()
+        }
+    }
+
+    private data class RecordedRequest(val method: String, val path: String, val authorization: String?, val body: String)
     private data class HttpResult(val status: Int, val body: String)
 
     private class LocalApiServer(
@@ -184,6 +293,7 @@ class AppApiHttpIntegrationTest {
         private fun respond(exchange: HttpExchange) {
             val body = exchange.requestBody.bufferedReader(Charsets.UTF_8).use { it.readText() }
             val request = RecordedRequest(
+                method = exchange.requestMethod,
                 path = exchange.requestURI.path,
                 authorization = exchange.requestHeaders.getFirst("Authorization"),
                 body = body,

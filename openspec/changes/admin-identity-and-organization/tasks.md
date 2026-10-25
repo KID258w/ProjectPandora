@@ -28,11 +28,11 @@
 
 ## PR 3 — Android App self-service (may proceed in parallel with Web after backend contract is set)
 
-- [ ] 3.1 Add a personal-profile form for the employee's own name, phone, and identity number; allow name and identity number to be saved together or independently in one form, with no automatic synchronization.
-- [ ] 3.2 Show the identity number only in masked form when reading the profile; allow the employee to re-enter the full value to change it. Refresh displayed profile values after a successful update.
-- [ ] 3.3 Add current-password, new-password, and confirmation inputs for self-service password change; show backend validation feedback and never persist the plaintext password.
-- [ ] 3.4 Preserve the existing phone login request field `username`; after a phone update, verify subsequent login uses the new phone. Keep role, organization, manager, and activation read-only in the App.
-- [ ] 3.5 Update `docs/android/account-login-ui.md`; verify profile edits, atomic name/identity updates, password validation, and phone login behavior.
+- [x] 3.1 Add a personal-profile form for the employee's own name, phone, and identity number; allow name and identity number to be saved together or independently in one form, with no automatic synchronization.
+- [x] 3.2 Show the identity number only in masked form when reading the profile; allow the employee to re-enter the full value to change it. Refresh displayed profile values after a successful update.
+- [x] 3.3 Add current-password, new-password, and confirmation inputs for self-service password change; show backend validation feedback and never persist the plaintext password.
+- [x] 3.4 Preserve the existing phone login request field `username`; after a phone update, verify subsequent login uses the new phone. Keep role, organization, manager, and activation read-only in the App.
+- [x] 3.5 Update `docs/android/account-login-ui.md`; verify profile edits, atomic name/identity updates, password validation, and phone login behavior.
 
 ## Acceptance across the three PRs
 

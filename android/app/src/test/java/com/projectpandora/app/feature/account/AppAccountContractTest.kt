@@ -155,6 +155,92 @@ class AppAccountContractTest {
         assertEquals("refresh", offlineTokens.read()?.refresh)
     }
 
+    @Test fun profilePatchReturnsFreshMaskedProfileAndOmitsUnchangedFields() = runBlocking {
+        val api = FakeAppAccountApi().apply {
+            updatedUserResponse = Response.success(
+                envelope(user("employee").copy(username = "13800138421", displayName = "新姓名", idNumberMasked = "************1234")),
+            )
+        }
+        val tokens = MemoryTokenStorage().apply { write(StoredTokens("access", "refresh")) }
+        val result = ApiAccountRepository(api, tokens).updateProfile(
+            ProfileUpdateRequest(displayName = "新姓名", username = "13800138421"),
+        )
+
+        assertEquals(ProfileUpdateRequest(displayName = "新姓名", username = "13800138421"), api.updateRequest)
+        assertEquals("13800138421", result.account)
+        assertEquals("************1234", result.idNumberMasked)
+        val body = Gson().toJson(api.updateRequest)
+        assertTrue(body.contains("\"display_name\":\"新姓名\""))
+        assertTrue(body.contains("\"username\":\"13800138421\""))
+        assertFalse(body.contains("id_number"))
+        assertEquals(StoredTokens("access", "refresh"), tokens.read())
+    }
+
+    @Test fun identityNumberCanBeUpdatedWithoutSubmittingNameOrPhone() = runBlocking {
+        val api = FakeAppAccountApi()
+        val tokens = MemoryTokenStorage().apply { write(StoredTokens("access", "refresh")) }
+        val request = ProfileUpdateRequest(idNumber = "110101199001011234")
+
+        ApiAccountRepository(api, tokens).updateProfile(request)
+
+        assertEquals(request, api.updateRequest)
+        val body = Gson().toJson(api.updateRequest)
+        assertTrue(body.contains("\"id_number\":\"110101199001011234\""))
+        assertFalse(body.contains("display_name"))
+        assertFalse(body.contains("username"))
+    }
+
+    @Test fun rejectedRefreshDuringProfileUpdateClearsSessionAndReportsExpiry() = runBlocking {
+        val tokens = MemoryTokenStorage().apply { write(StoredTokens("expired-access", "expired-refresh")) }
+        val api = FakeAppAccountApi().apply {
+            onUpdateCall = { tokens.clear() }
+            updatedUserResponse = Response.error(
+                401,
+                """{"code":401,"message":"请求失败","data":{"detail":"令牌已过期"},"requestId":"r"}"""
+                    .toResponseBody("application/json".toMediaType()),
+            )
+        }
+
+        var failure: AccountException? = null
+        try {
+            ApiAccountRepository(api, tokens).updateProfile(ProfileUpdateRequest(displayName = "新姓名"))
+        } catch (expected: AccountException) {
+            failure = expected
+        }
+
+        assertEquals(AccountFailureKind.SESSION_EXPIRED, failure?.kind)
+        assertEquals(AccountMessages.SESSION_EXPIRED, failure?.message)
+        assertNull(tokens.read())
+    }
+
+    @Test fun passwordChangeUsesBackendContractAndSurfacesValidationDetail() = runBlocking {
+        val api = FakeAppAccountApi()
+        val tokens = MemoryTokenStorage().apply { write(StoredTokens("access", "refresh")) }
+        val request = PasswordChangeRequest("old-password", "new-password", "new-password")
+        ApiAccountRepository(api, tokens).changePassword(request)
+
+        assertEquals(request, api.passwordRequest)
+        val body = Gson().toJson(api.passwordRequest)
+        assertTrue(body.contains("\"current_password\":\"old-password\""))
+        assertTrue(body.contains("\"new_password_confirm\":\"new-password\""))
+        assertEquals(StoredTokens("access", "refresh"), tokens.read())
+
+        api.passwordResponse = Response.error(
+            400,
+            """{"code":400,"message":"请求失败","data":{"current_password":["当前密码不正确。"]},"requestId":"r"}"""
+                .toResponseBody("application/json".toMediaType()),
+        )
+        var failure: AccountException? = null
+        try {
+            ApiAccountRepository(api, tokens).changePassword(request)
+        } catch (expected: AccountException) {
+            failure = expected
+        }
+        assertEquals(AccountFailureKind.VALIDATION, failure?.kind)
+        assertEquals("当前密码不正确。", failure?.message)
+        assertEquals(StoredTokens("access", "refresh"), tokens.read())
+    }
+
     private fun user(role: String) = AppUserResponse(
         id = 1,
         username = "tester",
@@ -174,6 +260,11 @@ class AppAccountContractTest {
         var loginRequest: LoginRequest? = null
         var loginResponse: Response<ApiEnvelope<TokenResponse>> = Response.success(envelope(TokenResponse("access-secret", "refresh-secret")))
         var currentUserResponse: Response<ApiEnvelope<AppUserResponse>> = Response.success(envelope(user("employee")))
+        var updateRequest: ProfileUpdateRequest? = null
+        var updatedUserResponse: Response<ApiEnvelope<AppUserResponse>> = Response.success(envelope(user("employee")))
+        var passwordRequest: PasswordChangeRequest? = null
+        var passwordResponse: Response<ApiEnvelope<PasswordChangeResponse>> = Response.success(envelope(PasswordChangeResponse(true)))
+        var onUpdateCall: (() -> Unit)? = null
         var throwOnLogin: IOException? = null
         var throwOnCurrentUser: IOException? = null
         var onCurrentUserCall: (() -> Unit)? = null
@@ -188,6 +279,17 @@ class AppAccountContractTest {
             throwOnCurrentUser?.let { throw it }
             onCurrentUserCall?.invoke()
             return currentUserResponse
+        }
+
+        override suspend fun updateCurrentUser(request: ProfileUpdateRequest): Response<ApiEnvelope<AppUserResponse>> {
+            updateRequest = request
+            onUpdateCall?.invoke()
+            return updatedUserResponse
+        }
+
+        override suspend fun changePassword(request: PasswordChangeRequest): Response<ApiEnvelope<PasswordChangeResponse>> {
+            passwordRequest = request
+            return passwordResponse
         }
     }
 

@@ -8,6 +8,7 @@ data class BusinessUser(
     val team: String? = null,
     val supervisor: String? = null,
     val idNumberMasked: String? = null,
+    val isActive: Boolean = true,
 ) {
     val organization: String
         get() = listOfNotNull(department, team).joinToString(" · ").ifEmpty { "公司" }
@@ -36,6 +37,8 @@ interface AccountRepository {
     fun hasStoredSession(): Boolean
     suspend fun restore(): BusinessUser?
     suspend fun login(account: String, password: String): BusinessUser
+    suspend fun updateProfile(request: ProfileUpdateRequest): BusinessUser
+    suspend fun changePassword(request: PasswordChangeRequest)
     fun logout()
 }
 
@@ -49,4 +52,6 @@ object AccountMessages {
     const val SESSION_CHECK = "暂时无法验证登录状态，请检查网络或稍后重试。"
     const val SERVER = "服务暂时不可用，请稍后重试。"
     const val VALIDATION = "登录信息格式不正确，请检查后重试。"
+    const val PROFILE_UPDATE_FAILED = "个人资料保存失败，请稍后重试。"
+    const val PASSWORD_CHANGE_FAILED = "密码修改失败，请稍后重试。"
 }
