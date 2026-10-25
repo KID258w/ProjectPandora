@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { adminApi, fetchAllPages, getApiErrorMessage, unwrapResponse } from '../services/http'
+import { showOperationError } from '../services/feedback'
 
 const departments = ref([])
 const teams = ref([])
@@ -36,12 +37,12 @@ async function saveDetail() {
   try {
     detail.value = unwrapResponse(await adminApi.updateTeam(detail.value.id, { name: detail.value.name.trim(), description: detail.value.description?.trim() ?? '' }))
     ElMessage.success('团队信息已更新'); editing.value = false; await loadData()
-  } catch (error) { ElMessageBox.alert(getApiErrorMessage(error), '保存失败', { type: 'error' }) }
+  } catch (error) { showOperationError('团队信息未保存', getApiErrorMessage(error)) }
   finally { saving.value = false }
 }
 async function toggleActive(row, value) {
   try { await adminApi.updateTeam(row.id, { is_active: value }); ElMessage.success(value ? '团队已启用' : '团队已停用'); await loadData() }
-  catch (error) { ElMessageBox.alert(getApiErrorMessage(error), '团队状态未更改', { type: 'error' }); await loadData() }
+  catch (error) { showOperationError('团队状态未更改', getApiErrorMessage(error)); await loadData() }
 }
 
 async function loadData() {
@@ -64,7 +65,7 @@ async function createTeam() {
   try {
     unwrapResponse(await adminApi.createTeam({ name: form.name.trim(), department_id: form.department_id, description: form.description.trim() }))
     ElMessage.success('团队创建成功'); dialogVisible.value = false; await loadData()
-  } catch (error) { ElMessage.error(getApiErrorMessage(error)) }
+  } catch (error) { showOperationError('团队未创建', getApiErrorMessage(error)) }
   finally { submitting.value = false }
 }
 watch(filterDepartment, async (departmentId) => {

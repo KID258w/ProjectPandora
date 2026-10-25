@@ -275,7 +275,10 @@ class DashboardView(VersionedMixin, APIView):
         })
 
 
-@extend_schema(tags=["管理审计"], summary="管理操作记录")
+@extend_schema(
+    tags=["管理审计"], summary="管理操作记录",
+    parameters=[OpenApiParameter("actor_id", int, required=False, description="管理员用户 ID，必须为正整数。")],
+)
 class AuditLogListView(VersionedMixin, generics.ListAPIView):
     permission_classes = [IsAdministrator]
     serializer_class = AuditLogSerializer
@@ -293,6 +296,12 @@ class AuditLogListView(VersionedMixin, generics.ListAPIView):
         if end_date:
             queryset = queryset.filter(created_at__date__lte=_parse_date_param(end_date, "end_date"))
         if actor_id:
+            try:
+                actor_id = int(actor_id)
+            except (TypeError, ValueError) as exc:
+                raise serializers.ValidationError({"actor_id": "管理员 ID 必须是正整数。"}) from exc
+            if actor_id < 1 or actor_id > 2**63 - 1:
+                raise serializers.ValidationError({"actor_id": "管理员 ID 必须是正整数。"})
             queryset = queryset.filter(actor_id=actor_id)
         if module:
             queryset = queryset.filter(module=module)

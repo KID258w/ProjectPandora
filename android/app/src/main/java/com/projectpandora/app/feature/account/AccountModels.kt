@@ -54,4 +54,6 @@ object AccountMessages {
     const val VALIDATION = "登录信息格式不正确，请检查后重试。"
     const val PROFILE_UPDATE_FAILED = "个人资料保存失败，请稍后重试。"
     const val PASSWORD_CHANGE_FAILED = "密码修改失败，请稍后重试。"
+    const val PHONE_CHANGED_RELOGIN = "手机号已更新，请使用新手机号重新登录。"
+    const val PASSWORD_CHANGED_RELOGIN = "密码已修改，请使用新密码重新登录。"
 }

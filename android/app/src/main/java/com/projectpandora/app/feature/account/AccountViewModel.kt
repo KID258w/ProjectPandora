@@ -19,6 +19,8 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    var notice by mutableStateOf<String?>(null)
+        private set
     var canRetrySessionValidation by mutableStateOf(false)
         private set
     var profileSaving by mutableStateOf(false)
@@ -58,6 +60,7 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
 
     fun login(account: String, password: String) {
         if (loading) return
+        notice = null
         if (account.isBlank() || password.isEmpty()) {
             error = if (account.isBlank()) "请输入手机号" else "请输入密码"
             return
@@ -86,6 +89,7 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
 
     fun clearError() {
         error = null
+        notice = null
     }
 
     fun clearProfileError() {
@@ -102,8 +106,14 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
         profileError = null
         viewModelScope.launch {
             try {
-                user = repository.updateProfile(request)
-                onSuccess()
+                val previousPhone = user?.account
+                val updatedUser = repository.updateProfile(request)
+                if (request.username != null && updatedUser.account != previousPhone) {
+                    endSessionAfterCredentialChange(AccountMessages.PHONE_CHANGED_RELOGIN)
+                } else {
+                    user = updatedUser
+                    onSuccess()
+                }
             } catch (failure: CancellationException) {
                 throw failure
             } catch (failure: AccountException) {
@@ -120,14 +130,14 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
         }
     }
 
-    fun changePassword(request: PasswordChangeRequest, onSuccess: () -> Unit) {
+    fun changePassword(request: PasswordChangeRequest) {
         if (passwordSaving) return
         passwordSaving = true
         passwordError = null
         viewModelScope.launch {
             try {
                 repository.changePassword(request)
-                onSuccess()
+                endSessionAfterCredentialChange(AccountMessages.PASSWORD_CHANGED_RELOGIN)
             } catch (failure: CancellationException) {
                 throw failure
             } catch (failure: AccountException) {
@@ -178,6 +188,16 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
         repository.logout()
         user = null
         error = null
+        notice = null
+        canRetrySessionValidation = false
+    }
+
+    private fun endSessionAfterCredentialChange(message: String) {
+        repository.logout()
+        user = null
+        startupDestination = AccountStartupDestination.LOGIN
+        error = null
+        notice = message
         canRetrySessionValidation = false
     }
 

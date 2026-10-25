@@ -225,16 +225,6 @@ fun ProfileSavedScreen(user: BusinessUser, onReturn: () -> Unit) {
 }
 
 @Composable
-fun PasswordChangedScreen(onReturn: () -> Unit) {
-    SuccessScreen(
-        title = "密码已成功修改",
-        description = "你的新密码已保存。请妥善保管登录凭据。",
-        onReturn = onReturn,
-        action = "返回个人资料",
-    )
-}
-
-@Composable
 private fun SuccessScreen(
     title: String,
     description: String,

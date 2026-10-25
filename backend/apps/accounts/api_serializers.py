@@ -24,6 +24,17 @@ class StrictInputMixin:
         return super().to_internal_value(data)
 
 
+def _active_resource_summary(queryset, *, name_field, unit):
+    count = queryset.count()
+    if not count:
+        return None
+    rows = list(queryset.order_by(name_field, "pk").values_list("pk", name_field)[:5])
+    names = [name or f"编号 {pk}" for pk, name in rows]
+    if count > len(names):
+        names.append(f"另有 {count - len(names)} 个")
+    return f"{count}{unit}（{'、'.join(names)}）"
+
+
 def resolve_placement(role, department, team, is_active, exclude_pk=None, allow_missing_manager=False):
     """校验业务角色→组织归属形状、负责人唯一性，返回规范化后的 (manager, department, team)。
 
@@ -131,10 +142,23 @@ class DepartmentUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):
 
     def validate(self, attrs):
         if not attrs.get("is_active", self.instance.is_active):
-            if Team.objects.filter(department=self.instance, is_active=True).exists():
-                raise serializers.ValidationError({"is_active": "该部门仍有启用的下属团队，不能停用。"})
-            if User.objects.filter(account_type=User.AccountType.BUSINESS, department=self.instance, is_active=True).exists():
-                raise serializers.ValidationError({"is_active": "该部门仍有启用的成员，不能停用。"})
+            active_teams = _active_resource_summary(
+                Team.objects.filter(department=self.instance, is_active=True),
+                name_field="name", unit="个启用下属团队",
+            )
+            active_members = _active_resource_summary(
+                User.objects.filter(
+                    account_type=User.AccountType.BUSINESS,
+                    department=self.instance,
+                    is_active=True,
+                ),
+                name_field="display_name", unit="名启用成员",
+            )
+            blockers = [summary for summary in (active_teams, active_members) if summary]
+            if blockers:
+                raise serializers.ValidationError({
+                    "is_active": f"部门无法停用：仍有{'；'.join(blockers)}。请先停用相关团队或成员后重试。",
+                })
         return attrs
 
 
@@ -196,8 +220,18 @@ class TeamUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):
             if not self.instance.department.is_active:
                 raise serializers.ValidationError({"is_active": "所属部门已停用，不能启用团队。"})
         else:
-            if User.objects.filter(account_type=User.AccountType.BUSINESS, team=self.instance, is_active=True).exists():
-                raise serializers.ValidationError({"is_active": "该团队仍有启用的成员，不能停用。"})
+            active_members = _active_resource_summary(
+                User.objects.filter(
+                    account_type=User.AccountType.BUSINESS,
+                    team=self.instance,
+                    is_active=True,
+                ),
+                name_field="display_name", unit="名启用成员",
+            )
+            if active_members:
+                raise serializers.ValidationError({
+                    "is_active": f"团队无法停用：仍有{active_members}。请先停用相关成员后重试。",
+                })
         return attrs
 
 

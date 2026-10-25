@@ -43,10 +43,25 @@ export async function fetchAllPages(request, params = {}) {
 export function getApiErrorMessage(error) {
   const body = error.response?.data
   const details = body?.data
+  const fieldLabels = {
+    is_active: '状态',
+    business_role: '业务身份',
+    department_id: '所属部门',
+    team_id: '所属团队',
+    username: '手机号',
+    id_number: '身份证号',
+    display_name: '姓名',
+    name: '名称',
+    description: '说明',
+    current_password: '当前密码',
+    new_password: '新密码',
+    new_password_confirm: '新密码确认',
+  }
   const fieldMessages = details && typeof details === 'object'
     ? Object.entries(details).flatMap(([field, messages]) => {
         const values = Array.isArray(messages) ? messages : [messages]
-        return values.map((message) => `${field === 'non_field_errors' ? '' : `${field}: `}${message}`)
+        const label = field === 'non_field_errors' ? '' : `${fieldLabels[field] || field}：`
+        return values.map((message) => `${label}${message}`)
       })
     : []
   if (fieldMessages.length) return fieldMessages.join('；')

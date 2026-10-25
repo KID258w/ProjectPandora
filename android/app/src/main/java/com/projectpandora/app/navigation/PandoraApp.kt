@@ -32,7 +32,6 @@ private object AccountRoute {
     const val EDIT_INFO = "edit-personal-info"
     const val PROFILE_SAVED = "personal-info-saved"
     const val CHANGE_PASSWORD = "change-password"
-    const val PASSWORD_CHANGED = "password-changed"
     const val NOTIFICATIONS = "notifications"
     const val HELP = "help"
 }
@@ -155,17 +154,8 @@ fun PandoraApp(
                         error = model.passwordError,
                         onBack = { nav.popBackStack() },
                         onErrorDismiss = model::clearPasswordError,
-                        onChangePassword = { request ->
-                            model.changePassword(request) {
-                                nav.navigate(AccountRoute.PASSWORD_CHANGED) {
-                                    popUpTo(AccountRoute.CHANGE_PASSWORD) { inclusive = true }
-                                }
-                            }
-                        },
+                        onChangePassword = model::changePassword,
                     )
-                }
-                composable(AccountRoute.PASSWORD_CHANGED) {
-                    PasswordChangedScreen { nav.popBackStack(AccountRoute.INFO, false) }
                 }
                 composable(AccountRoute.NOTIFICATIONS) { NotificationScreen(preferences) { nav.popBackStack() } }
                 composable(AccountRoute.HELP) { HelpScreen { nav.popBackStack() } }

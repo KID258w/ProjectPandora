@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { adminApi, fetchAllPages, getApiErrorMessage, unwrapResponse } from '../services/http'
+import { showOperationError } from '../services/feedback'
 
 const departments = ref([])
 const teams = ref([])
@@ -49,12 +50,12 @@ async function saveDetail() {
   try {
     detail.value = unwrapResponse(await adminApi.updateDepartment(detail.value.id, { name: detail.value.name.trim(), description: detail.value.description?.trim() ?? '' }))
     ElMessage.success('部门信息已更新'); editing.value = false; await loadData()
-  } catch (error) { ElMessageBox.alert(getApiErrorMessage(error), '保存失败', { type: 'error' }) }
+  } catch (error) { showOperationError('部门信息未保存', getApiErrorMessage(error)) }
   finally { saving.value = false }
 }
 async function toggleActive(row, value) {
   try { await adminApi.updateDepartment(row.id, { is_active: value }); ElMessage.success(value ? '部门已启用' : '部门已停用'); await loadData() }
-  catch (error) { ElMessageBox.alert(getApiErrorMessage(error), '部门状态未更改', { type: 'error' }); await loadData() }
+  catch (error) { showOperationError('部门状态未更改', getApiErrorMessage(error)); await loadData() }
 }
 
 function openCreate() { Object.assign(form, { name: '', description: '' }); dialogVisible.value = true }
@@ -67,7 +68,7 @@ async function createDepartment() {
     ElMessage.success('部门创建成功')
     dialogVisible.value = false
     await loadData()
-  } catch (error) { ElMessage.error(getApiErrorMessage(error)) }
+  } catch (error) { showOperationError('部门未创建', getApiErrorMessage(error)) }
   finally { submitting.value = false }
 }
 onMounted(loadData)

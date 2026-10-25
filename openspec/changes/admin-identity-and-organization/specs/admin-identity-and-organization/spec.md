@@ -20,7 +20,7 @@ The system SHALL let administrators activate and deactivate departments and team
 
 #### Scenario: Administrator deactivates an organization with active descendants
 - **WHEN** a department has an active subordinate team or member, or a team has an active member
-- **THEN** the system rejects deactivation and returns a user-readable validation error
+- **THEN** the system rejects deactivation and returns a user-readable validation error naming the blocker type, count, and up to five blocking organization/member names
 
 #### Scenario: Administrator selects an organization for employee placement
 - **WHEN** the system provides department or team choices for employee placement
@@ -39,7 +39,7 @@ The system SHALL allow zero or one active Founder for the company, zero or one a
 
 #### Scenario: Administrator assigns a second active leader
 - **WHEN** an organization already has an active leader
-- **THEN** the system rejects the second active leader assignment without changing the existing leader
+- **THEN** the system rejects the second active leader assignment without changing the existing leader, and the Web form displays the backend reason in a persistent error dialog
 
 #### Scenario: Leader is revoked or deactivated
 - **WHEN** an administrator revokes or deactivates the active Founder, Department Manager, or Team Leader
@@ -70,7 +70,7 @@ The system SHALL allow zero or one active Founder for the company, zero or one a
 - **THEN** affected App users can authenticate and access App APIs again
 
 ### Requirement: Administrators manage employee placement without editing personal data
-The system SHALL let administrators search and view employees and update only business role, department/team placement, and activation state after account creation. It SHALL reject administrator writes to employee name, phone, identity number, or password.
+The system SHALL let administrators search and view employees and update only business role, department/team placement, and activation state after account creation. The Web employee list SHALL provide a switch for directly changing activation state. The system SHALL reject administrator writes to employee name, phone, identity number, or password.
 
 #### Scenario: Administrator filters employees
 - **WHEN** an administrator filters employees by name or phone, business role, department, team, or activation state
@@ -79,6 +79,10 @@ The system SHALL let administrators search and view employees and update only bu
 #### Scenario: Administrator updates employee placement or role
 - **WHEN** an administrator submits a valid role, organization placement, or activation change
 - **THEN** the system validates role-placement compatibility and applies only the permitted changes
+
+#### Scenario: Administrator toggles employee activation from the list
+- **WHEN** an administrator changes an employee's activation switch in the employee list
+- **THEN** the Web client submits only `is_active`, refreshes the displayed state, and shows backend validation errors without changing the displayed state
 
 #### Scenario: Administrator updates personal information
 - **WHEN** an administrator submits employee name, phone, identity number, or password through Web management
@@ -105,7 +109,7 @@ The system SHALL let an authenticated employee update only their own name, phone
 
 #### Scenario: Employee changes phone number
 - **WHEN** an employee submits an unused valid phone number
-- **THEN** the system atomically updates the unique `username` login identifier and subsequent sign-in uses the new phone number
+- **THEN** the system atomically updates the unique `username` login identifier, and the App clears its local session, returns to login, and tells the employee to sign in with the new phone number
 
 #### Scenario: Employee attempts to change administrator-managed fields
 - **WHEN** an employee submits a business role, department, team, manager, or activation change from the App
@@ -116,7 +120,7 @@ The system SHALL allow an authenticated employee to change only their own passwo
 
 #### Scenario: Employee changes password with valid credentials
 - **WHEN** an employee submits the correct current password, a valid different new password, and a matching confirmation
-- **THEN** the system changes only that employee's password hash and returns a success flag
+- **THEN** the system changes only that employee's password hash and returns a success flag; the App clears its local session, returns to login, and tells the employee to sign in with the new password
 
 #### Scenario: Employee submits invalid password-change data
 - **WHEN** the current password is wrong, the confirmation differs, the new password is unchanged, or configured password validation fails

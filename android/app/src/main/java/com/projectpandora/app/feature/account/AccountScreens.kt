@@ -108,6 +108,7 @@ fun LoginScreen(model: AccountViewModel, requiresLocalNetworkPermission: Boolean
         Spacer(Modifier.height(24.dp))
         PageTitle("欢迎回来")
         Text("使用管理员为你录入的手机号和密码登录", fontSize = 14.sp, color = C.Muted)
+        model.notice?.let { Note(it) }
         model.error?.let { Note(it, C.ErrorPale, C.Error) }
         if (localNetworkPermissionDenied) {
             Note("需要允许本地网络访问，才能连接当前服务器。请在系统设置中授权后重试。", C.ErrorPale, C.Error)

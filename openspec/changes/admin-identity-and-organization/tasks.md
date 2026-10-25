@@ -18,13 +18,15 @@
 - [x] 1.13 Align API, database, requirements, OpenSpec, and account-provisioning documentation with the repaired behavior and migration safeguards.
 - [x] 1.14 Run backend tests and migration/API schema checks for the post-merge corrections; record the results before closing backend acceptance.
 - [x] 1.15 Normalize national ID values before storage and hashing; preflight and canonicalize existing values in migration 0010; verify case variants are rejected as duplicates.
+- [x] 1.16 Include blocking active team/member counts and sample names in department/team deactivation validation errors.
 
 ## PR 2 — Web management (may proceed in parallel with Android after backend contract is set)
 
 - [x] 2.1 Add department/team detail screens and list activation controls. Keep details read-only for leaders, members, and team parent; allow editing name/description only. Display “无” when an organization has no active leader.
-- [x] 2.2 Add employee filters and detail display for name, phone, masked identity number, role, organization, and status. Allow only role, department/team placement, and activation changes; do not add personal-data editing or password reset.
+- [x] 2.2 Add employee filters and detail display for name, phone, masked identity number, role, organization, and status. Allow only role, department/team placement, and activation changes, including a list switch for activation; do not add personal-data editing or password reset.
 - [x] 2.3 Add active-only employee and organization choices, show backend validation for leader conflicts and activation guards, and connect the management summary/audit view to their APIs without exposing tasks or employee logs.
 - [x] 2.4 Update `docs/web/account-management-ui.md`; verify the rendered field boundaries, list/detail interactions, and API request payloads.
+- [x] 2.5 Show backend write failures from create forms in persistent error dialogs, including leader uniqueness conflicts; display organization deactivation blocker details.
 
 ## PR 3 — Android App self-service (may proceed in parallel with Web after backend contract is set)
 
@@ -33,6 +35,7 @@
 - [x] 3.3 Add current-password, new-password, and confirmation inputs for self-service password change; show backend validation feedback and never persist the plaintext password.
 - [x] 3.4 Preserve the existing phone login request field `username`; after a phone update, verify subsequent login uses the new phone. Keep role, organization, manager, and activation read-only in the App.
 - [x] 3.5 Update `docs/android/account-login-ui.md`; verify profile edits, atomic name/identity updates, password validation, and phone login behavior.
+- [x] 3.6 After a successful phone-number or password change, clear the local App session and require the employee to sign in again with the updated credential.
 
 ## Acceptance across the three PRs
 
