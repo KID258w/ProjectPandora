@@ -5,7 +5,7 @@
 > **Issue #15 实施更新**：部门/团队详情与启停、员工筛选与身份/组织调整、管理概况与操作审计、App 个人资料与密码已实现（见 2.1 节契约）。以下未标注已实现的业务内容仍为规划。
 
 > 维护说明：由项目统筹与后端同学共同维护，作为 API 设计的持续文档。接口路径、字段名和错误格式可随开发协商调整。  
-> 依据：`docs/requirements/01` 至 `06`、`docs/cooperate/swagger-guide.md` 与当前 Django 骨架。需求变化时以最新确认的需求为准。
+> 依据：`docs/requirements/01` 至 `07`、`docs/cooperate/swagger-guide.md` 与当前 Django 骨架。需求变化时以最新确认的需求为准。
 
 ## 1. 设计约定
 
@@ -122,9 +122,9 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `GET /api/v1/app/tasks/subordinates/` | 当前用户有权查看的下属承担任务；仅含承担人视角，不单列下属创建列表 |
 | `GET /api/v1/app/task-approvals/inbox/` | 待当前上级审批任务；不提供已完成/未完成筛选 |
 | `GET /api/v1/app/task-approvals/outbox/` | 当前用户等待上级审批的任务；不提供已完成/未完成筛选 |
-| `GET /api/v1/app/tasks/{id}/` | 任务详情；服务端按创建人、负责人、授权上级等校验可见性 |
-| `POST /api/v1/app/tasks/` | 普通入口创建任务；创始人可指派给本公司任一成员，其他角色按各自组织范围选择负责人；创建人有直属上级则进入待审批 |
-| `PATCH /api/v1/app/tasks/{id}/` | 修改有权修改且仍可编辑的任务；审批后关键定义变更需重新审批 |
+| `GET /api/v1/app/tasks/{id}/` | 任务详情；返回全部标签名称和颜色（含历史停用标签、不标记停用）；服务端校验原任务可见性 |
+| `POST /api/v1/app/tasks/` | 普通入口创建任务；可选提交 `tag_ids`；创始人可指派给本公司任一成员，其他角色按各自组织范围选择负责人；创建人有直属上级则进入待审批 |
+| `PATCH /api/v1/app/tasks/{id}/` | 按原任务编辑权限修改任务；可选提交 `tag_ids`；单独改标签不触发重新审批 |
 | `POST /api/v1/app/tasks/{id}/approval/` | 上级审批通过或退回；退回必须附原因 |
 | `POST /api/v1/app/tasks/{id}/updates/` | 负责人追加进展说明；只追加记录，不设置百分比进度 |
 | `POST /api/v1/app/tasks/{id}/submissions/` | 负责人提交完成说明及所需材料说明；不是创建任务表单 |
@@ -148,7 +148,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 }
 ```
 
-服务端根据登录人、组织关系和目标负责人决定是否需要审批，客户端不得自行传入/覆盖 `approval_status`、创建人或完成状态。接口不接收跨部门标记；是否允许负责人由服务端按角色、部门关系校验。关联说明为自由文本，不建立上级任务外键或任务树。
+服务端根据登录人、组织关系和目标负责人决定是否需要审批，客户端不得自行传入/覆盖 `approval_status`、创建人或完成状态。接口不接收跨部门标记；是否允许负责人由服务端按角色、部门关系校验。关联说明为自由文本，不建立上级任务外键或任务树。任务创建请求可选 `tag_ids`；首次创建按数组顺序添加关联。更新请求只有在字段存在时才变更标签关联，`[]` 表示清空；保存时保留仍在目标集合中的原关联顺序，新增标签按数组顺序追加。停用标签只允许保留当前仍存在的关联，移除后不能重新关联。
 
 ### 3.3 日志
 
@@ -156,25 +156,36 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 |---|---|
 | `GET /api/v1/app/logs/calendar/` | 按 `year`、`month` 返回本人或选中查看对象已提交日志的日期标记 |
 | `GET /api/v1/app/logs/` | 查询本人历史日志或有权查看的下属日志；按用户/日期筛选 |
-| `GET /api/v1/app/logs/{id}/` | 查看日志内容；管理者只读且只能查看已提交日志 |
-| `GET /api/v1/app/logs/mine/{log_date}/` | 获取本人指定日期日志（含草稿）；未创建时返回空表单态，并返回是否可编辑 |
-| `PUT /api/v1/app/logs/mine/{log_date}/` | 新建或更新本人指定日期唯一日志；只允许今天、昨天或前天 |
+| `GET /api/v1/app/logs/{id}/` | 查看日志内容及全部标签名称/颜色；管理者只读且只能查看已提交日志 |
+| `GET /api/v1/app/logs/mine/{log_date}/` | 获取本人指定日期日志（含草稿及标签）；未创建时返回空表单态，并返回是否可编辑 |
+| `PUT /api/v1/app/logs/mine/{log_date}/` | 新建或更新本人指定日期唯一日志，可选提交 `tag_ids`；只允许今天、昨天或前天 |
 | `POST /api/v1/app/logs/mine/{log_date}/submit/` | 提交本人指定日期日志；只允许今天、昨天或前天 |
 | `GET /api/v1/app/log-viewers/` | 返回当前用户可选择查看的下属，支持姓名关键词搜索 |
 
-建议日志请求字段：`completed_work`（提交必填）、`next_day_plan`（可选）。MVP 不提供关联任务、问题与风险字段、附件和日志正文关键字搜索。每人每天最多一条。作者可新建、修改及提交业务时区内今天、昨天和前天的日志；该窗口按自然日滚动，不是滚动 72 小时，超过前天的日期及未来日期拒绝写入并只读展示。读取本人历史记录仍允许。管理者查询草稿与无日志日期时不应泄露草稿内容，管理者写入接口不开放。
+建议日志请求字段：`completed_work`（提交必填）、`next_day_plan`（可选）、`tag_ids`（可选标签 ID 数组）。MVP 不提供关联任务、问题与风险字段、附件和日志正文关键字搜索；标签选择器按标签名称搜索，不提供日志标签筛选。每人每天最多一条。作者可新建、修改及提交业务时区内今天、昨天和前天的日志；该窗口按自然日滚动，不是滚动 72 小时，超过前天的日期及未来日期拒绝写入并只读展示。读取本人历史记录仍允许。管理者查询草稿与无日志日期时不应泄露草稿内容，管理者写入接口不开放。详情返回标签关联名称和颜色；已停用标签不标明状态。更新中省略 `tag_ids` 表示不改关联，空数组表示清空；保存时仅保留已有关系并新增/移除差异。
 
 ### 3.4 月、周、日工作视图
 
 | 方法与路径 | 用途 |
 |---|---|
-| `GET /api/v1/app/work-views/month/?user_id=&year=&month=` | 月视图：返回按任务创建日期至截止日期绘制的任务条及当日状态；可选查看本人或有权查看的单一下属 |
-| `GET /api/v1/app/work-views/week/?user_id=&date=` | 周视图：一周日期条、未完成任务全天任务条、24 小时时间轴动态事件 |
-| `GET /api/v1/app/work-views/day/?user_id=&date=` | 日视图：当天未完成任务条及 24 小时时间轴动态事件 |
+| `GET /api/v1/app/work-views/month/?user_id=&year=&month=` | 月视图：返回任务条颜色 `bar_color`（首个添加的当前关联标签颜色；无标签为中性灰色）及原有日期信息 |
+| `GET /api/v1/app/work-views/week/?user_id=&date=` | 周视图：未完成任务全天条返回 `bar_color`；另含日期条和 24 小时时间轴动态事件 |
+| `GET /api/v1/app/work-views/day/?user_id=&date=` | 日视图：当天未完成任务条返回 `bar_color`；另含 24 小时时间轴动态事件 |
 
-视图为只读聚合，不单独保存日历副本。月视图任务条可点击进入详情，显示标题、未完成/已完成；个人重点可附 `is_personal_focus`。周/日动态项包括负责人进展更新、负责人提交、直接派发者验收通过；自我负责任务提交即完成只产生一条合并动态。上级验收事件归属于负责人的视图，不出现在验收人的视图。动态响应至少包含 `occurred_at`、`task_id`、`task_title`、`event_type`、`summary`。周视图全天未完成任务可横跨多天；固定日期条和全天区域不随时间轴滚动，动态按实际发生日期/小时归列。
+视图为只读聚合，不单独保存日历副本。月视图任务条可点击进入详情，显示标题、未完成/已完成；个人重点可附 `is_personal_focus`。月视图任务及周/日全天任务响应均提供 `bar_color`，服务端按当前仍关联标签中最早建立的关系确定颜色；停用标签仍提供原颜色，无关联标签时提供中性灰色。任务条仅显示标题，工作视图响应不提供供任务条展示的标签名称。周/日动态项包括负责人进展更新、负责人提交、直接派发者验收通过；自我负责任务提交即完成只产生一条合并动态。上级验收事件归属于负责人的视图，不出现在验收人的视图。动态响应至少包含 `occurred_at`、`task_id`、`task_title`、`event_type`、`summary`。周视图全天未完成任务可横跨多天；固定日期条和全天区域不随时间轴滚动，动态按实际发生日期/小时归列。
 
-### 3.5 AI 地图与辅助功能
+### 3.5 标签系统
+
+| 方法与路径 | 用途 / 规则 |
+|---|---|
+| `GET /api/v1/app/tags/` | 所有 App 角色查询启用标签并按名称搜索；仅创始人可通过 `include_inactive=true` 查看管理列表中的停用标签 |
+| `POST /api/v1/app/tags/` | 创始人在 App“我的页面”的标签管理中心创建标签；服务端分配颜色 |
+| `PATCH /api/v1/app/tags/{id}/` | 创始人修改启用标签名称；不接受颜色或状态字段 |
+| `DELETE /api/v1/app/tags/{id}/` | 创始人不可逆停用标签；保留标签数据及任务/日志历史关联，不物理删除 |
+
+上述标签管理接口仅接受 Android 业务用户令牌；标签管理操作仅创始人可用。所有 App 角色可在本人有权编辑的任务/日志表单中关联多个启用标签。详情返回关联标签的 ID、名称和颜色，但不向关联标签附加停用状态标记。任务/日志列表不增加标签筛选。
+
+### 3.6 AI 地图与辅助功能
 
 | 方法与路径 | 用途 / 规则 |
 |---|---|
@@ -1488,6 +1499,10 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "description": "整理本周收集到的需求并形成结论",
     "required_materials": "需求清单与评审结论",
     "association_note": "与 Q4 项目方案相关",
+    "tags": [
+      { "id": 21, "name": "客户跟进", "color": "#4C9A8A" },
+      { "id": 24, "name": "需求分析", "color": "#6587C5" }
+    ],
     "due_at": "2026-10-20T18:00:00+08:00",
     "approval_status": "approved",
     "completion_status": "unfinished",
@@ -1510,7 +1525,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "description": "整理需求并形成结论",
   "required_materials": "需求清单与评审结论",
   "due_at": "2026-10-20T18:00:00+08:00",
-  "association_note": "与 Q4 项目方案相关"
+  "association_note": "与 Q4 项目方案相关",
+  "tag_ids": [21, 24]
 }
 ```
 
@@ -1528,6 +1544,10 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "approval_status": "pending",
     "completion_status": "unfinished",
     "lifecycle_status": "active",
+    "tags": [
+      { "id": 21, "name": "客户跟进", "color": "#4C9A8A" },
+      { "id": 24, "name": "需求分析", "color": "#6587C5" }
+    ],
     "due_at": "2026-10-20T18:00:00+08:00",
     "created_at": "2026-10-11T10:00:00+08:00"
   },
@@ -1542,7 +1562,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 ```json
 {
   "title": "完成客户需求与范围梳理",
-  "due_at": "2026-10-21T18:00:00+08:00"
+  "due_at": "2026-10-21T18:00:00+08:00",
+  "tag_ids": [21, 24]
 }
 ```
 
@@ -1556,6 +1577,10 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "id": 105,
     "title": "完成客户需求与范围梳理",
     "due_at": "2026-10-21T18:00:00+08:00",
+    "tags": [
+      { "id": 21, "name": "客户跟进", "color": "#4C9A8A" },
+      { "id": 24, "name": "需求分析", "color": "#6587C5" }
+    ],
     "approval_status": "pending",
     "updated_at": "2026-10-11T10:15:00+08:00"
   },
@@ -1892,6 +1917,10 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "status": "submitted",
     "completed_work": "完成接口梳理",
     "next_day_plan": "补充测试用例",
+    "tags": [
+      { "id": 21, "name": "客户跟进", "color": "#4C9A8A" },
+      { "id": 24, "name": "需求分析", "color": "#6587C5" }
+    ],
     "created_at": "2026-10-11T16:00:00+08:00",
     "submitted_at": "2026-10-11T18:00:00+08:00"
   },
@@ -1926,7 +1955,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 ```json
 {
   "completed_work": "完成接口梳理",
-  "next_day_plan": "补充测试用例"
+  "next_day_plan": "补充测试用例",
+  "tag_ids": [21, 24]
 }
 ```
 
@@ -1942,6 +1972,10 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "status": "draft",
     "completed_work": "完成接口梳理",
     "next_day_plan": "补充测试用例",
+    "tags": [
+      { "id": 21, "name": "客户跟进", "color": "#4C9A8A" },
+      { "id": 24, "name": "需求分析", "color": "#6587C5" }
+    ],
     "updated_at": "2026-10-11T17:30:00+08:00",
     "can_edit": true
   },
@@ -1974,7 +2008,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 }
 ```
 
-以上 `log_date` 为路径参数中的示例日期。对于早于今天两天的日期或未来日期，读取本人日志仍可返回内容及 `can_edit: false`；对应 `PUT`、`submit` 请求应拒绝且不得改变数据。服务端以统一配置的业务时区计算自然日窗口，不能信任客户端传来的日期范围或 `can_edit` 值。
+以上 `log_date` 为路径参数中的示例日期。对于早于今天两天的日期或未来日期，读取本人日志仍可返回内容及 `can_edit: false`；对应 `PUT`、`submit` 请求应拒绝且不得改变数据。服务端以统一配置的业务时区计算自然日窗口，不能信任客户端传来的日期范围或 `can_edit` 值。日志详情及本人编辑读取返回 `tags: [{id, name, color}]`；已停用历史关联照常返回，但不返回停用标记。
 
 #### GET /api/v1/app/log-viewers/?keyword=张
 
@@ -2005,7 +2039,122 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 ```
 
 
-### 4.6 Android 月、周、日视图
+### 4.6 Android 标签系统
+
+标签接口使用 Android 业务用户令牌。所有 App 角色都可读取启用标签；只有创始人可从“我的页面”的标签管理中心查看停用项、创建、改名或停用标签。管理接口不接受 Web 管理端令牌。颜色由服务端从固定 10 色调色板分配，创建后不可修改。
+
+#### GET /api/v1/app/tags/?keyword=客户&page=1&page_size=20
+
+默认只返回启用标签，支持按名称搜索。创始人的管理中心可追加 `include_inactive=true` 查看全部标签及启停状态；其他角色请求该参数返回 `403`。创始人任务/日志表单仍使用默认启用标签结果。
+
+**请求：** 无 JSON 请求体；查询参数：`keyword`（可选）、`include_inactive`（可选，创始人专用）、`page`、`page_size`。
+
+**响应 JSON（创始人管理列表）**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+      { "id": 21, "name": "客户跟进", "color": "#4C9A8A", "is_active": true },
+      { "id": 18, "name": "客户跟进", "color": "#6587C5", "is_active": false }
+    ]
+  },
+  "requestId": "<uuid>"
+}
+```
+
+常规标签选择器只返回 `is_active=true` 的标签。`include_inactive=true` 只影响创始人的管理列表，不用于创建或编辑任务/日志时的选择器。
+
+#### POST /api/v1/app/tags/
+
+仅创始人可调用。请求只提交名称；服务端按当前标签库内各颜色的使用标签数，从使用最少的颜色中选择，平数时按固定调色板顺序。已停用标签也计入颜色使用数。
+
+**请求 JSON**
+
+```json
+{
+  "name": "客户跟进"
+}
+```
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": 25,
+    "name": "客户跟进",
+    "color": "#4C9A8A",
+    "is_active": true,
+    "created_at": "2026-10-27T10:00:00+08:00"
+  },
+  "requestId": "<uuid>"
+}
+```
+
+创建或改名为另一个启用标签已使用的名称时返回 `409`；停用标签不参与名称唯一性校验。
+
+#### PATCH /api/v1/app/tags/25/
+
+仅创始人可调用，且仅启用标签可改名。`color`、`is_active` 等字段不接受。
+
+**请求 JSON**
+
+```json
+{
+  "name": "重点客户"
+}
+```
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": 25,
+    "name": "重点客户",
+    "color": "#4C9A8A",
+    "is_active": true,
+    "updated_at": "2026-10-27T10:15:00+08:00"
+  },
+  "requestId": "<uuid>"
+}
+```
+
+#### DELETE /api/v1/app/tags/25/
+
+仅创始人可调用。此操作将标签不可逆地设为停用，不物理删除记录或任务/日志关联；重复调用保持停用状态。App 调用前应要求创始人确认。
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": 25,
+    "is_active": false
+  },
+  "requestId": "<uuid>"
+}
+```
+
+任务 `POST`/`PATCH` 和日志 `PUT` 使用可选 `tag_ids` 数组保存关联。新建只能关联启用标签；编辑时仍关联于当前记录的停用标签可原样保留，若本次移除后再次尝试关联则返回 `400`。更新省略 `tag_ids` 表示不改关联，显式传空数组表示移除全部关联。无效 ID 或非法停用标签导致整次请求回滚，不部分保存。
+
+#### 工作视图响应字段
+
+月视图的 `tasks`、周/日视图的 `all_day_tasks` 每项增加 `bar_color`。颜色按当前关联中最早新增的关系计算；移除最早标签后顺延到剩余最早关联；无标签时返回固定中性灰色。工作视图不返回标签名称或停用标记供任务条展示。
+
+### 4.7 Android 月、周、日视图
 
 #### GET /api/v1/app/work-views/month/?user_id=42&year=2026&month=10
 
@@ -2025,6 +2174,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
       {
         "task_id": 101,
         "title": "完成需求梳理",
+        "bar_color": "#4C9A8A",
         "start_date": "2026-10-05",
         "due_date": "2026-10-20",
         "completion_status": "unfinished",
@@ -2064,6 +2214,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
       {
         "task_id": 101,
         "title": "完成需求梳理",
+        "bar_color": "#4C9A8A",
         "start_date": "2026-10-05",
         "due_date": "2026-10-20",
         "completion_status": "unfinished"
@@ -2102,6 +2253,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
       {
         "task_id": 101,
         "title": "完成需求梳理",
+        "bar_color": "#4C9A8A",
         "start_date": "2026-10-05",
         "due_date": "2026-10-20",
         "completion_status": "unfinished"
@@ -2123,7 +2275,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 ```
 
 
-### 4.7 Android AI 功能
+### 4.8 Android AI 功能
 
 #### GET /api/v1/app/ai/consent/
 
@@ -2417,7 +2569,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 ```
 
 
-### 4.8 错误响应示例
+### 4.9 错误响应示例
 
 所有业务接口的失败响应也使用相同外层结构；字段校验信息放在 `data` 中：
 
@@ -2446,6 +2598,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "requestId": "<uuid>"
 }
 ```
+
+标签相关失败约定：非创始人调用标签管理操作或请求停用标签管理列表返回 `403`；启用标签名称重复返回 `409`；任务/日志请求新关联未知或已停用标签返回 `400`，且整次请求回滚；未知标签 ID 返回 `404`。停用标签的重复 `DELETE` 返回成功并保持停用。
 
 ## 5. 统一响应结构约定
 
