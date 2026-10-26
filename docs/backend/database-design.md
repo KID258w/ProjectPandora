@@ -19,7 +19,7 @@ Issue #15（Issue2）已落地：部门/团队 `is_active` 启停（停用前校
 
 > 维护说明：由项目统筹与后端同学共同维护，作为数据库设计的持续文档。本文描述逻辑模型，字段、类型、索引及历史策略可随实现和需求协商调整。  
 > 当前后端使用 SQLite 开发；下表按 Django ORM 可实现、未来可迁移 MySQL 的关系模型设计。  
-> 依据：`docs/requirements/01` 至 `06`。数据库设计与最新确认的需求保持一致。
+> 依据：`docs/requirements/01` 至 `07`。数据库设计与最新确认的需求保持一致。
 
 ## 1. 设计原则
 
@@ -28,6 +28,7 @@ Issue #15（Issue2）已落地：部门/团队 `is_active` 启停（停用前校
 - 管理端只维护组织/账号/公司重要事项/审计数据，不管理任务和员工日志。
 - 固定业务角色使用用户字段枚举和服务端权限规则；MVP 不另建 `Role`、`Permission`、`UserRole`、`RolePermission` 多张业务权限表。需要管理端菜单权限时优先使用 Django `Group`/`Permission`。
 - 日志按用户及自然日唯一；不存在“未填写”日志行，未填写由无记录表示。
+- 任务与日志通过独立多对多关系表关联标签；停用标签保留记录和历史关系，不物理删除。
 - 工作视图是任务、动态记录的查询投影，不单独复制存储日/周/月日历数据。
 - 以下字段类型使用逻辑名称；最终以 Django 字段、数据库引擎和迁移文件为准。金额、地理位置等无关字段不预留。
 
@@ -47,7 +48,11 @@ erDiagram
   TASK ||--o{ TASK_SUBMISSION : submitted
   USER ||--o{ TASK_SUBMISSION : submits
   USER o|--o{ TASK_SUBMISSION : reviews
+  TAG ||--o{ TASK_TAG : associated
+  TASK ||--o{ TASK_TAG : tagged
   USER ||--o{ DAILY_LOG : writes
+  TAG ||--o{ DAILY_LOG_TAG : associated
+  DAILY_LOG ||--o{ DAILY_LOG_TAG : tagged
   USER ||--o{ PERSONAL_FOCUS_TASK : orders
   TASK ||--o{ PERSONAL_FOCUS_TASK : selected
   COMPANY_ITEM ||--o{ COMPANY_ITEM_ATTACHMENT : includes
@@ -244,9 +249,47 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 | `created_at`, `updated_at` | 时间 | 创建和最后修改时间 |
 | `submitted_at` | 可空时间 | 提交时间 |
 
-唯一约束 `(author_id, log_date)`。未填写日志不建记录，不设 `missing` 状态。提交后在自然日结束前可修改，之后只读；历史日志不允许作者回改。MVP 不存任务关联、问题风险、附件或内容搜索字段，也不存管理者评价。
+唯一约束 `(author_id, log_date)`。未填写日志不建记录，不设 `missing` 状态。作者可修改业务时区内今天、昨天或前天的日志（包括已提交日志）；超出三自然日窗口后只读。标签关联存储在独立关系表，不在日志行重复保存标签数据。MVP 不存任务关联、问题风险、附件或内容搜索字段，也不存管理者评价。
 
-### 3.5 审计与 AI
+### 3.5 标签与任务/日志关联
+
+标签库由 App 业务端共享，管理操作仅创始人可用；不在 Web 管理端建立标签表单或管理 API。标签停用通过 `is_active=false` 实现，不物理删除数据。停用不解除已有关联，详情仍可读取标签当前名称和固定颜色。标签颜色由服务端按固定 10 色调色板分配，取标签记录数最少的颜色；停用标签也计数。
+
+#### `tags_tag`
+
+| 字段 | 类型 / 约束 | 说明 |
+|---|---|---|
+| `id` | 主键 | 标签 ID |
+| `name` | 字符串，必填，最长 100 | 标签名称；仅启用标签之间全局唯一，停用标签不占用名称 |
+| `color` | `CHAR(7)`，必填 | 保存 `#RRGGBB` 格式的固定调色板色值；服务端分配并持久化，创建后不可修改 |
+| `is_active` | 布尔值，默认 `true` | 启用/停用状态；停用不可通过 App 恢复 |
+| `created_at`, `updated_at` | 时间 | 创建和最近改名/状态修改时间 |
+
+启用名称唯一须由服务层和数据库共同保证，防止并发创建/改名造成重复。SQLite 可用 `WHERE is_active = true` 的部分唯一索引；MySQL 使用等价的可空生成列唯一键等数据库能力，确保多个停用同名标签和一个启用同名标签可以共存。具体实现须按实际部署数据库及其字符比较规则验证。
+
+#### `tags_task_tag`
+
+| 字段 | 类型 / 约束 | 说明 |
+|---|---|---|
+| `id` | 主键 | 关联行 ID |
+| `task_id` | 外键，必填 | 任务 |
+| `tag_id` | 外键，必填，保护删除 | 标签；停用不删除此关联 |
+| `added_at` | 时间 | 本次关联添加时间，用于确定任务条颜色顺序 |
+
+唯一约束 `(task_id, tag_id)` 防止同一任务重复关联同一标签。更新标签集合时保留未变化关联的 `added_at`；新加关系按请求数组顺序保存。删除关联只删除该关联行；被移除的停用标签之后不能重新关联。
+
+#### `tags_daily_log_tag`
+
+| 字段 | 类型 / 约束 | 说明 |
+|---|---|---|
+| `id` | 主键 | 关联行 ID |
+| `daily_log_id` | 外键，必填 | 工作日志 |
+| `tag_id` | 外键，必填，保护删除 | 标签；停用不删除此关联 |
+| `added_at` | 时间 | 该日志与标签关系的建立时间 |
+
+唯一约束 `(daily_log_id, tag_id)` 防止同一日志重复关联同一标签。标签管理操作不改变日志作者、草稿隐私、提交状态或近三天编辑窗口。
+
+### 3.6 审计与 AI
 
 #### `admin_audit_log`
 
@@ -301,6 +344,7 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 - 审批：`(approver_id, decision, created_at)`、`(task_id, round)` 唯一。
 - 任务动态/提交：`(task_id, created_at)`、`(task_id, submitted_at)`；按需对负责人和事件时间增加索引。
 - 日志：`(author_id, log_date)` 唯一；`(department_id, log_date)`、`(team_id, log_date)` 用于授权范围查询。
+- 标签：启用状态下的名称唯一；按 `(is_active, name)` 支持管理列表/搜索；关联表分别对 `(task_id, tag_id)`、`(daily_log_id, tag_id)` 唯一，并按 `(task_id, added_at, id)`、`(daily_log_id, added_at, id)` 读取关联顺序。
 - 个人重点：`(user_id, sort_order)` 索引、`(user_id, task_id)` 唯一。
 - 公司事项：`(status, sort_order)`；发布上限 10 由事务/服务层校验，不能只依赖单行约束。
 - JSON 字段只用于确有动态结构的数据（审计快照、问卷答案），核心业务查询字段应保持关系列。
