@@ -73,6 +73,7 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 | 发布/下线事项 | `POST /api/v1/admin/company-items/{id}/publish/`、`.../offline/` | 发布或下线事项；发布数量最多 10 条 |
 | 调整事项排序 | `PUT /api/v1/admin/company-items/order/` | 按请求中的 ID 顺序批量保存手动排序 |
 | 上传事项附件 | `POST /api/v1/admin/company-items/{id}/attachments/` | 可选；附件存储方案和限制待定 |
+| 删除事项附件 | `DELETE /api/v1/admin/company-items/{id}/attachments/{attachment_id}/` | 删除当前事项下指定附件引用及对应文件；仅管理员可操作 |
 | 审计记录 | `GET /api/v1/admin/audit-logs/` | 按时间、管理员、模块筛选审计记录；只读 |
 
 Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `username` 接收手机号，要求身份证号，自动启用账号并只在本次成功响应返回后端生成的初始密码。下文的员工筛选/更新、组织维护和 App 自助资料修改已在 Issue #15 实现：列表保留停用对象供管理员查询，但用于员工身份/组织调整的候选项只返回启用员工、部门和团队；用户筛选支持姓名或手机号关键词、`department_id`、`team_id`、`business_role`、`is_active`。组织负责人在员工管理界面通过员工业务身份和组织归属调整，不提供组织详情页直接换负责人或独立负责人写接口。停用部门/团队前后端都要校验没有仍启用的下级组织或成员。团队的所属部门仅在创建时指定。手机号继续使用现有唯一 `username` 字段存储；App 登录 JSON 的 `username` 字段不改名，业务账号的值为手机号。
@@ -102,38 +103,47 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `GET /api/v1/app/me/` | 当前用户姓名、手机号、业务角色、部门/团队、直属上级等；不返回完整身份证号 |
 | `PATCH /api/v1/app/me/` | 员工本人修改姓名、手机号、身份证号；手机号更新现有 `username` 登录标识 |
 | `POST /api/v1/app/me/password/` | 员工本人验证当前密码后修改密码；不提供 Web 重置入口 |
-| `GET /api/v1/app/home/` | 聚合首页四卡摘要及最近日志摘要；每卡最多 5 条 |
+| `GET /api/v1/app/home/` | 返回首页四大面板摘要（每卡最多 5 条）及任务通知未读数；个人数据按当前登录用户隔离 |
 | `GET /api/v1/app/company-items/` | 已发布的公司重要事项列表，最多 10 条 |
 | `GET /api/v1/app/company-items/{id}/` | 公司重要事项详情 |
 
-首页“公司十大重要任务”是根据当前用户承担的未完成任务计算出的最多 10 条，不是管理员维护的全公司排行榜；按当前需求文档规定的来源和截止时间排序。个人十大重要任务由用户选择并拖拽排序，服务端持久化顺序；最多 10 条，任务完成、取消或不再由本人承担时应从可选范围中移除。
+首页“公司十大重要任务”是根据当前用户承担的未完成任务计算出的最多 10 条，不是管理员维护的全公司排行榜；按当前需求文档规定的来源和截止时间排序。个人十大重点工作由用户选择并拖拽排序，服务端持久化顺序；最多 10 条，任务完成、取消或不再由本人承担时应从可选范围中移除。首页聚合和个人重点列表首次读取时共用同一初始化逻辑：按当时的公司十大任务预填一次，之后不随公司榜单变化自动重置。
 
 | 方法与路径 | 用途 |
 |---|---|
-| `GET /api/v1/app/home/personal-focus/` | 返回个人重点任务及顺序 |
+| `GET /api/v1/app/home/company-top-tasks/` | 返回当前用户公司十大重要任务完整列表，最多 10 条 |
+| `GET /api/v1/app/home/personal-focus/` | 返回个人重点任务及顺序；首次使用时初始化 |
+| `GET /api/v1/app/home/personal-focus/candidates/` | 返回可加入个人重点的本人未完成任务 |
 | `PUT /api/v1/app/home/personal-focus/` | 一次性保存任务 ID 有序数组；校验均为本人未完成任务且不超过 10 条 |
 
 ### 3.2 任务中心、创建、审批与验收
 
 | 方法与路径 | 用途 / 规则 |
 |---|---|
-| `GET /api/v1/app/tasks/mine/` | 当前用户承担的已审批任务；支持 `completion_status`、关键词等筛选 |
-| `GET /api/v1/app/tasks/created/` | 当前用户创建的已审批任务；支持完成状态筛选 |
-| `GET /api/v1/app/tasks/subordinates/` | 当前用户有权查看的下属承担任务；仅含承担人视角，不单列下属创建列表 |
+| `GET /api/v1/app/tasks/` | 普通任务中心列表；`scope=all|mine|created`，支持截止日期、完成状态及归档状态筛选；`all` 合并去重 |
+| `GET /api/v1/app/tasks/subordinates/` | 当前用户有权查看的下属已审批任务；支持 `task_scope=assigned|created`、截止日期、完成状态和授权下属筛选 |
 | `GET /api/v1/app/task-approvals/inbox/` | 待当前上级审批任务；不提供已完成/未完成筛选 |
-| `GET /api/v1/app/task-approvals/outbox/` | 当前用户等待上级审批的任务；不提供已完成/未完成筛选 |
-| `GET /api/v1/app/tasks/{id}/` | 任务详情；返回全部标签名称和颜色（含历史停用标签、不标记停用）；服务端校验原任务可见性 |
+| `GET /api/v1/app/task-approvals/outbox/` | 当前用户创建、等待上级审批或已退回待修改的任务；不提供完成状态筛选 |
+| `GET /api/v1/app/tasks/{id}/` | 任务详情；返回审批/验收历史、进展和全部标签；服务端校验原任务可见性 |
+| `GET /api/v1/app/tasks/{id}/history/` | 返回当前用户有权查看的任务创建及定义变更记录，含操作人、时间和变更字段 |
 | `POST /api/v1/app/tasks/` | 普通入口创建任务；可选提交 `tag_ids`；创始人可指派给本公司任一成员，其他角色按各自组织范围选择负责人；创建人有直属上级则进入待审批 |
+| `POST /api/v1/app/tasks/{id}/start/` | 负责人首次打开已审批任务详情或开始处理时记录首次开始时间；重复调用不覆盖 |
 | `PATCH /api/v1/app/tasks/{id}/` | 按原任务编辑权限修改任务；可选提交 `tag_ids`；单独改标签不触发重新审批 |
+| `POST /api/v1/app/tasks/{id}/resubmit/` | 创建人完成退回任务编辑后重新送直属上级审批 |
 | `POST /api/v1/app/tasks/{id}/approval/` | 上级审批通过或退回；退回必须附原因 |
 | `POST /api/v1/app/tasks/{id}/updates/` | 负责人追加进展说明；只追加记录，不设置百分比进度 |
 | `POST /api/v1/app/tasks/{id}/submissions/` | 负责人提交完成说明及所需材料说明；不是创建任务表单 |
 | `POST /api/v1/app/tasks/{id}/submissions/{submission_id}/review/` | 直接派发者验收通过或退回；验收通过后任务完成 |
 | `POST /api/v1/app/tasks/{id}/cancel/` | 创建人取消本人创建的未完成任务，必须填写原因 |
+| `GET /api/v1/app/notifications/` | 返回当前用户的任务通知列表，支持未读筛选和分页；仅通知接收人可读 |
+| `GET /api/v1/app/notifications/unread-count/` | 返回当前用户未读任务通知数量，供首页铃铛显示红点 |
+| `POST /api/v1/app/notifications/mark-read/` | 将请求中明确列出的本人通知标记为已读；不改变任务状态 |
 | `GET /api/v1/app/organization/assignable-users/` | 查询当前用户在普通任务表单中有权选择的负责人；创始人可查询本公司全体成员，其他角色按其派发范围返回，支持姓名关键词 |
 | `GET /api/v1/app/organization/visible-subordinates/` | 查看对象选择器可访问的下属；逐级查看时支持姓名/团队/部门搜索 |
 
-任务列表可支持 `completion_status=all|unfinished|completed`；`lifecycle_status=cancelled` 可作为单独筛选或独立历史列表，具体交互待最终确认。审批列表仅按审批状态筛选。负责人选择接口只返回创建者有权派发给的对象：创始人为本公司全体成员；部门经理为本人、本部门团队长或其他部门经理；团队长为本人或本团队普通员工；普通员工仅本人。部门经理指派给其他部门经理仍调用统一创建接口，并由服务端按创建人的直属上级规则发起审批。
+普通任务列表通过一个筛选接口支持 `scope=all|mine|created`、`completion_status=all|unfinished|completed`、`lifecycle_status=active|cancelled|all`、`due_from` 和 `due_to`；日期边界均包含在结果中，默认 `scope=mine`、`completion_status=all`、`lifecycle_status=active` 且不限日期。`scope=all` 返回本人承担或创建的已审批任务并按任务 ID 去重。取消任务保留为归档记录，可通过 `lifecycle_status=cancelled` 查询。下属任务接口支持 `task_scope=assigned|created`，只返回审批通过的记录；具体人员筛选只能在服务端授权的下属范围内。审批列表仅按审批流程筛选。负责人选择接口只返回创建者有权派发给的对象：创始人为本公司全体成员；部门经理为本人、本部门团队长或其他部门经理；团队长为本人或本团队普通员工；普通员工仅本人。部门经理指派给其他部门经理仍调用统一创建接口，并由服务端按创建人的直属上级规则发起审批。任务被直属上级退回后，创建人通过 `PATCH` 修改，再调用 `POST /tasks/{id}/resubmit/` 新增审批轮次；审批通过后关键定义字段发生变化时，服务端自动重新送审并写入新审批轮次。单独修改标签不触发重新审批。
+
+通知只通过 App 内列表提供，不发送操作系统推送。创建人有直属上级时，任务进入待审批状态即向该直属上级生成审批通知；他人创建并派发给当前用户的任务在审批通过后生成新任务通知。本人创建并由本人承担的任务不生成新任务通知。
 
 建议创建任务请求示例：
 
@@ -974,6 +984,21 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 }
 ```
 
+#### DELETE /api/v1/admin/company-items/7/attachments/88/
+
+**请求：** 无 JSON 请求体。仅能删除当前事项下的附件；不影响事项正文或其他附件。
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": { "deleted": true },
+  "requestId": "<uuid>"
+}
+```
+
 #### GET /api/v1/admin/audit-logs/?start_date=2026-10-01&end_date=2026-10-31&actor_id=1&module=users
 
 **请求：** 无 JSON 请求体。`start_date`、`end_date` 按日期筛选，`module` 按模块筛选；可用 `actor_id` 按管理员 ID 筛选，必须为正整数，否则返回 `400` 字段校验错误。
@@ -1171,7 +1196,9 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
       {
         "id": 7,
         "title": "国庆值班安排",
-        "summary": "查看值班表"
+        "summary": "查看值班表",
+        "published_at": "2026-10-01T09:00:00+08:00",
+        "sort_order": 1
       }
     ],
     "company_top_tasks": [
@@ -1186,18 +1213,25 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
       {
         "id": 101,
         "title": "完成需求梳理",
-        "sort_order": 1
+        "sort_order": 1,
+        "completion_status": "unfinished",
+        "due_at": "2026-10-20T18:00:00+08:00"
       }
     ],
-    "today_log": {
-      "id": 301,
-      "status": "submitted",
-      "summary": "完成接口梳理"
-    }
+    "recent_logs": [
+      {
+        "id": 301,
+        "log_date": "2026-10-27",
+        "summary": "完成接口梳理"
+      }
+    ],
+    "unread_notification_count": 2
   },
   "requestId": "<uuid>"
 }
 ```
+
+该聚合响应中，四个面板分别最多返回 5 条摘要；`recent_logs` 只含当前用户已提交日志，按日期倒序，不含草稿。公司重要事项对所有 App 用户相同；任务和日志字段按当前用户权限返回。`unread_notification_count` 供任务铃铛显示红点，通知列表仍通过独立通知接口读取。
 
 #### GET /api/v1/app/company-items/?page=1&page_size=10
 
@@ -1259,12 +1293,70 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "code": 200,
   "message": "success",
   "data": {
+    "initialized": true,
     "tasks": [
       {
         "task_id": 101,
         "title": "完成需求梳理",
         "sort_order": 1,
-        "completion_status": "unfinished"
+        "completion_status": "unfinished",
+        "due_at": "2026-10-20T18:00:00+08:00"
+      }
+    ]
+  },
+  "requestId": "<uuid>"
+}
+```
+
+首次调用时，如果尚无个人重点初始化记录，服务端在事务中按当时的公司十大任务预填最多 10 项并设置 `initialized=true`；之后不因公司十大列表变化而自动重置。
+
+#### GET /api/v1/app/home/company-top-tasks/?page=1&page_size=10
+
+**请求：** 无 JSON 请求体；仅返回当前用户本人未完成且已审批的任务，最多 10 条。
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 101,
+        "title": "完成需求梳理",
+        "completion_status": "unfinished",
+        "due_at": "2026-10-20T18:00:00+08:00"
+      }
+    ]
+  },
+  "requestId": "<uuid>"
+}
+```
+
+#### GET /api/v1/app/home/personal-focus/candidates/?keyword=需求&page=1&page_size=20
+
+**请求：** 无 JSON 请求体；仅列出当前用户本人承担、已审批且未完成的任务，支持标题关键词；不得包含仅由本人派发给下属的任务。
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 101,
+        "title": "完成需求梳理",
+        "completion_status": "unfinished",
+        "due_at": "2026-10-20T18:00:00+08:00"
       }
     ]
   },
@@ -1317,7 +1409,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 任务列表接口统一返回分页结果；示例中的筛选参数均在 URL 查询字符串中，不放在 GET 请求体。
 
-#### GET /api/v1/app/tasks/mine/?completion_status=unfinished&page=1&page_size=20
+#### GET /api/v1/app/tasks/?scope=mine&completion_status=unfinished&lifecycle_status=active&page=1&page_size=20
 
 **请求：** 无 JSON 请求体；如有筛选条件，查询参数见接口 URL。
 
@@ -1347,7 +1439,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 }
 ```
 
-#### GET /api/v1/app/tasks/created/?completion_status=all&page=1&page_size=20
+#### GET /api/v1/app/tasks/?scope=created&completion_status=all&lifecycle_status=active&page=1&page_size=20
 
 **请求：** 无 JSON 请求体；如有筛选条件，查询参数见接口 URL。
 
@@ -1377,7 +1469,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 }
 ```
 
-#### GET /api/v1/app/tasks/subordinates/?user_id=31&keyword=王&page=1&page_size=20
+#### GET /api/v1/app/tasks/subordinates/?task_scope=assigned&user_id=31&keyword=王&completion_status=unfinished&page=1&page_size=20
 
 **请求：** 无 JSON 请求体；如有筛选条件，查询参数见接口 URL。
 
@@ -1504,11 +1596,70 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
       { "id": 24, "name": "需求分析", "color": "#6587C5" }
     ],
     "due_at": "2026-10-20T18:00:00+08:00",
+    "started_at": "2026-10-11T10:45:00+08:00",
     "approval_status": "approved",
     "completion_status": "unfinished",
     "lifecycle_status": "active",
+    "approval_history": [
+      {
+        "round": 1,
+        "approver_name": "王总",
+        "decision": "approved",
+        "comment": "目标和截止时间明确",
+        "submitted_at": "2026-10-11T10:00:00+08:00",
+        "decided_at": "2026-10-11T10:20:00+08:00"
+      }
+    ],
     "updates": [],
     "submissions": []
+  },
+  "requestId": "<uuid>"
+}
+```
+
+#### GET /api/v1/app/tasks/101/history/
+
+**请求：** 无 JSON 请求体。服务端按任务详情的相同权限范围校验访问权限。
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "results": [
+      {
+        "id": 701,
+        "change_type": "updated",
+        "actor": { "id": 31, "display_name": "李经理" },
+        "changes": {
+          "due_at": {
+            "before": "2026-10-20T18:00:00+08:00",
+            "after": "2026-10-21T18:00:00+08:00"
+          }
+        },
+        "created_at": "2026-10-11T10:15:00+08:00"
+      }
+    ]
+  },
+  "requestId": "<uuid>"
+}
+```
+
+#### POST /api/v1/app/tasks/101/start/
+
+**请求：** 无 JSON 请求体。仅负责人可调用；任务须已审批、未取消且未完成。重复调用幂等，保留首次时间。
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "task_id": 101,
+    "started_at": "2026-10-11T10:45:00+08:00"
   },
   "requestId": "<uuid>"
 }
@@ -1610,6 +1761,27 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "approval_status": "approved",
     "decision": "approved",
     "decided_at": "2026-10-11T10:20:00+08:00"
+  },
+  "requestId": "<uuid>"
+}
+```
+
+#### POST /api/v1/app/tasks/105/resubmit/
+
+**请求：** 无 JSON 请求体。创建人须先通过 `PATCH /api/v1/app/tasks/{id}/` 修改被退回的任务。
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "task_id": 105,
+    "approval_status": "pending",
+    "approval_round": 2,
+    "approver_id": 1,
+    "submitted_at": "2026-10-11T10:25:00+08:00"
   },
   "requestId": "<uuid>"
 }
@@ -1724,6 +1896,73 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "requestId": "<uuid>"
 }
 ```
+
+#### GET /api/v1/app/notifications/?unread_only=true&page=1&page_size=20
+
+**请求：** 无 JSON 请求体。按创建时间倒序返回当前用户收到的通知；省略 `unread_only` 时返回已读和未读记录。
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 501,
+        "notification_type": "approval_required",
+        "task_id": 104,
+        "task_title": "整理客户反馈",
+        "is_read": false,
+        "created_at": "2026-10-11T09:00:00+08:00"
+      }
+    ]
+  },
+  "requestId": "<uuid>"
+}
+```
+
+#### GET /api/v1/app/notifications/unread-count/
+
+**请求：** 无 JSON 请求体。
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": { "unread_count": 2 },
+  "requestId": "<uuid>"
+}
+```
+
+#### POST /api/v1/app/notifications/mark-read/
+
+**请求 JSON**
+
+```json
+{
+  "notification_ids": [501, 503]
+}
+```
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": { "marked_read_count": 2 },
+  "requestId": "<uuid>"
+}
+```
+
+仅将请求用户有权读取且明确列出的通知标记为已读；重复调用幂等。App 打开通知列表后提交当次已展示的未读 ID，未被本次读取的通知（包括之后产生的新通知）保持未读。点击通知后仍须通过任务详情接口进行权限校验。
 
 #### GET /api/v1/app/organization/assignable-users/?keyword=张
 
@@ -2628,12 +2867,10 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ## 6. 联调前待定项
 
-1. 最终是否采用 `/api/v1` 以及当前 `/api/auth/token/` 是否迁移/兼容。
-2. 管理员与业务用户采用独立 Django 用户模型还是同一认证表的类型隔离；JWT 的受众和密钥策略。
-3. 任务普通创建的可分配人规则、退回后编辑重提规则、取消任务在列表中的呈现方式，以及“公司十大任务”来源排序与最新扁平任务模型的映射。
-4. 组织调整后，历史日志/任务查看权限按当前组织关系还是创建时组织快照计算。
-5. 事项附件的存储方式、文件大小/类型限制，以及 AI 厂商数据留存、MBTI 题目和计分方案。
-6. 精确分页上限、字段长度、错误码清单、访问频率限制和刷新令牌有效期。
+1. 管理员与业务用户采用独立 Django 用户模型还是同一认证表的类型隔离；JWT 的受众和密钥策略。
+2. 组织调整后，历史日志/任务查看权限按当前组织关系还是创建时组织快照计算。
+3. 事项附件的存储方式、文件大小/类型限制，以及 AI 厂商数据留存、MBTI 题目和计分方案。
+4. 精确分页上限、字段长度、错误码清单、访问频率限制和刷新令牌有效期。
 
 ## 7. 与 Swagger 的关系
 
