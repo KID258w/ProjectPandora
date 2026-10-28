@@ -6,6 +6,8 @@
 
 > **Issue #20 后端实施更新**：`/api/v1/app/logs/`、`logs/calendar/`、`logs/{id}/`、`logs/mine/{log_date}/`、`logs/mine/{log_date}/submit/`、`log-viewers/` 与 `tags/` 已实现。日期窗口按服务端 `TIME_ZONE` 的自然日计算。日志列表对本人可返回草稿，对下属只返回已提交；日历标记仅包含已提交。标签创建返回 `201`，启用名称冲突返回 `409`，删除为不可逆停用。首页最近五篇已提交日志通过 `apps.logs.services.recent_submitted_logs` 提供数据源，首页聚合接口属于 Issue #22。
 
+> **Issue #21 后端实施更新**：第 3.2、4.4 节所列任务、审批、进展、提交/验收、取消、组织候选人与站内通知接口已实现。任务创建、进展和完成提交返回 `201`，其他写操作返回 `200`。普通及下属任务列表用 `due_from`、`due_to` 过滤截止日期，边界均包含在内；默认仅返回活动任务。通知列表只读取，不自动标记已读；客户端将本次实际展示的通知 ID 送至 `mark-read/`。任务详情返回创建人/负责人、状态、标签、审批历史、进展和提交记录；无权访问的详情返回 `404`。任务定义变更历史不保存密码等身份资料。
+
 > 维护说明：由项目统筹与后端同学共同维护，作为 API 设计的持续文档。接口路径、字段名和错误格式可随开发协商调整。  
 > 依据：`docs/requirements/01` 至 `07`、`docs/cooperate/swagger-guide.md` 与当前 Django 骨架。需求变化时以最新确认的需求为准。
 
@@ -13,7 +15,7 @@
 
 ### 1.1 当前实现与目标接口
 
-当前已实现健康检查、文档、版本化账号/组织接口及 Issue #20 的日志/标签接口。版本化 API 已采用统一外层响应；健康检查保持原响应。
+当前已实现健康检查、文档、版本化账号/组织接口及 Issue #20、#21 的业务端接口。版本化 API 已采用统一外层响应；健康检查保持原响应。
 
 | 当前已存在 | 路径 |
 |---|---|
@@ -27,9 +29,11 @@
 | App 个人资料与密码 | `GET, PATCH /api/v1/app/me/`、`POST /api/v1/app/me/password/` |
 | App 日志与授权查看对象 | `GET /api/v1/app/logs/`、`GET /api/v1/app/logs/calendar/`、`GET /api/v1/app/logs/{id}/`、`GET, PUT /api/v1/app/logs/mine/{log_date}/`、`POST /api/v1/app/logs/mine/{log_date}/submit/`、`GET /api/v1/app/log-viewers/` |
 | App 标签 | `GET, POST /api/v1/app/tags/`、`PATCH, DELETE /api/v1/app/tags/{id}/` |
+| App 任务、审批及历史 | `GET, POST /api/v1/app/tasks/`、`GET /api/v1/app/tasks/subordinates/`、`GET, PATCH /api/v1/app/tasks/{id}/`、`GET /api/v1/app/tasks/{id}/history/`、`GET /api/v1/app/task-approvals/inbox/`、`GET /api/v1/app/task-approvals/outbox/`，以及第 3.2 节所列操作路径 |
+| App 任务通知和人员选择 | `GET /api/v1/app/notifications/`、`GET /api/v1/app/notifications/unread-count/`、`POST /api/v1/app/notifications/mark-read/`、`GET /api/v1/app/organization/assignable-users/`、`GET /api/v1/app/organization/visible-subordinates/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
-下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口已实现。其余仍为建议接口，不代表已上线。
+下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口及 Issue #21 的任务、审批、通知接口已实现。其余仍为建议接口，不代表已上线。
 
 ### 1.2 通用约定
 

@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "apps.core.apps.CoreConfig",
     "apps.tags.apps.TagsConfig",
     "apps.logs.apps.LogsConfig",
+    "apps.tasks.apps.TasksConfig",
 ]
 
 MIDDLEWARE = [
