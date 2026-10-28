@@ -17,6 +17,7 @@ import com.projectpandora.app.feature.account.*
 import com.projectpandora.app.feature.ai.AiMapScreen
 import com.projectpandora.app.feature.home.HomeScreen
 import com.projectpandora.app.feature.logs.LogsScreen
+import com.projectpandora.app.feature.logs.TagManagementScreen
 import com.projectpandora.app.feature.profile.*
 import com.projectpandora.app.feature.tasks.TaskCenterScreen
 import com.projectpandora.app.feature.views.ViewsScreen
@@ -34,6 +35,7 @@ private object AccountRoute {
     const val CHANGE_PASSWORD = "change-password"
     const val NOTIFICATIONS = "notifications"
     const val HELP = "help"
+    const val TAGS = "tags"
 }
 
 @Composable
@@ -44,6 +46,7 @@ fun PandoraApp(
     val context = LocalContext.current.applicationContext
     val tokenStorage = remember(context) { AndroidTokenStorage(context) }
     val preferences = remember(context) { AccountPreferences(context) }
+    val businessApi = remember(tokenStorage) { ApiClient.createBusinessApi(tokenStorage) }
     val repository = remember(accountRepository, tokenStorage) {
         accountRepository ?: ApiAccountRepository(ApiClient.createAppAccountApi(tokenStorage), tokenStorage)
     }
@@ -105,14 +108,18 @@ fun PandoraApp(
                 }
                 composable(AccountRoute.WELCOME) { WelcomeScreen { nav.navigate(AccountRoute.LOGIN) } }
                 composable(AccountRoute.LOGIN) { LoginScreen(model, requiresLocalNetworkPermission) }
-                composable(MainTab.HOME.route) { user?.let { HomeScreen(it, { selectTab(MainTab.VIEWS) }, { selectTab(MainTab.LOGS) }) } }
+                composable(MainTab.HOME.route) {
+                    user?.let { HomeScreen(it, businessApi, { id -> nav.navigate("task-center/$id") },
+                        { date -> if (date.isBlank()) selectTab(MainTab.LOGS) else nav.navigate("log-detail/$date") }) }
+                }
                 composable(MainTab.VIEWS.route) { ViewsScreen { nav.navigate(AppRoute.TASK_CENTER) } }
-                composable(MainTab.LOGS.route) { LogsScreen() }
+                composable(MainTab.LOGS.route) { LogsScreen(businessApi) }
+                composable("log-detail/{date}") { entry -> LogsScreen(businessApi, entry.arguments?.getString("date") ?: "") { nav.popBackStack() } }
                 composable(MainTab.AI_MAP.route) { AiMapScreen() }
                 composable(MainTab.PROFILE.route) {
                     user?.let {
                         ProfileScreen(it, { nav.navigate(AccountRoute.INFO) }, { nav.navigate(AccountRoute.NOTIFICATIONS) },
-                            { nav.navigate(AccountRoute.HELP) }, { model.logout(); resetTo(AccountRoute.LOGIN) })
+                            { nav.navigate(AccountRoute.HELP) }, { model.logout(); resetTo(AccountRoute.LOGIN) }, { nav.navigate(AccountRoute.TAGS) })
                     }
                 }
                 composable(AccountRoute.INFO) {
@@ -159,7 +166,14 @@ fun PandoraApp(
                 }
                 composable(AccountRoute.NOTIFICATIONS) { NotificationScreen(preferences) { nav.popBackStack() } }
                 composable(AccountRoute.HELP) { HelpScreen { nav.popBackStack() } }
-                composable(AppRoute.TASK_CENTER) { Column { BackButton { nav.popBackStack() }; TaskCenterScreen() } }
+                composable(AccountRoute.TAGS) {
+                    if (user?.role == "创始人") TagManagementScreen(businessApi) { nav.popBackStack() }
+                }
+                composable(AppRoute.TASK_CENTER) { TaskCenterScreen(businessApi, { nav.popBackStack() }) }
+                composable("task-center/{id}") { entry ->
+                    val id = entry.arguments?.getString("id")?.toLongOrNull()
+                    if (id != null) TaskCenterScreen(businessApi, { nav.popBackStack() }, id)
+                }
             }
         }
     }
