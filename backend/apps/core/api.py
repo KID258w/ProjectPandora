@@ -3,6 +3,9 @@ from uuid import uuid4
 
 from drf_spectacular.openapi import AutoSchema
 from rest_framework.pagination import PageNumberPagination
+from rest_framework import generics
+
+from apps.accounts.authentication import IsBusinessUser, ScopedJWTAuthentication
 
 
 class EnvelopeMixin:
@@ -59,3 +62,17 @@ class StandardPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = "page_size"
     max_page_size = 100
+
+
+class BusinessAPIView(EnvelopeMixin, generics.GenericAPIView):
+    schema = EnvelopeSchema()
+    authentication_classes = [ScopedJWTAuthentication]
+    permission_classes = [IsBusinessUser]
+
+
+def paginated_response(view, request, queryset, serializer):
+    from rest_framework.response import Response
+
+    paginator = StandardPagination()
+    page = paginator.paginate_queryset(queryset, request, view=view)
+    return paginator.get_paginated_response(serializer(page)) if page is not None else Response(serializer(queryset))
