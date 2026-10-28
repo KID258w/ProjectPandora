@@ -173,6 +173,13 @@ class LogMineView(BusinessAPIView):
                 log = DailyLog.objects.select_for_update().filter(author=request.user, log_date=day).first()
                 existing_ids = set(log.tag_links.values_list("tag_id", flat=True)) if log else set()
                 tags = validate_tag_ids(values["tag_ids"], existing_ids) if "tag_ids" in values else None
+                completed_work = values.get("completed_work", log.completed_work if log else "")
+                next_day_plan = values.get("next_day_plan", log.next_day_plan if log else "")
+                resulting_tag_ids = {tag.pk for tag in tags} if tags is not None else existing_ids
+                if (log is None or log.status == DailyLog.Status.DRAFT) and not (
+                    completed_work.strip() or next_day_plan.strip() or resulting_tag_ids
+                ):
+                    raise ValidationError({"completed_work": "空白日志不会保存；请先填写内容或关联标签。"})
                 if log is None:
                     log = DailyLog(author=request.user, department=request.user.department,
                                    team=request.user.team, log_date=day)
@@ -220,7 +227,9 @@ class LogViewerListView(BusinessAPIView):
         keyword = request.query_params.get("keyword", "").strip().casefold()
         if keyword:
             users = [u for u in users if any(keyword in (value or "").casefold() for value in (
-                u.display_name, u.username, u.team.name if u.team else "", u.department.name if u.department else "",
+                u.display_name,
+                u.team.name if u.team else "",
+                u.department.name if u.department else "",
             ))]
         users.sort(key=lambda u: (u.department_id or 0, u.team_id or 0, u.pk))
         return paginated_response(self, request, users, lambda rows: [{

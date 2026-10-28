@@ -59,3 +59,18 @@ The system SHALL allow A to view the task A created and its submitted result, bu
 #### Scenario: Founder attempts to accept the result
 - **WHEN** the Founder is not the task's direct dispatcher and attempts to accept B's result
 - **THEN** the system rejects the operation without changing task or submission state
+
+### Requirement: Cross-department assignments notify both sides of result handoff
+The system SHALL use the ordinary task notification lifecycle for cross-department assignments. The direct dispatcher SHALL be notified when the assignee submits a result, and the assignee SHALL be notified when the direct dispatcher accepts or returns it. A return notification SHALL include the reason, and a resubmission SHALL resolve the previous return notification.
+
+#### Scenario: B submits a result to A
+- **WHEN** B submits completion details for a task assigned by A
+- **THEN** A receives an unread notification linked to the submitted result
+
+#### Scenario: A returns B's result
+- **WHEN** A returns the result with a reason
+- **THEN** B receives an unread return notification containing the reason and can revise and resubmit
+
+#### Scenario: A accepts B's result
+- **WHEN** A accepts B's submitted result
+- **THEN** B receives an unread acceptance notification and the task becomes completed

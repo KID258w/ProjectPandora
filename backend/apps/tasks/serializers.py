@@ -4,6 +4,16 @@ from apps.accounts.api_serializers import StrictInputMixin
 from apps.logs.serializers import TagBriefSerializer, AuthorBriefSerializer
 
 
+class TaskCreateInputSerializer(StrictInputMixin, serializers.Serializer):
+    assignee_id = serializers.IntegerField(min_value=1)
+    title = serializers.CharField(max_length=200, allow_blank=False, trim_whitespace=True)
+    description = serializers.CharField(allow_blank=False, trim_whitespace=True)
+    required_materials = serializers.CharField(allow_blank=True, trim_whitespace=True, required=False)
+    association_note = serializers.CharField(allow_blank=True, trim_whitespace=True, required=False)
+    due_at = serializers.DateTimeField()
+    tag_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False)
+
+
 class TaskInputSerializer(StrictInputMixin, serializers.Serializer):
     assignee_id = serializers.IntegerField(min_value=1, required=False)
     title = serializers.CharField(max_length=200, allow_blank=False, trim_whitespace=True, required=False)
@@ -136,7 +146,13 @@ class NotificationSerializer(serializers.Serializer):
     notification_type = serializers.CharField()
     task_id = serializers.IntegerField()
     task_title = serializers.CharField()
+    task_lifecycle_status = serializers.CharField()
+    task_approval_status = serializers.CharField()
+    task_completion_status = serializers.CharField()
+    submission_id = serializers.IntegerField(allow_null=True)
+    summary = serializers.CharField(allow_blank=True)
     is_read = serializers.BooleanField()
+    resolved_at = serializers.DateTimeField(allow_null=True)
     created_at = serializers.DateTimeField()
     read_at = serializers.DateTimeField(allow_null=True)
 

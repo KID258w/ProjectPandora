@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
 from apps.accounts.authentication import has_complete_supervisor_chain
@@ -85,12 +86,31 @@ def create_approval_round(task):
     return record
 
 
+def create_task_notification(task, recipient, notification_type, event_key, submission=None):
+    if recipient is None:
+        return None
+    notification, _ = TaskNotification.objects.get_or_create(event_key=event_key, defaults={
+        "recipient": recipient,
+        "task": task,
+        "submission": submission,
+        "notification_type": notification_type,
+    })
+    return notification
+
+
+def resolve_task_notifications(task, notification_types=None, submission=None):
+    rows = TaskNotification.objects.filter(task=task, resolved_at__isnull=True)
+    if notification_types is not None:
+        rows = rows.filter(notification_type__in=notification_types)
+    if submission is not None:
+        rows = rows.filter(submission=submission)
+    return rows.update(resolved_at=timezone.now())
+
+
 def send_assignment(task, approval_id=0):
     if task.assignee_id != task.creator_id:
-        TaskNotification.objects.get_or_create(event_key=f"assignment:{task.pk}:{approval_id}", defaults={
-            "recipient": task.assignee, "task": task,
-            "notification_type": TaskNotification.Type.ASSIGNMENT_RECEIVED,
-        })
+        create_task_notification(task, task.assignee, TaskNotification.Type.ASSIGNMENT_RECEIVED,
+                                 f"assignment:{task.pk}:{approval_id}")
 
 
 def set_task_tags(task, tags):

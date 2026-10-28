@@ -114,14 +114,21 @@ class TaskNotification(models.Model):
     class Type(models.TextChoices):
         APPROVAL_REQUIRED = "approval_required", "待审批"
         ASSIGNMENT_RECEIVED = "assignment_received", "新任务"
+        TASK_CANCELLED = "task_cancelled", "任务已取消"
+        SUBMISSION_RECEIVED = "submission_received", "待验收"
+        SUBMISSION_ACCEPTED = "submission_accepted", "验收通过"
+        SUBMISSION_RETURNED = "submission_returned", "结果退回"
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="task_notifications")
     task = models.ForeignKey(Task, on_delete=models.PROTECT, related_name="notifications")
+    submission = models.ForeignKey(TaskSubmission, null=True, blank=True, on_delete=models.PROTECT,
+                                   related_name="notifications")
     notification_type = models.CharField(max_length=24, choices=Type.choices)
     event_key = models.CharField(max_length=100, unique=True)
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     read_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]

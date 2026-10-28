@@ -16,10 +16,12 @@ from .models import (Task, TaskApprovalRecord, TaskChangeHistory, TaskNotificati
 from .serializers import (CancelInputSerializer, DecisionInputSerializer, HistoryItemSerializer,
                           MarkReadInputSerializer, NotificationSerializer, PersonSerializer,
                           QueueItemSerializer, ReviewInputSerializer, SubmissionInputSerializer,
+                          TaskCreateInputSerializer,
                           TaskDetailSerializer, TaskInputSerializer, TaskSummarySerializer,
                           TaskSubmissionSerializer, TaskUpdateSerializer, UpdateInputSerializer)
-from .services import (assignable_users, create_approval_round, json_value, require_assignee,
-                       require_creator, require_executable, send_assignment, set_task_tags,
+from .services import (assignable_users, create_approval_round, create_task_notification,
+                       json_value, require_assignee, require_creator, require_executable,
+                       resolve_task_notifications, send_assignment, set_task_tags,
                        subordinate_ids, task_detail, task_summary, task_tags, user_brief,
                        validate_assignee, validated_task_tags, visible_task)
 
@@ -71,12 +73,9 @@ class TaskListView(BusinessAPIView):
         queryset = filtered_tasks(request, queryset)
         return paginated_response(self, request, queryset, lambda rows: [task_summary(row) for row in rows])
 
-    @extend_schema(tags=["App 任务"], summary="创建任务并送直属上级审批", request=TaskInputSerializer, responses=TaskDetailSerializer)
+    @extend_schema(tags=["App 任务"], summary="创建任务并送直属上级审批", request=TaskCreateInputSerializer, responses=TaskDetailSerializer)
     def post(self, request):
-        values = form_data(TaskInputSerializer, request.data)
-        for field in ("assignee_id", "title", "description", "due_at"):
-            if field not in values:
-                raise ValidationError({field: "此字段必填。"})
+        values = form_data(TaskCreateInputSerializer, request.data)
         assignee = validate_assignee(request.user, values["assignee_id"])
         tags = validated_task_tags(None, values.get("tag_ids", []))
         try:
@@ -213,6 +212,10 @@ class TaskDetailView(BusinessAPIView):
                     task.returned_edit_required = False
                     task.save(update_fields=["returned_edit_required", "updated_at"])
                 elif task.approval_status == Task.Approval.APPROVED and key_changed:
+                    resolve_task_notifications(task, [
+                        TaskNotification.Type.ASSIGNMENT_RECEIVED,
+                        TaskNotification.Type.SUBMISSION_RETURNED,
+                    ])
                     if request.user.business_role != User.Role.FOUNDER:
                         task.approval_status = Task.Approval.PENDING
                         task.save(update_fields=["approval_status", "updated_at"])
@@ -292,6 +295,7 @@ class TaskApprovalView(BusinessAPIView):
             approval.comment = values.get("comment", "")
             approval.decided_at = timezone.now()
             approval.save(update_fields=["decision", "comment", "decided_at"])
+            resolve_task_notifications(task, [TaskNotification.Type.APPROVAL_REQUIRED])
             task.approval_status = values["decision"]
             task.returned_edit_required = values["decision"] == Task.Approval.RETURNED
             task.save(update_fields=["approval_status", "returned_edit_required", "updated_at"])
@@ -340,6 +344,11 @@ class TaskSubmissionView(BusinessAPIView):
                 task.completion_status = Task.Completion.COMPLETED
                 task.completed_at = timezone.now()
                 task.save(update_fields=["completion_status", "completed_at", "updated_at"])
+            else:
+                resolve_task_notifications(task, [TaskNotification.Type.ASSIGNMENT_RECEIVED])
+                resolve_task_notifications(task, [TaskNotification.Type.SUBMISSION_RETURNED])
+                create_task_notification(task, task.creator, TaskNotification.Type.SUBMISSION_RECEIVED,
+                                         f"submission:{row.pk}:received", submission=row)
         return Response({"id": row.pk, "task_id": task.pk, "review_status": row.review_status,
                          "completion_note": row.completion_note, "materials_note": row.materials_note,
                          "submitted_at": row.submitted_at}, status=201)
@@ -368,6 +377,13 @@ class TaskReviewView(BusinessAPIView):
             row.reviewed_by = request.user
             row.reviewed_at = timezone.now()
             row.save(update_fields=["review_status", "review_comment", "reviewed_by", "reviewed_at"])
+            resolve_task_notifications(task, [TaskNotification.Type.SUBMISSION_RECEIVED], submission=row)
+            if row.review_status == TaskSubmission.Review.ACCEPTED:
+                create_task_notification(task, task.assignee, TaskNotification.Type.SUBMISSION_ACCEPTED,
+                                         f"submission:{row.pk}:accepted", submission=row)
+            else:
+                create_task_notification(task, task.assignee, TaskNotification.Type.SUBMISSION_RETURNED,
+                                         f"submission:{row.pk}:returned", submission=row)
             if row.review_status == TaskSubmission.Review.ACCEPTED:
                 task.completion_status = Task.Completion.COMPLETED
                 task.completed_at = row.reviewed_at
@@ -384,16 +400,33 @@ class TaskCancelView(BusinessAPIView):
     def post(self, request, pk):
         values = form_data(CancelInputSerializer, request.data)
         with transaction.atomic():
-            task = Task.objects.select_for_update().filter(pk=pk).first()
+            task = Task.objects.select_for_update().select_related("creator", "assignee").filter(pk=pk).first()
             if task is None:
                 raise NotFound("任务不存在。")
             require_creator(task, request.user)
             if task.lifecycle_status != Task.Lifecycle.ACTIVE or task.completion_status != Task.Completion.UNFINISHED:
                 raise ValidationError("任务已完成或取消。")
+            recipient = None
+            if task.approval_status == Task.Approval.PENDING:
+                pending_approval = task.approval_records.filter(
+                    decision=TaskApprovalRecord.Decision.PENDING
+                ).select_related("approver").order_by("-round").first()
+                recipient = pending_approval.approver if pending_approval else None
+            elif task.approval_status == Task.Approval.APPROVED and task.assignee_id != task.creator_id:
+                recipient = task.assignee
             task.lifecycle_status = Task.Lifecycle.CANCELLED
             task.cancellation_reason = values["reason"]
             task.cancelled_at = timezone.now()
             task.save(update_fields=["lifecycle_status", "cancellation_reason", "cancelled_at", "updated_at"])
+            resolve_task_notifications(task, [
+                TaskNotification.Type.APPROVAL_REQUIRED,
+                TaskNotification.Type.ASSIGNMENT_RECEIVED,
+                TaskNotification.Type.SUBMISSION_RECEIVED,
+                TaskNotification.Type.SUBMISSION_RETURNED,
+            ])
+            if recipient is not None and recipient.pk != request.user.pk:
+                create_task_notification(task, recipient, TaskNotification.Type.TASK_CANCELLED,
+                                         f"task-cancelled:{task.pk}:{recipient.pk}")
         return Response({"task_id": task.pk, "lifecycle_status": task.lifecycle_status,
                          "cancelled_at": task.cancelled_at})
 
@@ -436,16 +469,26 @@ class VisibleSubordinateListView(BusinessAPIView):
             users = [u for u in users if u.department_id == department_id]
         keyword = request.query_params.get("keyword", "").strip().casefold()
         if keyword:
-            users = [u for u in users if any(keyword in (value or "").casefold() for value in (
-                u.display_name, u.username, u.department.name if u.department else "", u.team.name if u.team else "",
-            ))]
+            users = [u for u in users if keyword in (u.display_name or "").casefold()]
         users.sort(key=lambda u: u.pk)
         return paginated_response(self, request, users, lambda rows: [person_data(u) for u in rows])
 
 
 def notification_data(row):
+    summary = ""
+    if row.notification_type == TaskNotification.Type.TASK_CANCELLED:
+        summary = row.task.cancellation_reason
+    elif row.submission_id:
+        if row.notification_type == TaskNotification.Type.SUBMISSION_RECEIVED:
+            summary = row.submission.completion_note
+        else:
+            summary = row.submission.review_comment
     return {"id": row.pk, "notification_type": row.notification_type, "task_id": row.task_id,
-            "task_title": row.task.title, "is_read": row.is_read,
+            "task_title": row.task.title, "task_lifecycle_status": row.task.lifecycle_status,
+            "task_approval_status": row.task.approval_status,
+            "task_completion_status": row.task.completion_status,
+            "submission_id": row.submission_id, "summary": summary,
+            "is_read": row.is_read, "resolved_at": row.resolved_at,
             "created_at": row.created_at, "read_at": row.read_at}
 
 
@@ -458,9 +501,9 @@ class NotificationListView(BusinessAPIView):
         unread_only = request.query_params.get("unread_only", "false").lower()
         if unread_only not in ("true", "false"):
             raise ValidationError({"unread_only": "应为 true 或 false。"})
-        rows = TaskNotification.objects.filter(recipient=request.user).select_related("task")
+        rows = TaskNotification.objects.filter(recipient=request.user).select_related("task", "submission")
         if unread_only == "true":
-            rows = rows.filter(is_read=False)
+            rows = rows.filter(is_read=False, resolved_at__isnull=True)
         return paginated_response(self, request, rows, lambda page: [notification_data(row) for row in page])
 
 
@@ -469,7 +512,9 @@ class NotificationUnreadCountView(BusinessAPIView):
 
     @extend_schema(tags=["App 通知"], summary="查询本人未读任务通知数", responses=OpenApiTypes.OBJECT)
     def get(self, request):
-        return Response({"unread_count": TaskNotification.objects.filter(recipient=request.user, is_read=False).count()})
+        return Response({"unread_count": TaskNotification.objects.filter(
+            recipient=request.user, is_read=False, resolved_at__isnull=True
+        ).count()})
 
 
 class NotificationMarkReadView(BusinessAPIView):

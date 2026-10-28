@@ -114,7 +114,8 @@ class LogAndTagApiTests(APITestCase):
         self.assertEqual(self.client.put(self.url(), {"tag_ids": [tag_id]}, format="json").status_code, 400)
 
     def test_submit_required_and_reject_extra_fields(self):
-        self.assertEqual(self.client.put(self.url(), {"completed_work": ""}, format="json").status_code, 200)
+        self.assertEqual(self.client.put(self.url(), {"completed_work": ""}, format="json").status_code, 400)
+        self.assertFalse(DailyLog.objects.filter(author=self.employee, log_date=self.today).exists())
         self.assertEqual(self.client.post(self.url() + "submit/", {}, format="json").status_code, 400)
         self.assertEqual(self.client.put(self.url(), {"task_id": 1}, format="json").status_code, 400)
         self.assertEqual(self.client.put(self.url(), {"completed_work": "完成"}, format="json").status_code, 200)

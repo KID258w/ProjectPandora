@@ -12,6 +12,7 @@
 - [x] 2.3 Enforce requester, assignee, creator-supervisor, and read-only hierarchical access rules in APIs.
 - [x] 2.4 Use creator, assignee, and organization details for task context; do not persist or expose a cross-department task marker or filter.
 - [ ] 2.5 Add in-app reminders for approval, assignment availability, result submission, and acceptance/return.
+- [x] 2.6 Implement backend lifecycle notifications for cross-department result submission, acceptance, return, and cancellation through the shared task notification model.
 
 ## 3. Android workflows
 

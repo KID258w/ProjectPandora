@@ -15,6 +15,7 @@ Cross-department collaboration is represented by an ordinary standalone task ass
 - Because A has a direct supervisor, the task appears in A's “待上级审批” and the Founder's “待你审批”. Before approval it is not in A's “我创建的” or B's “我的任务”. After approval, the same task appears in A's “我创建的” and B's “我的任务”; B does not accept it a second time.
 - B may execute the assigned task directly or create new standalone local tasks for themself or eligible direct reports using the ordinary form and approval flow. Optional association notes may explain context; there is no foreign-key task tree or cascade. A cannot inspect B's internal tasks.
 - Only direct dispatcher A may accept or return B's submission; return requires a reason. Completion remains binary and execution updates remain text-only.
+- Cross-department assignments reuse the ordinary task notification events: notify A when B submits a result, notify B when A accepts or returns it, and include the return reason. Resubmission resolves the previous return notice; notification resolution remains separate from read state.
 - Home ordering treats tasks created by someone else and assigned to the current user as “他人派发”, without a separate cross-department category. Month-view colors distinguish “他人派发” from “本人创建” only.
 
 ## Authorization and Data Boundaries
