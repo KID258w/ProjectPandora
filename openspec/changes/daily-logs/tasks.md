@@ -1,10 +1,10 @@
 ## 1. Log data and APIs
 
-- [ ] 1.1 Add daily-log records, author/date uniqueness, status, and timestamps; do not create a log-to-task association.
-- [ ] 1.2 Implement create/update/draft/submit APIs with required completed-work validation and business-timezone three-date write restrictions.
-- [ ] 1.3 Implement author-only draft access and three-date edit/frozen-history enforcement.
-- [ ] 1.4 Implement manager subordinate-log queries for submitted records only, scoped through the organization hierarchy.
-- [ ] 1.5 Ensure the log API and editor contain only completed work for the selected log date and optional next-day plan; omit task and issue/risk fields.
+- [x] 1.1 Add daily-log records, author/date uniqueness, status, and timestamps; do not create a log-to-task association.
+- [x] 1.2 Implement create/update/draft/submit APIs with required completed-work validation and business-timezone three-date write restrictions.
+- [x] 1.3 Implement author-only draft access and three-date edit/frozen-history enforcement.
+- [x] 1.4 Implement manager subordinate-log queries for submitted records only, scoped through the organization hierarchy.
+- [ ] 1.5 Ensure the log API and editor contain only completed work for the selected log date and optional next-day plan; omit task and issue/risk fields. Backend API complete; Android editor pending.
 
 ## 2. Android workflows
 
@@ -15,7 +15,7 @@
 
 ## 3. Integration and verification
 
-- [ ] 3.1 Provide a query/API for the home panel to read the current user's latest five submitted log summaries.
+- [x] 3.1 Provide a query/API for the home panel to read the current user's latest five submitted log summaries. Backend query: `apps.logs.services.recent_submitted_logs`; aggregation is Issue #22.
 - [ ] 3.2 Verify view APIs do not read or expose log content, summaries, status, or associations.
 - [ ] 3.3 Test uniqueness, required field, draft privacy, edits/backfill within the three-date window, freeze after the window, year/month navigation, person search scope, role scopes, and forbidden operations.
 - [ ] 3.4 Run an end-to-end create-draft-submit-edit-and-manager-read scenario, including denied draft access.
