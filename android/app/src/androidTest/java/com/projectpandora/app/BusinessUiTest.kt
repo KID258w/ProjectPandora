@@ -187,7 +187,7 @@ class BusinessUiTest {
 
     @Test fun selectedLogPersonIncludesDepartmentAndTeam() {
         val api = FakeBusinessApi()
-        compose.setContent { PandoraAppTheme { LogsScreen(api) } }
+        compose.setContent { PandoraAppTheme { LogsScreen(api, canViewSubordinates = true) } }
         compose.onNodeWithText("选择查看对象").performScrollTo().performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("王同事 · 产品部 客户端组").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("王同事 · 产品部 客户端组").performClick()

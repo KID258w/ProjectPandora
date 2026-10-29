@@ -7,7 +7,6 @@ urlpatterns = [
     path("task-approvals/inbox/", views.ApprovalInboxView.as_view()),
     path("task-approvals/outbox/", views.ApprovalOutboxView.as_view()),
     path("tasks/<int:pk>/history/", views.TaskHistoryView.as_view()),
-    path("tasks/<int:pk>/start/", views.TaskStartView.as_view()),
     path("tasks/<int:pk>/resubmit/", views.TaskResubmitView.as_view()),
     path("tasks/<int:pk>/approval/", views.TaskApprovalView.as_view()),
     path("tasks/<int:pk>/updates/", views.TaskUpdateView.as_view()),

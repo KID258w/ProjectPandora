@@ -6,7 +6,7 @@
 
 > **Issue #20 后端实施更新**：`/api/v1/app/logs/`、`logs/calendar/`、`logs/{id}/`、`logs/mine/{log_date}/`、`logs/mine/{log_date}/submit/`、`log-viewers/` 与 `tags/` 已实现。日期窗口按服务端 `TIME_ZONE` 的自然日计算。日志列表对本人可返回草稿，对下属只返回已提交；日历标记仅包含已提交。标签创建返回 `201`，启用名称冲突返回 `409`，删除为不可逆停用。首页最近五篇已提交日志通过 `apps.logs.services.recent_submitted_logs` 提供数据源，首页聚合接口属于 Issue #22。
 
-> **Issue #21 后端实施更新**：第 3.2、4.4 节所列任务、审批、进展、提交/验收、取消、组织候选人与站内通知接口已实现。任务创建、进展和完成提交返回 `201`，其他写操作返回 `200`。普通及下属任务列表用 `due_from`、`due_to` 过滤截止日期，边界均包含在内；默认仅返回活动任务。通知列表只读取，不自动标记已读；客户端将本次实际展示的通知 ID 送至 `mark-read/`。任务详情返回创建人/负责人、状态、标签、审批历史、进展和提交记录；无权访问的详情返回 `404`。任务定义变更历史不保存密码等身份资料。
+> **Issue #21 后端实施更新**：第 3.2、4.4 节所列任务、审批、进展、提交/验收、取消、组织候选人与站内通知接口已实现。任务创建、进展和完成提交返回 `201`，其他写操作返回 `200`。普通及下属任务列表用 `due_from`、`due_to` 过滤截止日期，边界均包含在内；默认仅返回活动任务。通知列表只读取，不自动标记已读；用户点击单条通知时，客户端将该通知 ID 送至 `mark-read/`；打开或浏览通知列表不会自动标记已读。任务详情返回创建人/负责人、状态、标签、审批历史、进展和提交记录；无权访问的详情返回 `404`。任务定义变更历史不保存密码等身份资料。
 
 > 维护说明：由项目统筹与后端同学共同维护，作为 API 设计的持续文档。接口路径、字段名和错误格式可随开发协商调整。  
 > 依据：`docs/requirements/01` 至 `07`、`docs/cooperate/swagger-guide.md` 与当前 Django 骨架。需求变化时以最新确认的需求为准。
@@ -132,10 +132,9 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `GET /api/v1/app/tasks/subordinates/` | 当前用户有权查看的下属已审批任务；支持 `task_scope=assigned|created`、截止日期、完成状态和授权下属筛选 |
 | `GET /api/v1/app/task-approvals/inbox/` | 待当前上级审批任务；不提供已完成/未完成筛选 |
 | `GET /api/v1/app/task-approvals/outbox/` | 当前用户创建、等待上级审批或已退回待修改的任务；不提供完成状态筛选 |
-| `GET /api/v1/app/tasks/{id}/` | 任务详情；返回审批/验收历史、进展和全部标签；服务端校验原任务可见性 |
+| `GET /api/v1/app/tasks/{id}/` | 任务详情；返回审批/验收历史、进展和全部标签；服务端校验原任务可见性，App 按创建人、直属审批人、负责人或只读查看者关系展示相应内容 |
 | `GET /api/v1/app/tasks/{id}/history/` | 返回当前用户有权查看的任务创建及定义变更记录，含操作人、时间和变更字段 |
 | `POST /api/v1/app/tasks/` | 普通入口创建任务；可选提交 `tag_ids`；创始人可指派给本公司任一成员，其他角色按各自组织范围选择负责人；创建人有直属上级则进入待审批 |
-| `POST /api/v1/app/tasks/{id}/start/` | 负责人首次打开已审批任务详情或开始处理时记录首次开始时间；重复调用不覆盖 |
 | `PATCH /api/v1/app/tasks/{id}/` | 按原任务编辑权限修改任务；可选提交 `tag_ids`；单独改标签不触发重新审批 |
 | `POST /api/v1/app/tasks/{id}/resubmit/` | 创建人完成退回任务编辑后重新送直属上级审批 |
 | `POST /api/v1/app/tasks/{id}/approval/` | 上级审批通过或退回；退回必须附原因 |
@@ -148,6 +147,8 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `POST /api/v1/app/notifications/mark-read/` | 将请求中明确列出的本人通知标记为已读；不改变任务状态 |
 | `GET /api/v1/app/organization/assignable-users/` | 查询当前用户在普通任务表单中有权选择的负责人；创始人可查询本公司全体成员，其他角色按其派发范围返回，支持姓名关键词 |
 | `GET /api/v1/app/organization/visible-subordinates/` | 查看对象选择器可访问的下属；逐级查看时关键词仅匹配授权下属姓名 |
+
+任务详情的 Android 展示按当前用户关系区分：创建人和本轮直属审批人可查看审批状态及审批记录；非创建人/审批人的负责人和层级只读查看者不显示审批状态或审批记录。负责人及授权只读查看者可查看已审批任务的执行信息；具体操作仍由服务端逐项校验。用户同时具备多种关系时，客户端合并展示其有权查看的信息。创始人免审批任务不展示空审批记录区块。
 
 普通任务列表通过一个筛选接口支持 `scope=all|mine|created`、`completion_status=all|unfinished|completed`、`lifecycle_status=active|cancelled|all`、`due_from` 和 `due_to`；日期边界均包含在结果中，默认 `scope=mine`、`completion_status=all`、`lifecycle_status=active` 且不限日期。`scope=all` 返回本人承担或创建的已审批任务并按任务 ID 去重。取消任务保留为归档记录，可通过 `lifecycle_status=cancelled` 查询。下属任务接口支持 `task_scope=assigned|created`，只返回审批通过的记录；具体人员筛选只能在服务端授权的下属范围内。审批列表仅按审批流程筛选。负责人选择接口只返回创建者有权派发给的对象：创始人为本公司全体成员；部门经理为本人、本部门团队长或其他部门经理；团队长为本人或本团队普通员工；普通员工仅本人。部门经理指派给其他部门经理仍调用统一创建接口，并由服务端按创建人的直属上级规则发起审批。任务被直属上级退回后，创建人通过 `PATCH` 修改，再调用 `POST /tasks/{id}/resubmit/` 新增审批轮次；审批通过后关键定义字段发生变化时，服务端自动重新送审并写入新审批轮次。单独修改标签不触发重新审批。
 
@@ -1608,7 +1609,6 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
       { "id": 24, "name": "需求分析", "color": "#6587C5" }
     ],
     "due_at": "2026-10-20T18:00:00+08:00",
-    "started_at": "2026-10-11T10:45:00+08:00",
     "approval_status": "approved",
     "completion_status": "unfinished",
     "lifecycle_status": "active",
@@ -1654,24 +1654,6 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
         "created_at": "2026-10-11T10:15:00+08:00"
       }
     ]
-  },
-  "requestId": "<uuid>"
-}
-```
-
-#### POST /api/v1/app/tasks/101/start/
-
-**请求：** 无 JSON 请求体。仅负责人可调用；任务须已审批、未取消且未完成。重复调用幂等，保留首次时间。
-
-**响应 JSON**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "task_id": 101,
-    "started_at": "2026-10-11T10:45:00+08:00"
   },
   "requestId": "<uuid>"
 }
@@ -1927,6 +1909,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
       {
         "id": 501,
         "notification_type": "approval_required",
+        "approval_round": 2,
+        "approval_decision": "pending",
         "task_id": 104,
         "task_title": "整理客户反馈",
         "task_lifecycle_status": "active",
@@ -1944,6 +1928,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "requestId": "<uuid>"
 }
 ```
+
+审批通知返回 `approval_round` 和 `approval_decision`，分别表示该通知对应的审批轮次及该轮审批结果（`pending`、`returned`、`approved`）；非审批通知的这两个字段为 `null`。通知保留所属轮次的结果，任务重新提交后旧通知不会显示成新一轮的状态。
 
 #### GET /api/v1/app/notifications/unread-count/
 
@@ -1981,7 +1967,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 }
 ```
 
-仅将请求用户有权读取且明确列出的通知标记为已读；重复调用幂等。App 打开通知列表后提交当次已展示的未读 ID，未被本次读取的通知（包括之后产生的新通知）保持未读。点击通知后仍须通过任务详情接口进行权限校验。
+仅将请求用户有权读取且明确列出的通知标记为已读；重复调用幂等。打开或浏览通知列表不会自动标记已读；用户点击单条通知时，App 仅提交该通知 ID。未被点击的通知（包括之后产生的新通知）保持未读。点击后仍须通过对应任务详情或审批中心入口进行权限校验。
 
 #### GET /api/v1/app/organization/assignable-users/?keyword=张
 

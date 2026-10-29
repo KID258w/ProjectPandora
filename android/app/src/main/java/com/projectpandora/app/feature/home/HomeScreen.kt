@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,39 +14,78 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.gson.JsonObject
 import com.projectpandora.app.core.network.*
 import com.projectpandora.app.BuildConfig
 import com.projectpandora.app.feature.account.BusinessUser
 import com.projectpandora.app.ui.*
 import com.projectpandora.app.ui.theme.PandoraColors as C
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import androidx.lifecycle.repeatOnLifecycle
 
 private const val ROOT = "api/v1/app/"
 
 @Composable
-fun HomeScreen(user: BusinessUser, api: BusinessApi, onTask: (Long) -> Unit, onLog: (String) -> Unit, onApprovalTask: (Long) -> Unit = onTask) {
+fun HomeScreen(user: BusinessUser, api: BusinessApi, onTask: (Long) -> Unit, onLog: (String) -> Unit, onApprovalTask: (Long) -> Unit = onTask, notificationRefreshKey: Int = 0) {
     val context = LocalContext.current
     var page by remember { mutableStateOf("home") }; var itemReturn by remember { mutableStateOf("home") }; var data by remember { mutableStateOf<JsonObject?>(null) }
     var list by remember { mutableStateOf<List<JsonObject>>(emptyList()) }; var item by remember { mutableStateOf<JsonObject?>(null) }
     var error by remember { mutableStateOf("") }; var busy by remember { mutableStateOf(false) }; var reload by remember { mutableIntStateOf(0) }
+    var unreadNotificationCount by remember { mutableLongStateOf(0L) }
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) reload++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(page, lifecycleOwner) {
+        if (page == "home") {
+            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (isActive) {
+                    delay(30_000)
+                    try { unreadNotificationCount = api.get(ROOT + "notifications/unread-count/").data().long("unread_count") }
+                    catch (_: Exception) { /* Keep the last known count during a transient connection failure. */ }
+                }
+            }
+        }
+    }
     LaunchedEffect(page, reload) {
         error = ""; busy = true
         try {
             when (page) {
-                "home" -> data = api.get(ROOT + "home/").data()
+                "home" -> {
+                    try { data = api.get(ROOT + "home/").data() }
+                    catch (e: Exception) { error = e.businessMessage() }
+                    try { unreadNotificationCount = api.get(ROOT + "notifications/unread-count/").data().long("unread_count") }
+                    catch (e: Exception) { if (error.isBlank()) error = e.businessMessage() }
+                }
                 "items" -> list = api.all(ROOT + "company-items/").take(10)
                 "company-tasks" -> list = api.all(ROOT + "home/company-top-tasks/").take(10)
             }
         } catch (e: Exception) { error = e.businessMessage() } finally { busy = false }
     }
     if (page == "focus") { FocusScreen(api, onBack = { page = "home"; reload++ }, onTask = onTask); return }
-    if (page == "notifications") { TaskNotificationsScreen(api, onBack = { page = "home"; reload++ }, onTask = { id, approval -> if (approval) onApprovalTask(id) else onTask(id) }); return }
+    if (page == "notifications") { TaskNotificationsScreen(api, onBack = { page = "home"; reload++ }, onTask = { id, approval -> if (approval) onApprovalTask(id) else onTask(id) }, reloadKey = reload + notificationRefreshKey); return }
     PageColumn {
         if (page != "home") BackButton { page = if (page == "item") itemReturn else "home"; reload++ }
         if (page == "home") {
-            BrandHeader(); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { PageTitle("你好，${user.name}", small = true); TextButton(onClick = { page = "notifications" }) { Text("任务通知${if ((data?.long("unread_notification_count") ?: 0) > 0) " ●" else ""}") } }
+            BrandHeader(); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                PageTitle("你好，${user.name}", small = true)
+                TextButton(onClick = { page = "notifications" }) {
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("任务通知", color = C.Ink)
+                        if (unreadNotificationCount > 0) Box(Modifier.size(8.dp).background(C.Error, CircleShape))
+                    }
+                }
+            }
             Text(user.organization)
         } else PageTitle(when (page) { "items" -> "公司重要事项"; "item" -> "事项详情"; "company-tasks" -> "公司十大重要任务"; else -> "任务通知" }, small = true)
         if (busy) CircularProgressIndicator()

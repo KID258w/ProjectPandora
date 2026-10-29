@@ -55,7 +55,7 @@ Every task created by a user with a direct supervisor SHALL be approved by that 
 - **THEN** it bypasses supervisor approval and is visible to its creator and assignee as appropriate
 
 ### Requirement: Approval and incoming assignments generate task notifications
-The direct supervisor SHALL receive an unread notification for a task awaiting their approval. An assignee SHALL receive an unread assignment notification only after another user's task is approved and visible in the assignee's task list. Self-assigned work SHALL NOT create an incoming-assignment notification. Reading a notification SHALL NOT change task workflow state.
+The direct supervisor SHALL receive an unread notification for a task awaiting their approval. An assignee SHALL receive an unread assignment notification only after another user's task is approved and visible in the assignee's task list. Self-assigned work SHALL NOT create an incoming-assignment notification. Browsing the notification list SHALL NOT mark notices read; opening one notice SHALL mark only that notice read and SHALL NOT change task workflow state.
 
 #### Scenario: Direct subordinate submits a task for approval
 - **WHEN** a direct subordinate creates a task that requires the current user’s approval
@@ -68,6 +68,40 @@ The direct supervisor SHALL receive an unread notification for a task awaiting t
 #### Scenario: Approved task is assigned to another user
 - **WHEN** the task is approved and its creator is different from its assignee
 - **THEN** the assignee receives an unread assignment notification that opens the task detail without changing its state
+
+### Requirement: Approval notifications represent individual rounds
+Each approval notification SHALL identify its approval round and show that round's decision. Resubmitting a returned task SHALL create a distinct unread approval notification for the current direct supervisor; older notifications SHALL retain their own round decision.
+
+#### Scenario: A returned task is resubmitted for approval
+- **WHEN** the creator edits a returned task and submits it again
+- **THEN** a new pending approval notification is created for the current direct supervisor, while the earlier notification retains its returned decision
+
+### Requirement: Task details show information appropriate to the viewer
+The Android task detail SHALL select status/history and execution sections using the viewer's creator, approver, assignee, and read-only relationships. Every action SHALL remain subject to server-side authorization. The MVP SHALL NOT expose a separate task-start state, timestamp, or action.
+
+#### Scenario: Creator views a pending or returned task
+- **WHEN** the task creator opens a task awaiting approval or returned for revision
+- **THEN** the detail shows approval state, approval rounds, and decision comments without completion state or execution sections
+
+#### Scenario: Approver views a pending task
+- **WHEN** the designated direct supervisor opens a task awaiting their approval
+- **THEN** the detail shows approval state/history and offers approval actions only while the current round is pending
+
+#### Scenario: Assignee views an approved task
+- **WHEN** the assignee who is not the creator opens an approved task
+- **THEN** the detail shows execution and completion information but omits approval state, approval history, and the standalone task-start action
+
+#### Scenario: Read-only supervisor views an approved descendant task
+- **WHEN** a supervisor who is neither creator nor designated approver opens an authorized descendant's approved task
+- **THEN** the detail shows authorized task/execution information without approval records or workflow actions
+
+#### Scenario: Founder-exempt task has no approval record
+- **WHEN** the Founder or assignee opens a Founder-created task that bypassed approval
+- **THEN** the detail omits the approval-status badge and empty approval-history section
+
+#### Scenario: Assignee starts working on an approved task
+- **WHEN** the assignee opens an approved task to record progress or submit work
+- **THEN** the detail offers the relevant execution actions without a separate “开始任务” button or start timestamp
 
 ### Requirement: Assignees record text updates and submit work for direct-dispatcher acceptance
 An approved task SHALL have only “未完成” or “已完成” completion status. The assignee SHALL record append-only text updates with author/time and submit completion details on a form separate from task creation. The task SHALL remain unfinished until the direct dispatcher accepts; return requires a reason. If creator and assignee are the same person, that person completes the task without self-acceptance. Percentage progress is not supported.
@@ -153,7 +187,7 @@ The task center SHALL place the Approval Center and authorized subordinate-inspe
 - **THEN** the unified task creation form opens and the list-footer creation button is absent
 
 ### Requirement: Task notifications follow the task workflow lifecycle
-The system SHALL notify the direct dispatcher when a non-self-assigned task result is submitted, and SHALL notify the assignee when that result is accepted or returned. The system SHALL notify the current pending approver or the other-person assignee when a task is cancelled, according to its approval state. When a workflow event makes an earlier notification no longer actionable, the system SHALL resolve that notification while preserving its read state and history. Resolved notifications SHALL be excluded from unread counts and unread-only results.
+The system SHALL create notifications for applicable task lifecycle events. Superseded notifications SHALL be resolved without changing their read state, remain in history, and be excluded from unread counts and unread-only results.
 
 #### Scenario: A pending task is cancelled
 - **WHEN** the creator cancels a task that is waiting for direct-supervisor approval

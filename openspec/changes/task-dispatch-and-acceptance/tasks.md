@@ -24,6 +24,7 @@
 - [ ] 3.5 Build read-only subordinate-task inspection without granting workflow actions; limit selectable objects to authorized descendants.
 - [ ] 3.6 Add one ordinary-list filter form for task scope, inclusive deadline range, and completion status; add one subordinate-list filter form for assigned/created task scope, inclusive deadline range, completion status, and employee-name search limited to authorized descendants. Keep approval queues outside these filters and preserve the distinction between assignment-recipient and subordinate-view permissions.
 - [ ] 3.7 Place Approval Center and subordinate-inspection shortcuts in the task-center top-right area; use a fixed bottom-right creation FAB on ordinary lists and hide it from approval, detail, and create/edit screens.
+- [x] 3.8 Make task detail sections role-aware; remove the standalone start button, `/start/` API, and `started_at` field because the MVP has no separate start state.
 
 ## 4. Verification
 

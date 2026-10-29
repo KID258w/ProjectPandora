@@ -151,7 +151,7 @@ def task_detail(task):
     data.update(creator=user_brief(task.creator), assignee=user_brief(task.assignee),
         description=task.description, required_materials=task.required_materials,
         association_note=task.association_note, creator_department_id=task.creator_department_id,
-        assignee_department_id=task.assignee_department_id, started_at=task.started_at,
+        assignee_department_id=task.assignee_department_id,
         completed_at=task.completed_at, cancelled_at=task.cancelled_at,
         cancellation_reason=task.cancellation_reason, created_at=task.created_at, updated_at=task.updated_at,
         tags=task_tags(task),

@@ -11,6 +11,7 @@ The task workflow has been simplified after product-owner review. Work decomposi
 - Use one filter form for ordinary task scope, deadline range, and completion state; subordinate inspection adds a task scope toggle (`承担的任务` / `创建的任务`, default assigned) and employee-name selection restricted to authorized descendants. Keep approval queues outside ordinary task filters.
 - Place Approval Center and subordinate-inspection shortcuts in the task-center top-right area, with a fixed bottom-right plus button for task creation on ordinary lists.
 - Replace task percentage progress with timestamped text updates; keep completion status binary.
+- Present task details according to the viewer's relationship to the task; remove the standalone start-time action because task execution has no separate start state in the MVP.
 - Keep association to prior work as optional explanatory text, not a task relationship.
 - Retain direct-dispatcher completion acceptance/return, required return reasons, and non-cascading cancellation.
 - Allow authorized leaders to inspect subordinate task records read-only without inheriting workflow powers.

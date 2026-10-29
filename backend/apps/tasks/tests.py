@@ -109,7 +109,6 @@ class TaskApiTests(APITestCase):
         self.assertEqual(TaskApprovalRecord.objects.filter(task=task).count(), 3)
         self.auth(self.leader)
         self.assertEqual(self.client.get(self.path(task)).status_code, 404)
-        self.assertEqual(self.client.post(self.path(task, "start/"), {}, format="json").status_code, 400)
         self.assertEqual(self.approve(task, self.founder).status_code, 200)
         self.assertEqual(TaskNotification.objects.filter(task=task, recipient=self.leader,
             notification_type="assignment_received").count(), 2)
@@ -122,9 +121,6 @@ class TaskApiTests(APITestCase):
         task = Task.objects.get(pk=self.create(self.manager, self.leader, required_materials="评审文档").data["data"]["id"])
         self.approve(task, self.founder)
         self.auth(self.leader)
-        first = self.client.post(self.path(task, "start/"), {}, format="json")
-        second = self.client.post(self.path(task, "start/"), {}, format="json")
-        self.assertEqual(first.data["data"]["started_at"], second.data["data"]["started_at"])
         self.assertEqual(self.client.post(self.path(task, "updates/"), {"content": "进展", "percent": 50}, format="json").status_code, 400)
         self.assertEqual(self.client.post(self.path(task, "updates/"), {"content": "开始实现"}, format="json").status_code, 201)
         self.assertEqual(self.client.post(self.path(task, "submissions/"), {"completion_note": "完成"}, format="json").status_code, 400)

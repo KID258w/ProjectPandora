@@ -61,10 +61,12 @@ fun PandoraApp(
     }
     val model: AccountViewModel = viewModel(factory = factory)
     val nav = rememberNavController()
+    var notificationRefreshKey by remember { mutableIntStateOf(0) }
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: AccountRoute.LAUNCH
     val selectedTab = MainTab.entries.find { it.route == route }
     val user = model.user
+    val canViewSubordinateLogs = user?.role?.let { it in setOf("创始人", "部门经理", "团队长") } == true
     fun resetTo(destination: String) {
         nav.navigate(destination) { popUpTo(nav.graph.id) { inclusive = true }; launchSingleTop = true }
     }
@@ -74,6 +76,10 @@ fun PandoraApp(
             launchSingleTop = true
             restoreState = true
         }
+    }
+    fun leaveTaskScreen() {
+        notificationRefreshKey++
+        nav.popBackStack()
     }
     LaunchedEffect(user, route, model.initializing) {
         if (user != null && route == AccountRoute.LOGIN) {
@@ -111,11 +117,19 @@ fun PandoraApp(
                 composable(MainTab.HOME.route) {
                     user?.let { HomeScreen(it, businessApi, { id -> nav.navigate("task-center/$id") },
                         { date -> if (date.isBlank()) selectTab(MainTab.LOGS) else nav.navigate("log-detail/$date") },
-                        { id -> nav.navigate("approval-task/$id") }) }
+                        { id -> nav.navigate("approval-task/$id") },
+                        notificationRefreshKey = notificationRefreshKey) }
                 }
                 composable(MainTab.VIEWS.route) { ViewsScreen { nav.navigate(AppRoute.TASK_CENTER) } }
-                composable(MainTab.LOGS.route) { LogsScreen(businessApi) }
-                composable("log-detail/{date}") { entry -> LogsScreen(businessApi, entry.arguments?.getString("date") ?: "") { nav.popBackStack() } }
+                composable(MainTab.LOGS.route) { LogsScreen(businessApi, canViewSubordinates = canViewSubordinateLogs) }
+                composable("log-detail/{date}") { entry ->
+                    LogsScreen(
+                        businessApi,
+                        entry.arguments?.getString("date") ?: "",
+                        onBack = { nav.popBackStack() },
+                        canViewSubordinates = canViewSubordinateLogs,
+                    )
+                }
                 composable(MainTab.AI_MAP.route) { AiMapScreen() }
                 composable(MainTab.PROFILE.route) {
                     user?.let {
@@ -170,15 +184,16 @@ fun PandoraApp(
                 composable(AccountRoute.TAGS) {
                     if (user?.role == "创始人") TagManagementScreen(businessApi) { nav.popBackStack() }
                 }
-                composable(AppRoute.TASK_CENTER) { TaskCenterScreen(businessApi, { nav.popBackStack() }) }
+                composable(AppRoute.TASK_CENTER) { TaskCenterScreen(businessApi, ::leaveTaskScreen) }
                 composable("task-center/{id}") { entry ->
                     val id = entry.arguments?.getString("id")?.toLongOrNull()
-                    if (id != null) TaskCenterScreen(businessApi, { nav.popBackStack() }, id)
+                    if (id != null) TaskCenterScreen(businessApi, ::leaveTaskScreen, id)
                 }
                 composable("approval-task/{id}") { entry ->
                     val id = entry.arguments?.getString("id")?.toLongOrNull()
-                    if (id != null) TaskCenterScreen(businessApi, { nav.popBackStack() }, id, initialApprovalContext = true)
+                    if (id != null) TaskCenterScreen(businessApi, ::leaveTaskScreen, id, initialApprovalContext = true)
                 }
+                composable("task-approvals") { TaskCenterScreen(businessApi, ::leaveTaskScreen, initialApprovalCenter = true) }
             }
         }
     }

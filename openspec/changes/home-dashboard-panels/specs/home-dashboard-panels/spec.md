@@ -79,7 +79,7 @@ The system SHALL show concise summaries and provide navigation to the source mod
 - **THEN** the system opens the corresponding authorized secondary list or module without modifying the source record from Home
 
 ### Requirement: Home exposes unread task notifications
-Home SHALL show a task-notification bell with a red dot when unread notifications exist. Opening its list SHALL mark the notifications currently displayed as read; new notifications SHALL remain unread. Notification rows SHALL navigate to the corresponding task without changing task state.
+Home SHALL show a task-notification bell with a red dot when unread notifications exist and refresh the unread count periodically while Home is active and when the app returns to the foreground. Opening or browsing the list SHALL NOT mark notifications as read. Tapping an individual notification SHALL mark only that notification as read; unselected notifications SHALL remain unread. Approval notification rows SHALL show the decision of their own approval round. Notification rows SHALL navigate to the corresponding task or Approval Center without changing task state.
 
 #### Scenario: User has an unread approval or assignment notification
 - **WHEN** the current user has an unread notice for a direct subordinate's pending approval or an approved task assigned by another user
@@ -87,8 +87,28 @@ Home SHALL show a task-notification bell with a red dot when unread notification
 
 #### Scenario: User opens the notification list
 - **WHEN** the user taps the Home bell
-- **THEN** the notification list opens and its currently displayed unread notices are marked read, clearing the red dot unless a newer unread notice exists
+- **THEN** the notification list opens, displayed unread notices remain unread, and the red dot stays visible
 
-#### Scenario: User follows a task notification
-- **WHEN** the user taps an approval or new-assignment notification
+#### Scenario: User taps one notification
+- **WHEN** the user taps an individual notification
+- **THEN** only that notification is marked read; all other unread notifications remain unread
+
+#### Scenario: A returned task is resubmitted for approval
+- **WHEN** a task is returned and its creator edits and resubmits it
+- **THEN** the supervisor receives a new unread approval notice for the new round, the Home bell shows a red dot, and the earlier notice continues to show the earlier round's decision
+
+#### Scenario: User follows an actionable approval or assignment notification
+- **WHEN** the user taps a pending approval or new-assignment notification
 - **THEN** the corresponding task detail opens with only the user's existing task permissions and no workflow state changes caused by viewing
+
+#### Scenario: User taps an ended approval notification
+- **WHEN** the user taps a returned or otherwise resolved approval notification
+- **THEN** the notification is marked read if needed, the user remains on the notification list, and no task detail or Approval Center is opened
+
+#### Scenario: Returning a task from its notification detail
+- **WHEN** a supervisor returns a task from its notification-linked detail
+- **THEN** the app returns directly to the notification list and refreshes the notice; the returned notice cannot reopen the task or navigate to the Approval Center
+
+#### Scenario: User follows an approved task notification
+- **WHEN** the user taps an approval notification for a task that has been approved
+- **THEN** the corresponding task detail opens

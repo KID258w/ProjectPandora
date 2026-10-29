@@ -26,7 +26,6 @@ class Task(models.Model):
     creator_department = models.ForeignKey("accounts.Department", null=True, blank=True, on_delete=models.PROTECT, related_name="creator_tasks")
     assignee_department = models.ForeignKey("accounts.Department", null=True, blank=True, on_delete=models.PROTECT, related_name="assignee_tasks")
     due_at = models.DateTimeField()
-    started_at = models.DateTimeField(null=True, blank=True)
     approval_status = models.CharField(max_length=10, choices=Approval.choices)
     completion_status = models.CharField(max_length=12, choices=Completion.choices, default=Completion.UNFINISHED)
     lifecycle_status = models.CharField(max_length=10, choices=Lifecycle.choices, default=Lifecycle.ACTIVE)

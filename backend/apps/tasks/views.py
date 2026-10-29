@@ -236,23 +236,6 @@ class TaskHistoryView(BusinessAPIView):
             for row in task.changes.select_related("actor")]})
 
 
-class TaskStartView(BusinessAPIView):
-    serializer_class = TaskDetailSerializer
-
-    @extend_schema(tags=["App 任务"], summary="记录负责人首次开始时间", request=None, responses=OpenApiTypes.OBJECT)
-    def post(self, request, pk):
-        require_empty_body(request)
-        with transaction.atomic():
-            task = Task.objects.select_for_update().filter(pk=pk).first()
-            if task is None:
-                raise NotFound("任务不存在。")
-            require_executable(task, request.user)
-            if task.started_at is None:
-                task.started_at = timezone.now()
-                task.save(update_fields=["started_at", "updated_at"])
-        return Response({"task_id": task.pk, "started_at": task.started_at})
-
-
 class TaskResubmitView(BusinessAPIView):
     serializer_class = TaskDetailSerializer
 
@@ -476,6 +459,8 @@ class VisibleSubordinateListView(BusinessAPIView):
 
 def notification_data(row):
     summary = ""
+    approval_round = None
+    approval_decision = None
     if row.notification_type == TaskNotification.Type.TASK_CANCELLED:
         summary = row.task.cancellation_reason
     elif row.submission_id:
@@ -483,7 +468,23 @@ def notification_data(row):
             summary = row.submission.completion_note
         else:
             summary = row.submission.review_comment
+    elif row.notification_type == TaskNotification.Type.APPROVAL_REQUIRED:
+        # Approval notifications describe one approval round. Resolve that round
+        # from the event key so older notifications do not inherit the task's
+        # current (possibly newer) approval status after a resubmission.
+        prefix = f"approval:{row.task_id}:"
+        if row.event_key.startswith(prefix):
+            try:
+                approval_round = int(row.event_key[len(prefix):])
+            except ValueError:
+                approval_round = None
+        if approval_round is not None:
+            approval = next((record for record in row.task.approval_records.all()
+                             if record.round == approval_round), None)
+            if approval is not None:
+                approval_decision = approval.decision
     return {"id": row.pk, "notification_type": row.notification_type, "task_id": row.task_id,
+            "approval_round": approval_round, "approval_decision": approval_decision,
             "task_title": row.task.title, "task_lifecycle_status": row.task.lifecycle_status,
             "task_approval_status": row.task.approval_status,
             "task_completion_status": row.task.completion_status,
@@ -501,7 +502,9 @@ class NotificationListView(BusinessAPIView):
         unread_only = request.query_params.get("unread_only", "false").lower()
         if unread_only not in ("true", "false"):
             raise ValidationError({"unread_only": "应为 true 或 false。"})
-        rows = TaskNotification.objects.filter(recipient=request.user).select_related("task", "submission")
+        rows = TaskNotification.objects.filter(recipient=request.user).select_related(
+            "task", "submission"
+        ).prefetch_related("task__approval_records")
         if unread_only == "true":
             rows = rows.filter(is_read=False, resolved_at__isnull=True)
         return paginated_response(self, request, rows, lambda page: [notification_data(row) for row in page])

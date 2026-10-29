@@ -17,7 +17,7 @@ fun TagManagementScreen(api: BusinessApi, onBack: () -> Unit) {
     var revision by remember { mutableIntStateOf(0) }; var changing by remember { mutableStateOf<JsonObject?>(null) }
     var create by remember { mutableStateOf(false) }; var deleting by remember { mutableStateOf<JsonObject?>(null) }
     var name by remember { mutableStateOf("") }; var formError by remember { mutableStateOf("") }; var busy by remember { mutableStateOf(false) }
-    LaunchedEffect(revision) { try { rows = api.all("api/v1/app/tags/", mapOf("include_inactive" to "true")) } catch (e: Exception) { error = e.businessMessage() } }
+    LaunchedEffect(revision) { try { rows = api.all("api/v1/app/tags/") } catch (e: Exception) { error = e.businessMessage() } }
     PageColumn {
         BackButton(onBack); PageTitle("标签管理", small = true); Text("删除后不可恢复，已有任务和日志关联将保留。")
         OutlinedTextField(search, { search = it }, Modifier.fillMaxWidth(), label = { Text("搜索标签") })

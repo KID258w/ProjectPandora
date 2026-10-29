@@ -111,7 +111,6 @@ class TaskDetailSerializer(TaskSummarySerializer):
     association_note = serializers.CharField()
     creator_department_id = serializers.IntegerField(allow_null=True)
     assignee_department_id = serializers.IntegerField(allow_null=True)
-    started_at = serializers.DateTimeField(allow_null=True)
     completed_at = serializers.DateTimeField(allow_null=True)
     cancelled_at = serializers.DateTimeField(allow_null=True)
     cancellation_reason = serializers.CharField()
@@ -144,6 +143,8 @@ class HistoryItemSerializer(serializers.Serializer):
 class NotificationSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     notification_type = serializers.CharField()
+    approval_round = serializers.IntegerField(allow_null=True)
+    approval_decision = serializers.CharField(allow_null=True)
     task_id = serializers.IntegerField()
     task_title = serializers.CharField()
     task_lifecycle_status = serializers.CharField()
