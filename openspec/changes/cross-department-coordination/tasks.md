@@ -1,17 +1,18 @@
 ## 1. Ordinary task creation and approval
 
-- [ ] 1.1 Extend the unified assignable-user query for Department Managers to include other Department Managers in the same company.
-- [ ] 1.2 Validate at the server that a Department Manager may assign only to themself, a Team Leader in their department, or a Department Manager in another department; reject same-department peers and out-of-scope roles.
-- [ ] 1.3 Use the existing task-create API and creator's direct-supervisor approval flow; do not add a dedicated endpoint or task-type field.
-- [ ] 1.4 After approval, expose the task in the creator's “我创建的” and assignee's “我的任务”; prevent assignee visibility/execution before approval and do not require a second acceptance.
+- [x] 1.1 Extend the unified assignable-user query for Department Managers to include other Department Managers in the same company.
+- [x] 1.2 Validate at the server that a Department Manager may assign only to themself, a Team Leader in their department, or a Department Manager in another department; reject same-department peers and out-of-scope roles.
+- [x] 1.3 Use the existing task-create API and creator's direct-supervisor approval flow; do not add a dedicated endpoint or task-type field.
+- [x] 1.4 After approval, expose the task in the creator's “我创建的” and assignee's “我的任务”; prevent assignee visibility/execution before approval and do not require a second acceptance.
 
 ## 2. Execution and access boundaries
 
-- [ ] 2.1 Reuse common text updates, completion submission, and direct-dispatcher acceptance/required-reason return.
-- [ ] 2.2 Allow assignee's internal work to use ordinary task creation and its own approval; do not create physical task links or expose internal task details to the requester.
-- [ ] 2.3 Enforce requester, assignee, creator-supervisor, and read-only hierarchical access rules in APIs.
-- [ ] 2.4 Use creator, assignee, and organization details for task context; do not persist or expose a cross-department task marker or filter.
+- [x] 2.1 Reuse common text updates, completion submission, and direct-dispatcher acceptance/required-reason return.
+- [x] 2.2 Allow assignee's internal work to use ordinary task creation and its own approval; do not create physical task links or expose internal task details to the requester.
+- [x] 2.3 Enforce requester, assignee, creator-supervisor, and read-only hierarchical access rules in APIs.
+- [x] 2.4 Use creator, assignee, and organization details for task context; do not persist or expose a cross-department task marker or filter.
 - [ ] 2.5 Add in-app reminders for approval, assignment availability, result submission, and acceptance/return.
+- [x] 2.6 Implement backend lifecycle notifications for cross-department result submission, acceptance, return, and cancellation through the shared task notification model.
 
 ## 3. Android workflows
 

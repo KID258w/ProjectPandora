@@ -1,18 +1,19 @@
 ## 1. Task domain and authorization
 
-- [ ] 1.1 Implement standalone task records with one creator/assignee, required title/details/deadline, optional expected-deliverable text, and optional non-relational association note.
-- [ ] 1.2 Implement server-side assignment validation for Founder, Department Manager (self, same-department Team Leaders, or other-department Department Managers), Team Leader, and Employee scopes.
-- [ ] 1.3 Implement direct-supervisor lookup and approval records, including pending queues, required return reason, edit/resubmit, and reapproval for key changes.
-- [ ] 1.4 Enforce creator, assignee, direct-supervisor, direct-dispatcher, and read-only hierarchical visibility for task APIs.
+- [x] 1.1 Implement standalone task records with one creator/assignee, required title/details/deadline, optional expected-deliverable text, and optional non-relational association note.
+- [x] 1.2 Implement server-side assignment validation for Founder, Department Manager (self, same-department Team Leaders, or other-department Department Managers), Team Leader, and Employee scopes.
+- [x] 1.3 Implement direct-supervisor lookup and approval records, including pending queues, required return reason, edit/resubmit, and reapproval for key changes.
+- [x] 1.4 Enforce creator, assignee, direct-supervisor, direct-dispatcher, and read-only hierarchical visibility for task APIs.
 
 ## 2. Execution and lifecycle
 
-- [ ] 2.1 Implement binary completion status and append-only text updates with author/timestamp; do not implement percentage progress or parent-task aggregation.
-- [ ] 2.2 Implement the separate completion-submission form and record; validate deliverable information only when the task specified expected deliverables.
-- [ ] 2.3 Implement direct-dispatcher accept/return, required return reason, and resubmission; self-assigned tasks are completed by their assignee without self-acceptance.
-- [ ] 2.4 Implement task-definition editing, reapproval for key post-approval changes, and auditable edit history.
-- [ ] 2.5 Implement reason-required cancellation of only the direct-dispatcher's unfinished task; preserve the record and do not cascade.
-- [ ] 2.6 Implement in-app notifications with unread/read state, including direct-supervisor approval notices and assignment notices after another user's task is approved and visible to its assignee; preserve other lifecycle reminders as applicable.
+- [x] 2.1 Implement binary completion status and append-only text updates with author/timestamp; do not implement percentage progress or parent-task aggregation.
+- [x] 2.2 Implement the separate completion-submission form and record; validate deliverable information only when the task specified expected deliverables.
+- [x] 2.3 Implement direct-dispatcher accept/return, required return reason, and resubmission; self-assigned tasks are completed by their assignee without self-acceptance.
+- [x] 2.4 Implement task-definition editing, reapproval for key post-approval changes, and auditable edit history.
+- [x] 2.5 Implement reason-required cancellation of only the direct-dispatcher's unfinished task; preserve the record and do not cascade.
+- [x] 2.6 Implement in-app notifications with unread/read state, including direct-supervisor approval notices and assignment notices after another user's task is approved and visible to its assignee; preserve other lifecycle reminders as applicable.
+- [x] 2.7 Implement cancellation, result-submission, acceptance, and return notification events; resolve superseded notices without changing their read state, and exclude resolved notices from unread counts and unread-only queries.
 
 ## 3. Android task workflows
 
@@ -26,10 +27,10 @@
 
 ## 4. Verification
 
-- [ ] 4.1 Test the role assignment matrix (including Founder's company-wide scope and Department Manager-to-other-department-Manager assignment), creator-supervisor approval, Founder bypass, pre-approval visibility, self-assignment, and out-of-scope access denial.
-- [ ] 4.2 Test text-only updates, distinct create/complete forms, deliverable validation, return reason, acceptance, and self-completion.
-- [ ] 4.3 Test key-change reapproval, cancellation reason, no cancellation cascade, and retention of audit history.
-- [ ] 4.4 Run end-to-end Founder → Department Manager → Team Leader → Employee approval, execution, and acceptance scenarios.
+- [x] 4.1 Test the role assignment matrix (including Founder's company-wide scope and Department Manager-to-other-department-Manager assignment), creator-supervisor approval, Founder bypass, pre-approval visibility, self-assignment, and out-of-scope access denial.
+- [x] 4.2 Test text-only updates, distinct create/complete forms, deliverable validation, return reason, acceptance, and self-completion.
+- [x] 4.3 Test key-change reapproval, cancellation reason, no cancellation cascade, and retention of audit history.
+- [x] 4.4 Run end-to-end Founder → Department Manager → Team Leader → Employee approval, execution, and acceptance scenarios.
 
 ## 5. Prototype scope
 

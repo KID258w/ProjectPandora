@@ -152,6 +152,37 @@ The task center SHALL place the Approval Center and authorized subordinate-inspe
 - **WHEN** a user taps the fixed bottom-right plus button on an ordinary task list
 - **THEN** the unified task creation form opens and the list-footer creation button is absent
 
+### Requirement: Task notifications follow the task workflow lifecycle
+The system SHALL notify the direct dispatcher when a non-self-assigned task result is submitted, and SHALL notify the assignee when that result is accepted or returned. The system SHALL notify the current pending approver or the other-person assignee when a task is cancelled, according to its approval state. When a workflow event makes an earlier notification no longer actionable, the system SHALL resolve that notification while preserving its read state and history. Resolved notifications SHALL be excluded from unread counts and unread-only results.
+
+#### Scenario: A pending task is cancelled
+- **WHEN** the creator cancels a task that is waiting for direct-supervisor approval
+- **THEN** the pending approval notification is resolved and the pending approver receives an unread cancellation notification with the reason and no approval action
+
+#### Scenario: An approved assignment is cancelled
+- **WHEN** the creator cancels an approved task assigned to another user
+- **THEN** outstanding assignment or submission reminders are resolved and the assignee receives an unread cancellation notification with the reason
+
+#### Scenario: A returned task is cancelled before approval
+- **WHEN** the creator cancels a task returned for editing before it is approved
+- **THEN** the prior approval notice remains resolved and no cancellation notice is sent to the assignee, who has not yet received the task
+
+#### Scenario: An assignee submits a result
+- **WHEN** an assignee submits a result for direct-dispatcher acceptance
+- **THEN** the direct dispatcher receives an unread notification linked to that submission
+
+#### Scenario: A submission is accepted or returned
+- **WHEN** the direct dispatcher accepts or returns a submitted result
+- **THEN** the assignee receives an unread notification for that decision, and a return notification includes the return reason
+
+#### Scenario: A returned result is resubmitted
+- **WHEN** the assignee submits a new result after a return
+- **THEN** the previous return notification is resolved and a new pending-acceptance notification is created
+
+#### Scenario: A self-assigned task is completed
+- **WHEN** the assignee submits their own task for self-completion
+- **THEN** the system completes the task without sending a result or acceptance notification to that same user
+
 ### Requirement: Direct dispatchers cancel only their own unfinished task without cascading
 The system SHALL allow a direct dispatcher to cancel their own unfinished task with a required reason. The system SHALL preserve and archive the task record. Cancellation SHALL NOT alter any other task. MVP SHALL NOT add a separate recipient accept/reject step, completed-task reopening, submission withdrawal, or cascading cancellation.
 

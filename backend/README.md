@@ -1,6 +1,6 @@
 # Pandora Backend
 
-Django + Django REST Framework 的后端骨架。当前使用 SQLite，暂不配置 MySQL；Issue #6 的管理员/业务账号、组织与两端登录已实现，任务、日志等工作模块将在对应功能设计时逐步加入。
+Django + Django REST Framework 后端。当前使用 SQLite，暂不配置 MySQL；管理员/业务账号、组织与两端登录、Issue #20 日志/标签及 Issue #21 任务/审批/通知接口已实现。
 
 ## 本地运行
 
@@ -44,6 +44,7 @@ gunicorn config.wsgi:application --bind 0.0.0.0:8000
 - Simple JWT 获取/刷新令牌接口：`POST /api/v1/admin/auth/token/`、`POST /api/v1/admin/auth/token/refresh/`、`POST /api/v1/app/auth/token/`、`POST /api/v1/app/auth/token/refresh/`。
 - drf-spectacular OpenAPI、Swagger UI 和 ReDoc 文档。
 - 可供后续扩展的自定义用户模型；登录名使用 Django 的 `username`，并已落地 `account_type`、`business_role`、部门/团队/上级关系及账号录入、当前用户、部门/团队接口。契约见 `../docs/backend/account-provisioning.md`。
+- App 日志、标签、任务中心、直属上级审批、完成验收、任务定义历史及站内通知接口；请求与权限规则见 `../docs/backend/api-design.md`。
 - Vue 开发服务器默认允许 `localhost:5173` 和 `127.0.0.1:5173` 跨域访问；可通过 `.env` 中的 `CORS_ALLOWED_ORIGINS` 调整。
 
 生产环境不要使用默认开发密钥或 `DEBUG=True`。本地 SQLite 文件适合原型开发；将来部署 Docker 时需要配置持久化卷，正式协作环境再切换 MySQL。

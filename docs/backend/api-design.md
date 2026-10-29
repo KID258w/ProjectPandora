@@ -4,6 +4,10 @@
 
 > **Issue #15 实施更新**：部门/团队详情与启停、员工筛选与身份/组织调整、管理概况与操作审计、App 个人资料与密码已实现（见 2.1 节契约）。以下未标注已实现的业务内容仍为规划。
 
+> **Issue #20 后端实施更新**：`/api/v1/app/logs/`、`logs/calendar/`、`logs/{id}/`、`logs/mine/{log_date}/`、`logs/mine/{log_date}/submit/`、`log-viewers/` 与 `tags/` 已实现。日期窗口按服务端 `TIME_ZONE` 的自然日计算。日志列表对本人可返回草稿，对下属只返回已提交；日历标记仅包含已提交。标签创建返回 `201`，启用名称冲突返回 `409`，删除为不可逆停用。首页最近五篇已提交日志通过 `apps.logs.services.recent_submitted_logs` 提供数据源，首页聚合接口属于 Issue #22。
+
+> **Issue #21 后端实施更新**：第 3.2、4.4 节所列任务、审批、进展、提交/验收、取消、组织候选人与站内通知接口已实现。任务创建、进展和完成提交返回 `201`，其他写操作返回 `200`。普通及下属任务列表用 `due_from`、`due_to` 过滤截止日期，边界均包含在内；默认仅返回活动任务。通知列表只读取，不自动标记已读；客户端将本次实际展示的通知 ID 送至 `mark-read/`。任务详情返回创建人/负责人、状态、标签、审批历史、进展和提交记录；无权访问的详情返回 `404`。任务定义变更历史不保存密码等身份资料。
+
 > 维护说明：由项目统筹与后端同学共同维护，作为 API 设计的持续文档。接口路径、字段名和错误格式可随开发协商调整。  
 > 依据：`docs/requirements/01` 至 `07`、`docs/cooperate/swagger-guide.md` 与当前 Django 骨架。需求变化时以最新确认的需求为准。
 
@@ -11,7 +15,7 @@
 
 ### 1.1 当前实现与目标接口
 
-当前已实现健康检查、文档及 Issue #6 的版本化账号/组织接口。版本化 API 已采用统一外层响应；健康检查保持原响应。
+当前已实现健康检查、文档、版本化账号/组织接口及 Issue #20、#21 的业务端接口。版本化 API 已采用统一外层响应；健康检查保持原响应。
 
 | 当前已存在 | 路径 |
 |---|---|
@@ -23,9 +27,13 @@
 | 员工筛选/详情/调整 | `GET /api/v1/admin/users/`、`GET, PATCH /api/v1/admin/users/{id}/` |
 | 管理操作审计 | `GET /api/v1/admin/audit-logs/` |
 | App 个人资料与密码 | `GET, PATCH /api/v1/app/me/`、`POST /api/v1/app/me/password/` |
+| App 日志与授权查看对象 | `GET /api/v1/app/logs/`、`GET /api/v1/app/logs/calendar/`、`GET /api/v1/app/logs/{id}/`、`GET, PUT /api/v1/app/logs/mine/{log_date}/`、`POST /api/v1/app/logs/mine/{log_date}/submit/`、`GET /api/v1/app/log-viewers/` |
+| App 标签 | `GET, POST /api/v1/app/tags/`、`PATCH, DELETE /api/v1/app/tags/{id}/` |
+| App 任务、审批及历史 | `GET, POST /api/v1/app/tasks/`、`GET /api/v1/app/tasks/subordinates/`、`GET, PATCH /api/v1/app/tasks/{id}/`、`GET /api/v1/app/tasks/{id}/history/`、`GET /api/v1/app/task-approvals/inbox/`、`GET /api/v1/app/task-approvals/outbox/`，以及第 3.2 节所列操作路径 |
+| App 任务通知和人员选择 | `GET /api/v1/app/notifications/`、`GET /api/v1/app/notifications/unread-count/`、`POST /api/v1/app/notifications/mark-read/`、`GET /api/v1/app/organization/assignable-users/`、`GET /api/v1/app/organization/visible-subordinates/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
-下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料与密码已实现（契约见 2.1）。其余仍为建议接口，不代表已上线。
+下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口及 Issue #21 的任务、审批、通知接口已实现。其余仍为建议接口，不代表已上线。
 
 ### 1.2 通用约定
 
@@ -135,15 +143,19 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `POST /api/v1/app/tasks/{id}/submissions/` | 负责人提交完成说明及所需材料说明；不是创建任务表单 |
 | `POST /api/v1/app/tasks/{id}/submissions/{submission_id}/review/` | 直接派发者验收通过或退回；验收通过后任务完成 |
 | `POST /api/v1/app/tasks/{id}/cancel/` | 创建人取消本人创建的未完成任务，必须填写原因 |
-| `GET /api/v1/app/notifications/` | 返回当前用户的任务通知列表，支持未读筛选和分页；仅通知接收人可读 |
-| `GET /api/v1/app/notifications/unread-count/` | 返回当前用户未读任务通知数量，供首页铃铛显示红点 |
+| `GET /api/v1/app/notifications/` | 返回当前用户的任务通知列表，支持未读筛选和分页；未读筛选排除流程已结束的通知；仅通知接收人可读 |
+| `GET /api/v1/app/notifications/unread-count/` | 返回当前用户未读且流程未结束的任务通知数量，供首页铃铛显示红点 |
 | `POST /api/v1/app/notifications/mark-read/` | 将请求中明确列出的本人通知标记为已读；不改变任务状态 |
 | `GET /api/v1/app/organization/assignable-users/` | 查询当前用户在普通任务表单中有权选择的负责人；创始人可查询本公司全体成员，其他角色按其派发范围返回，支持姓名关键词 |
-| `GET /api/v1/app/organization/visible-subordinates/` | 查看对象选择器可访问的下属；逐级查看时支持姓名/团队/部门搜索 |
+| `GET /api/v1/app/organization/visible-subordinates/` | 查看对象选择器可访问的下属；逐级查看时关键词仅匹配授权下属姓名 |
 
 普通任务列表通过一个筛选接口支持 `scope=all|mine|created`、`completion_status=all|unfinished|completed`、`lifecycle_status=active|cancelled|all`、`due_from` 和 `due_to`；日期边界均包含在结果中，默认 `scope=mine`、`completion_status=all`、`lifecycle_status=active` 且不限日期。`scope=all` 返回本人承担或创建的已审批任务并按任务 ID 去重。取消任务保留为归档记录，可通过 `lifecycle_status=cancelled` 查询。下属任务接口支持 `task_scope=assigned|created`，只返回审批通过的记录；具体人员筛选只能在服务端授权的下属范围内。审批列表仅按审批流程筛选。负责人选择接口只返回创建者有权派发给的对象：创始人为本公司全体成员；部门经理为本人、本部门团队长或其他部门经理；团队长为本人或本团队普通员工；普通员工仅本人。部门经理指派给其他部门经理仍调用统一创建接口，并由服务端按创建人的直属上级规则发起审批。任务被直属上级退回后，创建人通过 `PATCH` 修改，再调用 `POST /tasks/{id}/resubmit/` 新增审批轮次；审批通过后关键定义字段发生变化时，服务端自动重新送审并写入新审批轮次。单独修改标签不触发重新审批。
 
 通知只通过 App 内列表提供，不发送操作系统推送。创建人有直属上级时，任务进入待审批状态即向该直属上级生成审批通知；他人创建并派发给当前用户的任务在审批通过后生成新任务通知。本人创建并由本人承担的任务不生成新任务通知。
+
+任务通知类型为 `approval_required`、`assignment_received`、`task_cancelled`、`submission_received`、`submission_accepted` 和 `submission_returned`。取消待审批任务时，关闭其待审批通知并通知当前待审批的直属上级；取消已审批且派发给他人的任务时，关闭尚未处理的派发/提交/退回通知并通知负责人。审批退回后、重新审批通过前取消的任务尚未进入负责人任务列表，不向负责人发送取消通知。提交完成结果通知直接派发人；验收通过或退回通知负责人，退回通知包含原因。重新提交会结束上一次退回通知。取消、验收或重新提交等流程变化通过 `resolved_at` 结束旧通知，但不会自动标记为已读；所有通知历史仍可查询。`unread_only=true` 与未读数只包含 `is_read=false` 且 `resolved_at=null` 的通知。
+
+创建任务时 `assignee_id`、`title`、`description`、`due_at` 为必填字段；`required_materials`、`association_note` 和 `tag_ids` 为可选字段。编辑任务使用部分更新，字段可按需提交。
 
 建议创建任务请求示例：
 
@@ -170,7 +182,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `GET /api/v1/app/logs/mine/{log_date}/` | 获取本人指定日期日志（含草稿及标签）；未创建时返回空表单态，并返回是否可编辑 |
 | `PUT /api/v1/app/logs/mine/{log_date}/` | 新建或更新本人指定日期唯一日志，可选提交 `tag_ids`；只允许今天、昨天或前天 |
 | `POST /api/v1/app/logs/mine/{log_date}/submit/` | 提交本人指定日期日志；只允许今天、昨天或前天 |
-| `GET /api/v1/app/log-viewers/` | 返回当前用户可选择查看的下属，支持姓名关键词搜索 |
+| `GET /api/v1/app/log-viewers/` | 返回当前用户可选择查看的下属，支持姓名、团队或部门关键词搜索 |
 
 建议日志请求字段：`completed_work`（提交必填）、`next_day_plan`（可选）、`tag_ids`（可选标签 ID 数组）。MVP 不提供关联任务、问题与风险字段、附件和日志正文关键字搜索；标签选择器按标签名称搜索，不提供日志标签筛选。每人每天最多一条。作者可新建、修改及提交业务时区内今天、昨天和前天的日志；该窗口按自然日滚动，不是滚动 72 小时，超过前天的日期及未来日期拒绝写入并只读展示。读取本人历史记录仍允许。管理者查询草稿与无日志日期时不应泄露草稿内容，管理者写入接口不开放。详情返回标签关联名称和颜色；已停用标签不标明状态。更新中省略 `tag_ids` 表示不改关联，空数组表示清空；保存时仅保留已有关系并新增/移除差异。
 
@@ -1899,7 +1911,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 #### GET /api/v1/app/notifications/?unread_only=true&page=1&page_size=20
 
-**请求：** 无 JSON 请求体。按创建时间倒序返回当前用户收到的通知；省略 `unread_only` 时返回已读和未读记录。
+**请求：** 无 JSON 请求体。按创建时间倒序返回当前用户收到的通知；省略 `unread_only` 时返回完整历史（含已读和流程已结束通知）；`unread_only=true` 只返回未读且流程尚未结束的通知。
 
 **响应 JSON**
 
@@ -1917,8 +1929,15 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
         "notification_type": "approval_required",
         "task_id": 104,
         "task_title": "整理客户反馈",
+        "task_lifecycle_status": "active",
+        "task_approval_status": "pending",
+        "task_completion_status": "unfinished",
+        "submission_id": null,
+        "summary": "",
         "is_read": false,
-        "created_at": "2026-10-11T09:00:00+08:00"
+        "resolved_at": null,
+        "created_at": "2026-10-11T09:00:00+08:00",
+        "read_at": null
       }
     ]
   },
@@ -1995,6 +2014,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 ```
 
 #### GET /api/v1/app/organization/visible-subordinates/?keyword=张&department_id=10
+
+人员关键词仅匹配当前用户有权只读查看的下属姓名；`department_id`（可选）用于限定结果部门，不会扩大授权范围。
 
 **请求：** 无 JSON 请求体；如有筛选条件，查询参数见接口 URL。
 
