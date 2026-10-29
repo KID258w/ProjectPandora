@@ -110,7 +110,8 @@ fun PandoraApp(
                 composable(AccountRoute.LOGIN) { LoginScreen(model, requiresLocalNetworkPermission) }
                 composable(MainTab.HOME.route) {
                     user?.let { HomeScreen(it, businessApi, { id -> nav.navigate("task-center/$id") },
-                        { date -> if (date.isBlank()) selectTab(MainTab.LOGS) else nav.navigate("log-detail/$date") }) }
+                        { date -> if (date.isBlank()) selectTab(MainTab.LOGS) else nav.navigate("log-detail/$date") },
+                        { id -> nav.navigate("approval-task/$id") }) }
                 }
                 composable(MainTab.VIEWS.route) { ViewsScreen { nav.navigate(AppRoute.TASK_CENTER) } }
                 composable(MainTab.LOGS.route) { LogsScreen(businessApi) }
@@ -173,6 +174,10 @@ fun PandoraApp(
                 composable("task-center/{id}") { entry ->
                     val id = entry.arguments?.getString("id")?.toLongOrNull()
                     if (id != null) TaskCenterScreen(businessApi, { nav.popBackStack() }, id)
+                }
+                composable("approval-task/{id}") { entry ->
+                    val id = entry.arguments?.getString("id")?.toLongOrNull()
+                    if (id != null) TaskCenterScreen(businessApi, { nav.popBackStack() }, id, initialApprovalContext = true)
                 }
             }
         }

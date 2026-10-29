@@ -15,26 +15,29 @@ fun TagManagementScreen(api: BusinessApi, onBack: () -> Unit) {
     var rows by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var error by remember { mutableStateOf("") }; var search by remember { mutableStateOf("") }
     var revision by remember { mutableIntStateOf(0) }; var changing by remember { mutableStateOf<JsonObject?>(null) }
-    var create by remember { mutableStateOf(false) }; var deactivate by remember { mutableStateOf<JsonObject?>(null) }
+    var create by remember { mutableStateOf(false) }; var deleting by remember { mutableStateOf<JsonObject?>(null) }
+    var name by remember { mutableStateOf("") }; var formError by remember { mutableStateOf("") }; var busy by remember { mutableStateOf(false) }
     LaunchedEffect(revision) { try { rows = api.all("api/v1/app/tags/", mapOf("include_inactive" to "true")) } catch (e: Exception) { error = e.businessMessage() } }
-    fun run(action: suspend () -> Unit) { scope.launch { try { action(); error = ""; revision++ } catch (e: Exception) { error = e.businessMessage() } } }
     PageColumn {
-        BackButton(onBack); PageTitle("标签管理", small = true); Text("停用后不可恢复，已有日志关联将保留。")
+        BackButton(onBack); PageTitle("标签管理", small = true); Text("删除后不可恢复，已有任务和日志关联将保留。")
         OutlinedTextField(search, { search = it }, Modifier.fillMaxWidth(), label = { Text("搜索标签") })
-        PrimaryButton("新建标签", { create = true })
+        PrimaryButton("新建标签", { name = ""; formError = ""; create = true })
         if (error.isNotEmpty()) Note(error)
         rows.filter { it.string("name").contains(search, true) }.forEach { tag ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(tag.string("name") + if (tag.bool("is_active")) "" else "（已停用）", Modifier.weight(1f))
-                if (tag.bool("is_active")) { TextButton(onClick = { changing = tag }) { Text("重命名") }; TextButton(onClick = { deactivate = tag }) { Text("停用") } }
+                Text(tag.string("name") + if (tag.bool("is_active")) "" else "（已删除）", Modifier.weight(1f))
+                if (tag.bool("is_active")) { TextButton(onClick = { name = tag.string("name"); formError = ""; changing = tag }) { Text("重命名") }; TextButton(onClick = { formError = ""; deleting = tag }) { Text("删除") } }
             }
         }
     }
     if (create || changing != null) {
-        var name by remember(create, changing) { mutableStateOf(changing?.string("name") ?: "") }
-        AlertDialog(onDismissRequest = { create = false; changing = null }, title = { Text(if (create) "新建标签" else "重命名") }, text = { OutlinedTextField(name, { name = it }, label = { Text("标签名称") }) }, confirmButton = { TextButton(onClick = {
-            if (name.isNotBlank()) { val item = changing; run { if (item == null) api.post("api/v1/app/tags/", json { addProperty("name", name.trim()) }) else api.patch("api/v1/app/tags/${item.long("id")}/", json { addProperty("name", name.trim()) }) }; create = false; changing = null }
-        }) { Text("保存") } }, dismissButton = { TextButton(onClick = { create = false; changing = null }) { Text("取消") } })
+        AlertDialog(onDismissRequest = { if (!busy) { create = false; changing = null } }, title = { Text(if (create) "新建标签" else "重命名") }, text = { Column { OutlinedTextField(name, { name = it }, label = { Text("标签名称") }); if (formError.isNotEmpty()) Text(formError, color = MaterialTheme.colorScheme.error) } }, confirmButton = { TextButton(enabled = !busy, onClick = {
+            if (name.isBlank()) { formError = "请输入标签名称。" } else scope.launch {
+                busy = true; formError = ""
+                try { val item = changing; if (item == null) api.post("api/v1/app/tags/", json { addProperty("name", name.trim()) }) else api.patch("api/v1/app/tags/${item.long("id")}/", json { addProperty("name", name.trim()) }); create = false; changing = null; error = ""; revision++ }
+                catch (e: Exception) { formError = e.businessMessage() } finally { busy = false }
+            }
+        }) { Text("保存") } }, dismissButton = { TextButton(enabled = !busy, onClick = { create = false; changing = null }) { Text("取消") } })
     }
-    deactivate?.let { tag -> AlertDialog(onDismissRequest = { deactivate = null }, title = { Text("停用标签？") }, text = { Text("停用不可恢复，之后不能再关联；已有日志关联会保留。") }, confirmButton = { TextButton(onClick = { run { api.delete("api/v1/app/tags/${tag.long("id")}/") }; deactivate = null }) { Text("停用") } }, dismissButton = { TextButton(onClick = { deactivate = null }) { Text("取消") } }) }
+    deleting?.let { tag -> AlertDialog(onDismissRequest = { if (!busy) deleting = null }, title = { Text("删除标签？") }, text = { Column { Text("删除后不可恢复，之后不能再关联；既有关联的任务和日志仍会显示该标签。") ; if (formError.isNotEmpty()) Text(formError, color = MaterialTheme.colorScheme.error) } }, confirmButton = { TextButton(enabled = !busy, onClick = { scope.launch { busy = true; formError = ""; try { api.delete("api/v1/app/tags/${tag.long("id")}/"); deleting = null; error = ""; revision++ } catch (e: Exception) { formError = e.businessMessage() } finally { busy = false } } }) { Text("删除") } }, dismissButton = { TextButton(enabled = !busy, onClick = { deleting = null }) { Text("取消") } }) }
 }

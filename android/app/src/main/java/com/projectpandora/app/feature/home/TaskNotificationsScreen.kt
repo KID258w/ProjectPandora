@@ -18,7 +18,7 @@ import com.projectpandora.app.ui.PageTitle
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable
-fun TaskNotificationsScreen(api: BusinessApi, onBack: () -> Unit, onTask: (Long) -> Unit) {
+fun TaskNotificationsScreen(api: BusinessApi, onBack: () -> Unit, onTask: (Long, Boolean) -> Unit) {
     var rows by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var page by remember { mutableIntStateOf(1) }; var hasNext by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }; var busy by remember { mutableStateOf(false) }; var reload by remember { mutableIntStateOf(0) }
@@ -45,10 +45,10 @@ fun TaskNotificationsScreen(api: BusinessApi, onBack: () -> Unit, onTask: (Long)
         LazyColumn(state = listState, modifier = Modifier.weight(1f).testTag("notification-list")) {
             items(rows, key = { it.long("id") }) { row ->
                 val read = row.bool("is_read") || row.long("id") in readIds
-                Column(Modifier.fillMaxWidth().clickable { onTask(row.long("task_id")) }.padding(vertical = 14.dp)) {
+                Column(Modifier.fillMaxWidth().clickable { onTask(row.long("task_id"), row.string("notification_type") == "approval_required") }.padding(vertical = 14.dp)) {
                     val type = when (row.string("notification_type")) {
                         "approval_required" -> "待审批"
-                        "task_assigned" -> "新任务"
+                        "assignment_received" -> "新任务"
                         else -> "任务动态"
                     }
                     Text((if (read) "" else "● ") + row.string("task_title")); Text(type + " · " + row.string("created_at"))

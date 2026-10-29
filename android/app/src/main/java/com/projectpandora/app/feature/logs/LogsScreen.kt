@@ -1,5 +1,6 @@
 package com.projectpandora.app.feature.logs
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -10,6 +11,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.google.gson.JsonObject
 import com.projectpandora.app.core.network.*
@@ -41,6 +46,7 @@ fun LogsScreen(api: BusinessApi, initialDate: String = "", onBack: (() -> Unit)?
     var edit by remember { mutableStateOf(false) }
     var quickMonth by remember { mutableStateOf(false) }
     var reload by remember { mutableIntStateOf(0) }
+    BackHandler(enabled = edit) { edit = false }
     val scope = rememberCoroutineScope()
     val date = dateString(year, month, day)
     fun shift(delta: Int) {
@@ -78,6 +84,7 @@ fun LogsScreen(api: BusinessApi, initialDate: String = "", onBack: (() -> Unit)?
             if (row != null) try { selected = api.get(ROOT + "logs/${row.long("id")}/").data() } catch (e: Exception) { error = e.businessMessage() }
         }
     }
+    Box(Modifier.fillMaxSize()) {
     if (edit) {
         LogEditor(api, date, selected, onBack = { edit = false }, onSaved = { edit = false; reload++ })
     } else PageColumn {
@@ -99,7 +106,7 @@ fun LogsScreen(api: BusinessApi, initialDate: String = "", onBack: (() -> Unit)?
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(person?.string("display_name") ?: "我的日志")
+            Text(person?.let { listOf(it.string("display_name"), it.string("department_name"), it.string("team_name")).filter(String::isNotBlank).joinToString(" · ") } ?: "我的日志", Modifier.weight(1f))
             TextButton(onClick = {
                 scope.launch { try { viewers = api.all(ROOT + "log-viewers/"); choosePerson = true } catch (e: Exception) { error = e.businessMessage() } }
             }) { Text("选择查看对象") }
@@ -107,17 +114,19 @@ fun LogsScreen(api: BusinessApi, initialDate: String = "", onBack: (() -> Unit)?
         if (person != null) TextButton(onClick = { person = null }) { Text("返回我的日志") }
         if (loading) CircularProgressIndicator()
         if (error.isNotBlank()) { Note(error); TextButton(onClick = { reload++ }) { Text("重试") } }
-        Text("$date · ${when (selected?.string("status")) { "draft" -> "草稿"; "submitted" -> "已提交"; else -> "未填写" }}")
+        Text("$date · ${when (selected?.string("status")) { "draft" -> "草稿"; "submitted" -> "已提交"; else -> if (person == null) "未填写" else "暂无已提交日志" }}")
         selected?.let { log ->
             Text("已完成工作\n${log.string("completed_work")}")
             Text("明日计划\n${log.string("next_day_plan")}")
             val tags = log.array("tags").joinToString("、") { it.string("name") }
             if (tags.isNotEmpty()) Text("标签：$tags")
         } ?: Text("这一天没有可查看的日志。")
-        if (person == null && canEdit) PrimaryButton(if (selected == null) "填写日志" else "编辑日志", { edit = true })
-        else if (person == null) Text("该日期只读。")
+        if (person == null && !canEdit) Text("该日期只读。")
         Text("历史日志")
         rows.forEach { row -> TextButton(onClick = { day = row.string("log_date").takeLast(2).toIntOrNull() ?: day }) { Text("${row.string("log_date")} · ${if (row.string("status") == "draft") "草稿" else "已提交"}") } }
+        Spacer(Modifier.height(80.dp))
+    }
+    if (!edit && person == null && canEdit) FloatingActionButton(onClick = { edit = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).testTag("edit-log").semantics { contentDescription = if (selected == null) "填写日志" else "编辑日志" }, shape = androidx.compose.foundation.shape.CircleShape) { Text("＋") }
     }
     if (quickMonth) {
         var y by remember { mutableStateOf(year.toString()) }; var m by remember { mutableStateOf(month.toString()) }

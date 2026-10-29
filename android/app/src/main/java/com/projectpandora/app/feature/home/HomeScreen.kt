@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
 private const val ROOT = "api/v1/app/"
 
 @Composable
-fun HomeScreen(user: BusinessUser, api: BusinessApi, onTask: (Long) -> Unit, onLog: (String) -> Unit) {
+fun HomeScreen(user: BusinessUser, api: BusinessApi, onTask: (Long) -> Unit, onLog: (String) -> Unit, onApprovalTask: (Long) -> Unit = onTask) {
     val context = LocalContext.current
     var page by remember { mutableStateOf("home") }; var itemReturn by remember { mutableStateOf("home") }; var data by remember { mutableStateOf<JsonObject?>(null) }
     var list by remember { mutableStateOf<List<JsonObject>>(emptyList()) }; var item by remember { mutableStateOf<JsonObject?>(null) }
@@ -41,7 +41,7 @@ fun HomeScreen(user: BusinessUser, api: BusinessApi, onTask: (Long) -> Unit, onL
         } catch (e: Exception) { error = e.businessMessage() } finally { busy = false }
     }
     if (page == "focus") { FocusScreen(api, onBack = { page = "home"; reload++ }, onTask = onTask); return }
-    if (page == "notifications") { TaskNotificationsScreen(api, onBack = { page = "home"; reload++ }, onTask = onTask); return }
+    if (page == "notifications") { TaskNotificationsScreen(api, onBack = { page = "home"; reload++ }, onTask = { id, approval -> if (approval) onApprovalTask(id) else onTask(id) }); return }
     PageColumn {
         if (page != "home") BackButton { page = if (page == "item") itemReturn else "home"; reload++ }
         if (page == "home") {

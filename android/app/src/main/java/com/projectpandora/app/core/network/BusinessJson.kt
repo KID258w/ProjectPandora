@@ -2,6 +2,8 @@ package com.projectpandora.app.core.network
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import com.google.gson.JsonElement
+import com.google.gson.JsonParser
 import kotlinx.coroutines.CancellationException
 
 fun JsonObject.obj(key: String): JsonObject? = get(key)?.takeIf { it.isJsonObject }?.asJsonObject
@@ -33,7 +35,27 @@ suspend fun BusinessApi.all(path: String, query: Map<String, String> = emptyMap(
 fun Throwable.businessMessage(): String {
     if (this is CancellationException) throw this
     return when (this) {
-        is retrofit2.HttpException -> "请求失败（${code()}），请检查权限或稍后重试。"
+        is retrofit2.HttpException -> {
+            val fallback = "请求失败（${code()}），请检查权限或稍后重试。"
+            val parsed = runCatching {
+                val root = JsonParser.parseString(response()?.errorBody()?.string().orEmpty())
+                fun messages(value: JsonElement?): List<String> {
+                    if (value == null || value.isJsonNull) return emptyList()
+                    if (value.isJsonArray) return value.asJsonArray.flatMap(::messages)
+                    if (value.isJsonObject) return value.asJsonObject.entrySet().flatMap { (key, child) ->
+                        messages(child).map { if (key in setOf("detail", "non_field_errors")) it else "$key: $it" }
+                    }
+                    return if (value.isJsonPrimitive && value.asJsonPrimitive.isString) listOf(value.asString) else emptyList()
+                }
+                if (root.isJsonObject) {
+                    val obj = root.asJsonObject
+                    val details = if (obj.has("data")) messages(obj.get("data")) else messages(obj)
+                    if (details.isNotEmpty()) details.joinToString("；")
+                    else obj.string("message").takeUnless { it.isBlank() || it == "请求失败" } ?: fallback
+                } else messages(root).joinToString("；").ifBlank { fallback }
+            }.getOrDefault(fallback)
+            parsed
+        }
         is java.io.IOException -> "无法连接服务器，请检查网络后重试。"
         else -> message ?: "操作未完成，请稍后重试。"
     }
