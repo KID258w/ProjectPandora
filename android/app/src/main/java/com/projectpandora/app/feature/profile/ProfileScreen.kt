@@ -23,7 +23,7 @@ import com.projectpandora.app.ui.theme.PandoraColors as C
 
 @Composable
 fun ProfileScreen(user: BusinessUser, onPersonalInfo: () -> Unit, onNotifications: () -> Unit,
-    onHelp: () -> Unit, onLogout: () -> Unit) {
+    onHelp: () -> Unit, onLogout: () -> Unit, onTags: () -> Unit = {}) {
     var confirmLogout by rememberSaveable { mutableStateOf(false) }
     PageColumn {
         BrandHeader()
@@ -31,6 +31,7 @@ fun ProfileScreen(user: BusinessUser, onPersonalInfo: () -> Unit, onNotification
         IdentityCard(user)
         PageTitle("个人设置", small = true)
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (user.role == "创始人") SettingsRow("标签管理", R.drawable.setting_profile, C.Orange, C.AmberPale, onClick = onTags)
             SettingsRow("个人资料", R.drawable.setting_profile, C.Orange, C.AmberPale, onClick = onPersonalInfo)
             SettingsRow("通知设置", R.drawable.setting_notification, C.Blue, C.BluePale, onClick = onNotifications)
             SettingsRow("帮助与反馈", R.drawable.setting_help, C.Violet, C.VioletPale, onClick = onHelp)

@@ -18,12 +18,19 @@ import java.io.IOException
 
 object ApiClient {
     fun createAppAccountApi(tokenStorage: TokenStorage, baseUrl: String = BuildConfig.API_BASE_URL): AppAccountApi {
+        return authenticatedRetrofit(tokenStorage, baseUrl).create(AppAccountApi::class.java)
+    }
+
+    fun createBusinessApi(tokenStorage: TokenStorage, baseUrl: String = BuildConfig.API_BASE_URL): BusinessApi =
+        authenticatedRetrofit(tokenStorage, baseUrl).create(BusinessApi::class.java)
+
+    private fun authenticatedRetrofit(tokenStorage: TokenStorage, baseUrl: String): Retrofit {
         val refreshApi = retrofit(baseUrl, OkHttpClient.Builder().build()).create(AppTokenRefreshApi::class.java)
         val authenticatedClient = OkHttpClient.Builder()
             .addInterceptor(AppAccessTokenInterceptor(tokenStorage))
             .authenticator(AppTokenAuthenticator(refreshApi, tokenStorage))
             .build()
-        return retrofit(baseUrl, authenticatedClient).create(AppAccountApi::class.java)
+        return retrofit(baseUrl, authenticatedClient)
     }
 
     private fun retrofit(baseUrl: String, client: OkHttpClient): Retrofit =
