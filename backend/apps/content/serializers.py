@@ -53,6 +53,7 @@ class ItemDetailSerializer(ItemBriefSerializer):
     body = serializers.CharField()
     attachments = AttachmentSerializer(many=True)
     offline_at = serializers.DateTimeField(allow_null=True)
+    offline_reason = serializers.CharField()
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
 
@@ -79,6 +80,7 @@ class OfflineResultSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     status = serializers.CharField()
     offline_at = serializers.DateTimeField(allow_null=True)
+    offline_reason = serializers.CharField()
 
 
 class OrderItemSerializer(serializers.Serializer):

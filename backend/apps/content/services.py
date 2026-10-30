@@ -47,6 +47,7 @@ def item_detail(item):
         "status": item.status, "sort_order": item.sort_order,
         "attachments": [attachment_data(row) for row in item.attachments.all()],
         "published_at": item.published_at, "offline_at": item.offline_at,
+        "offline_reason": item.offline_reason,
         "created_at": item.created_at, "updated_at": item.updated_at,
     }
     return data
@@ -115,8 +116,10 @@ def publish_item(item, actor, sort_order=None):
         locked.publisher = actor
         locked.published_at = timezone.now()
         locked.offline_at = None
+        locked.offline_reason = ""
         locked.save(update_fields=[
-            "status", "sort_order", "publisher", "published_at", "offline_at", "updated_at",
+            "status", "sort_order", "publisher", "published_at", "offline_at", "offline_reason",
+            "updated_at",
         ])
     return locked
 
@@ -128,7 +131,8 @@ def offline_item(item, reason=""):
             raise ValidationError({"status": "只有已发布事项可以下线。"})
         locked.status = CompanyImportantItem.Status.OFFLINE
         locked.offline_at = timezone.now()
-        locked.save(update_fields=["status", "offline_at", "updated_at"])
+        locked.offline_reason = reason
+        locked.save(update_fields=["status", "offline_at", "offline_reason", "updated_at"])
     return locked
 
 

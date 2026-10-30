@@ -153,6 +153,7 @@ class CompanyItemOfflineView(AdministratorAPIView):
         )
         return Response({
             "id": offline.pk, "status": offline.status, "offline_at": offline.offline_at,
+            "offline_reason": offline.offline_reason,
         })
 
 

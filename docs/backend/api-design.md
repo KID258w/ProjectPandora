@@ -851,7 +851,9 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "status": "published",
     "sort_order": 1,
     "attachments": [],
-    "published_at": "2026-10-01T09:00:00+08:00"
+    "published_at": "2026-10-01T09:00:00+08:00",
+    "offline_at": null,
+    "offline_reason": ""
   },
   "requestId": "<uuid>"
 }
@@ -932,7 +934,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "data": {
     "id": 7,
     "status": "offline",
-    "offline_at": "2026-10-11T10:20:00+08:00"
+    "offline_at": "2026-10-11T10:20:00+08:00",
+    "offline_reason": "内容已过期"
   },
   "requestId": "<uuid>"
 }

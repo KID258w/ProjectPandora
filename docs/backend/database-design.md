@@ -10,7 +10,7 @@
 
 ## Issue #22 后端已落地的数据模型
 
-`content_company_item` 保存标题、摘要、正文、`draft/published/offline` 状态、手动顺序、发布人与发布/下线时间，索引 `(status, sort_order)`；发布上限 10 条由服务层在事务内校验（SQLite 下靠单写入者，MySQL 下对已发布行加锁）。`content_company_item_attachment` 只保存文件引用与元数据（`file_key`、`original_name`、`mime_type`、`size_bytes`），开发期文件落在 `MEDIA_ROOT`，不把二进制写入关系表。`home_personal_focus_task` 保存用户自选的任务顺序，`(user_id, task_id)` 与 `(user_id, sort_order)` 唯一；`home_personal_focus_state` 以一对一保存首次预填时间。首页其余三个面板直接读取 `content_company_item`、`tasks_task` 与 `logs_daily_log`，不另建摘要表；`AdminAuditLog.module` 扩展 `company_items` 记录事项创建、编辑、发布、下线、排序与附件操作。管理端事项接口写审计，App 端全部只读。
+`content_company_item` 保存标题、摘要、正文、`draft/published/offline` 状态、手动顺序、发布人与发布/下线时间及最近一次下线原因（重新发布时清空），索引 `(status, sort_order)`；发布上限 10 条由服务层在事务内校验（SQLite 下靠单写入者，MySQL 下对已发布行加锁）。`content_company_item_attachment` 只保存文件引用与元数据（`file_key`、`original_name`、`mime_type`、`size_bytes`），开发期文件落在 `MEDIA_ROOT`，不把二进制写入关系表。`home_personal_focus_task` 保存用户自选的任务顺序，`(user_id, task_id)` 与 `(user_id, sort_order)` 唯一；`home_personal_focus_state` 以一对一保存首次预填时间。首页其余三个面板直接读取 `content_company_item`、`tasks_task` 与 `logs_daily_log`，不另建摘要表；`AdminAuditLog.module` 扩展 `company_items` 记录事项创建、编辑、发布、下线、排序与附件操作。管理端事项接口写审计，App 端全部只读。
 
 ## Issue #6 已落地的数据模型
 
@@ -277,6 +277,7 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 | `publisher_id` | 管理员/用户外键 | 发布人 |
 | `published_at` | 可空时间 | 发布时间 |
 | `offline_at` | 可空时间 | 最近一次下线时间 |
+| `offline_reason` | 短文本，可空 | 最近一次下线原因；重新发布时清空 |
 | `created_at`, `updated_at` | 时间 | 创建、编辑时间 |
 
 发布事项总数最多 10 条；不设置置顶。首页按已发布状态和手动顺序取最多 5 条，二级页展示全部已发布事项。最近日志直接读取 `logs_daily_log` 中当前用户的已提交记录，按 `log_date` 倒序取最多 5 条；不另建首页日志实体，也不返回草稿。

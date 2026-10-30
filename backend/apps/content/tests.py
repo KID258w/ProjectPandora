@@ -144,7 +144,12 @@ class CompanyItemApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data["data"]["status"], "offline")
-        self.assertIsNotNone(CompanyImportantItem.objects.get(pk=item_id).offline_at)
+        self.assertEqual(response.data["data"]["offline_reason"], "内容已过期")
+        stored = CompanyImportantItem.objects.get(pk=item_id)
+        self.assertIsNotNone(stored.offline_at)
+        self.assertEqual(stored.offline_reason, "内容已过期")
+        detail = self.client.get(f"/api/v1/admin/company-items/{item_id}/").data["data"]
+        self.assertEqual(detail["offline_reason"], "内容已过期")
 
         self.auth(self.employee)
         self.assertEqual(self.client.get("/api/v1/app/company-items/").data["data"]["count"], 0)
@@ -152,6 +157,9 @@ class CompanyItemApiTests(APITestCase):
         self.auth(self.admin)
         self.assertEqual(self.client.post(f"/api/v1/admin/company-items/{item_id}/offline/", {}, format="json").status_code, 400)
         self.assertEqual(self.publish(item_id).status_code, 200)
+        republished = CompanyImportantItem.objects.get(pk=item_id)
+        self.assertEqual(republished.offline_reason, "")
+        self.assertIsNone(republished.offline_at)
 
     # ---- 排序 ----
 

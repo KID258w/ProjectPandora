@@ -26,6 +26,7 @@ class CompanyImportantItem(models.Model):
     )
     published_at = models.DateTimeField(null=True, blank=True)
     offline_at = models.DateTimeField(null=True, blank=True)
+    offline_reason = models.CharField(max_length=200, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
