@@ -106,6 +106,44 @@ class HomePanelApiTests(APITestCase):
         third = self.client.get("/api/v1/app/home/personal-focus/").data["data"]
         self.assertEqual([row["task_id"] for row in third["tasks"]], chosen)
 
+    def test_first_home_open_initializes_personal_focus_once(self):
+        """首次打开首页即完成预填；之后的首页请求不再重建，也不影响已有顺序。"""
+        for index in range(3):
+            self.task(self.manager, self.employee, title=f"任务{index}", due_days=index + 1)
+        self.auth(self.employee)
+        self.assertFalse(HomePersonalFocusState.objects.filter(user=self.employee).exists())
+
+        first = self.client.get("/api/v1/app/home/").data["data"]["personal_focus_tasks"]
+        self.assertEqual(len(first), 3)
+        state = HomePersonalFocusState.objects.get(user=self.employee)
+        self.assertIsNotNone(state.initialized_at)
+        self.assertEqual(HomePersonalFocusTask.objects.filter(user=self.employee).count(), 3)
+
+        # 之后新增候选不会改变已初始化的个人重点
+        self.task(self.manager, self.employee, title="后来的任务", due_days=0)
+        second = self.client.get("/api/v1/app/home/").data["data"]["personal_focus_tasks"]
+        self.assertEqual([row["id"] for row in second], [row["id"] for row in first])
+
+        # 两个入口共用同一初始化逻辑，不会重复预填
+        via_focus = self.client.get("/api/v1/app/home/personal-focus/").data["data"]["tasks"]
+        self.assertEqual([row["task_id"] for row in via_focus], [row["id"] for row in first])
+        self.assertEqual(HomePersonalFocusTask.objects.filter(user=self.employee).count(), 3)
+
+    def test_first_use_without_candidates_stays_empty_until_user_saves(self):
+        """首次使用时无候选任务：记录初始化状态，之后不自动补填，但允许用户手动添加。"""
+        self.auth(self.founder)
+        empty = self.client.get("/api/v1/app/home/").data["data"]["personal_focus_tasks"]
+        self.assertEqual(empty, [])
+        self.assertIsNotNone(HomePersonalFocusState.objects.get(user=self.founder).initialized_at)
+
+        task = self.task(self.founder, self.founder, title="后来自己建的任务")
+        still_empty = self.client.get("/api/v1/app/home/").data["data"]["personal_focus_tasks"]
+        self.assertEqual(still_empty, [])
+
+        saved = self.client.put("/api/v1/app/home/personal-focus/", {"task_ids": [task.pk]}, format="json")
+        self.assertEqual(saved.status_code, 200, saved.data)
+        self.assertEqual(saved.data["data"]["tasks"], [{"task_id": task.pk, "sort_order": 1}])
+
     def test_personal_focus_is_per_user(self):
         mine = self.task(self.manager, self.employee, title="我的任务")
         other = self.task(self.manager, self.colleague, title="同事任务")

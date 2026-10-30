@@ -32,7 +32,8 @@ class HomeView(BusinessAPIView):
 
     @extend_schema(
         tags=TAGS, summary="首页四面板聚合",
-        description="四个面板各最多返回 5 条摘要，并附带 Issue 4 的未读任务通知数。",
+        description="四个面板各最多返回 5 条摘要，并附带 Issue 4 的未读任务通知数。"
+                    "首次调用时按当时的公司十大预填个人重点，之后仅清理失效项。",
         responses=HomePayloadSerializer,
     )
     def get(self, request):
