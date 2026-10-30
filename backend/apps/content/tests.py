@@ -101,6 +101,30 @@ class CompanyItemApiTests(APITestCase):
         self.assertEqual(self.create_item(status="published").status_code, 400)
         self.assertEqual(self.client.get("/api/v1/admin/company-items/999999/").status_code, 404)
 
+    def test_all_management_mutations_are_auditable(self):
+        """七个写入口都必须落审计，且能通过审计查询接口按 module 过滤。"""
+        item_a = self.create_item(title="A").data["data"]["id"]
+        item_b = self.create_item(title="B").data["data"]["id"]
+        self.client.patch(f"/api/v1/admin/company-items/{item_a}/", {"summary": "改"}, format="json")
+        self.publish(item_a)
+        self.client.post(f"/api/v1/admin/company-items/{item_a}/offline/", {"reason": "过期"}, format="json")
+        self.client.put("/api/v1/admin/company-items/order/", {"item_ids": [item_b, item_a]}, format="json")
+        upload = SimpleUploadedFile("a.pdf", b"%PDF", content_type="application/pdf")
+        attachment_id = self.client.post(
+            f"/api/v1/admin/company-items/{item_a}/attachments/", {"file": upload}, format="multipart",
+        ).data["data"]["id"]
+        self.client.delete(f"/api/v1/admin/company-items/{item_a}/attachments/{attachment_id}/")
+
+        logs = AdminAuditLog.objects.filter(module=AdminAuditLog.Module.COMPANY_ITEMS)
+        self.assertEqual(set(logs.values_list("action", flat=True)), {
+            "create", "update", "publish", "offline", "reorder", "upload_attachment", "delete_attachment",
+        })
+        self.assertTrue(all(row.actor_id == self.admin.pk for row in logs))
+
+        listed = self.client.get("/api/v1/admin/audit-logs/?module=company_items&page_size=100").data["data"]
+        self.assertEqual(listed["count"], logs.count())
+        self.assertTrue(all(row["module"] == "company_items" for row in listed["results"]))
+
     # ---- 发布/下线规则 ----
 
     def test_publish_requires_required_fields(self):
