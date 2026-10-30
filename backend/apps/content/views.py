@@ -70,7 +70,8 @@ class CompanyItemListView(AdministratorAPIView):
             queryset = queryset.filter(title__icontains=keyword)
         return paginated_response(self, request, queryset, lambda rows: [item_brief(row) for row in rows])
 
-    @extend_schema(tags=TAGS, summary="创建事项草稿", request=ItemCreateInputSerializer, responses=ItemSavedSerializer)
+    @extend_schema(tags=TAGS, summary="创建事项草稿", request=ItemCreateInputSerializer,
+                   responses={201: ItemSavedSerializer})
     def post(self, request):
         values = validated(ItemCreateInputSerializer, request.data)
         item = CompanyImportantItem.objects.create(
@@ -179,7 +180,7 @@ class CompanyItemAttachmentView(AdministratorAPIView):
     @extend_schema(
         tags=TAGS, summary="上传事项附件",
         description="multipart/form-data，字段名 file；受大小与类型白名单限制。",
-        request=AttachmentUploadInputSerializer, responses=AttachmentSerializer,
+        request=AttachmentUploadInputSerializer, responses={201: AttachmentSerializer},
     )
     def post(self, request, pk):
         item = require_item(pk)

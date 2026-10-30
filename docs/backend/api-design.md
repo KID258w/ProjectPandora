@@ -47,7 +47,7 @@
 - 日期时间：请求与响应使用 ISO 8601；数据库统一存储带时区时间，客户端按 `Asia/Shanghai` 显示。纯日期使用 `YYYY-MM-DD`。
 - 命名：JSON 字段建议统一使用 `snake_case`；主键统一为整数 ID 或 UUID，实际项目选定一种后保持一致。
 - 列表：建议统一 `page`、`page_size` 查询参数；响应包含 `count`、`next`、`previous`、`results`。日历/视图等按日期区间查询的接口也应限制区间长度。
-- 成功响应：业务接口统一使用 `{ "code": 200, "message": "success", "data": {}, "requestId": "<uuid>" }`；单条资源、操作结果或分页对象放入 `data`。
+- 成功响应：业务接口统一使用 `{ "code": 200, "message": "success", "data": {}, "requestId": "<uuid>" }`；单条资源、操作结果或分页对象放入 `data`。外层 `code` 与 HTTP 状态码保持一致：新建资源成功返回 `201`（如创建部门/团队/账号/标签/任务、创建公司事项、上传附件、提交进展或成果），其余查询、修改、删除与状态变更返回 `200`。
 - 错误：使用相同外层结构，`code` 与 HTTP 状态码一致，`message` 为可读说明，`data` 放字段校验或错误详情，`requestId` 用于日志追踪。
 - 状态码：`400` 参数/业务校验失败，`401` 未登录或令牌失效，`403` 已登录但无权，`404` 对象不存在或对当前用户不可见，`409` 状态冲突，`500` 未预期服务错误。
 - 每次请求都必须在服务端重新验证数据范围和对象权限；前端隐藏按钮不构成权限控制。
@@ -466,7 +466,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 10,
@@ -574,7 +574,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 21,
@@ -818,7 +818,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 7,
@@ -987,7 +987,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 88,
@@ -1683,7 +1683,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 105,
@@ -1799,7 +1799,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 801,
@@ -1827,7 +1827,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 901,
@@ -2336,7 +2336,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 25,
