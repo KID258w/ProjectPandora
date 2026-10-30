@@ -31,9 +31,13 @@
 | App 标签 | `GET, POST /api/v1/app/tags/`、`PATCH, DELETE /api/v1/app/tags/{id}/` |
 | App 任务、审批及历史 | `GET, POST /api/v1/app/tasks/`、`GET /api/v1/app/tasks/subordinates/`、`GET, PATCH /api/v1/app/tasks/{id}/`、`GET /api/v1/app/tasks/{id}/history/`、`GET /api/v1/app/task-approvals/inbox/`、`GET /api/v1/app/task-approvals/outbox/`，以及第 3.2 节所列操作路径 |
 | App 任务通知和人员选择 | `GET /api/v1/app/notifications/`、`GET /api/v1/app/notifications/unread-count/`、`POST /api/v1/app/notifications/mark-read/`、`GET /api/v1/app/organization/assignable-users/`、`GET /api/v1/app/organization/visible-subordinates/` |
+| 公司重要事项管理（管理端） | `GET, POST /api/v1/admin/company-items/`、`GET, PATCH /api/v1/admin/company-items/{id}/`、`POST .../publish/`、`POST .../offline/`、`PUT .../order/`、`POST .../attachments/`、`DELETE .../attachments/{attachment_id}/` |
+| App 首页四面板与公司事项 | `GET /api/v1/app/home/`、`GET /api/v1/app/company-items/`、`GET /api/v1/app/company-items/{id}/`、`GET /api/v1/app/home/company-top-tasks/`、`GET, PUT /api/v1/app/home/personal-focus/`、`GET .../personal-focus/candidates/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
-下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口及 Issue #21 的任务、审批、通知接口已实现。其余仍为建议接口，不代表已上线。
+下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口、Issue #21 的任务、审批、通知接口，以及 Issue #22 的公司重要事项、首页四面板与个人重点接口均已实现。其余仍为建议接口，不代表已上线。
+
+附件实现约定（Issue #22 落地）：`POST .../attachments/` 使用 `multipart/form-data`，字段名 `file`；开发环境文件写入 `MEDIA_ROOT`（默认 `backend/media/`）并由 Django 在 `DEBUG` 下提供 `/media/` 访问，正式部署须改为对象存储或由反向代理提供持久化目录。默认上限 10 MB，类型白名单为 PDF、PNG/JPEG、纯文本、Word、Excel，可用环境变量 `COMPANY_ITEM_ATTACHMENT_MAX_BYTES` 与 `COMPANY_ITEM_ATTACHMENT_MIME_TYPES` 覆盖。
 
 ### 1.2 通用约定
 
@@ -2876,7 +2880,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 1. 管理员与业务用户采用独立 Django 用户模型还是同一认证表的类型隔离；JWT 的受众和密钥策略。
 2. 组织调整后，历史日志/任务查看权限按当前组织关系还是创建时组织快照计算。
-3. 事项附件的存储方式、文件大小/类型限制，以及 AI 厂商数据留存、MBTI 题目和计分方案。
+3. 事项附件的正式存储介质（当前开发期使用本地 `MEDIA_ROOT`，正式环境需确定对象存储与清理策略），以及 AI 厂商数据留存、MBTI 题目和计分方案。
 4. 精确分页上限、字段长度、错误码清单、访问频率限制和刷新令牌有效期。
 
 ## 7. 与 Swagger 的关系

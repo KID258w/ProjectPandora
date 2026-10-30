@@ -266,12 +266,16 @@ class DashboardView(VersionedMixin, APIView):
     permission_classes = [IsAdministrator]
 
     def get(self, request):
-        # published_company_items 由 company-important-items change 负责，其模型尚未实现，暂返回 0。
+        # 公司事项计数由 apps.content 提供；延迟导入避免 accounts 在 app 加载阶段依赖 content。
+        from apps.content.models import CompanyImportantItem
+
         return Response({
             "active_users": User.objects.filter(account_type="business", is_active=True).count(),
             "departments": Department.objects.filter(is_active=True).count(),
             "teams": Team.objects.filter(is_active=True).count(),
-            "published_company_items": 0,
+            "published_company_items": CompanyImportantItem.objects.filter(
+                status=CompanyImportantItem.Status.PUBLISHED
+            ).count(),
         })
 
 

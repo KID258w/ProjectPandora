@@ -111,6 +111,7 @@ class AdminAuditLog(models.Model):
         USERS = "users", "用户"
         DEPARTMENTS = "departments", "部门"
         TEAMS = "teams", "团队"
+        COMPANY_ITEMS = "company_items", "公司重要事项"
 
     class Result(models.TextChoices):
         SUCCESS = "success", "成功"
