@@ -31,9 +31,13 @@
 | App 标签 | `GET, POST /api/v1/app/tags/`、`PATCH, DELETE /api/v1/app/tags/{id}/` |
 | App 任务、审批及历史 | `GET, POST /api/v1/app/tasks/`、`GET /api/v1/app/tasks/subordinates/`、`GET, PATCH /api/v1/app/tasks/{id}/`、`GET /api/v1/app/tasks/{id}/history/`、`GET /api/v1/app/task-approvals/inbox/`、`GET /api/v1/app/task-approvals/outbox/`，以及第 3.2 节所列操作路径 |
 | App 任务通知和人员选择 | `GET /api/v1/app/notifications/`、`GET /api/v1/app/notifications/unread-count/`、`POST /api/v1/app/notifications/mark-read/`、`GET /api/v1/app/organization/assignable-users/`、`GET /api/v1/app/organization/visible-subordinates/` |
+| 公司重要事项管理（管理端） | `GET, POST /api/v1/admin/company-items/`、`GET, PATCH /api/v1/admin/company-items/{id}/`、`POST .../publish/`、`POST .../offline/`、`PUT .../order/`、`POST .../attachments/`、`DELETE .../attachments/{attachment_id}/` |
+| App 首页四面板与公司事项 | `GET /api/v1/app/home/`、`GET /api/v1/app/company-items/`、`GET /api/v1/app/company-items/{id}/`、`GET /api/v1/app/home/company-top-tasks/`、`GET, PUT /api/v1/app/home/personal-focus/`、`GET .../personal-focus/candidates/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
-下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口及 Issue #21 的任务、审批、通知接口已实现。其余仍为建议接口，不代表已上线。
+下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口、Issue #21 的任务、审批、通知接口，以及 Issue #22 的公司重要事项、首页四面板与个人重点接口均已实现。其余仍为建议接口，不代表已上线。
+
+附件实现约定（Issue #22 落地）：`POST .../attachments/` 使用 `multipart/form-data`，字段名 `file`；开发环境文件写入 `MEDIA_ROOT`（默认 `backend/media/`）并由 Django 在 `DEBUG` 下提供 `/media/` 访问，正式部署须改为对象存储或由反向代理提供持久化目录。默认上限 10 MB，类型白名单为 PDF、PNG/JPEG、纯文本、Word、Excel，可用环境变量 `COMPANY_ITEM_ATTACHMENT_MAX_BYTES` 与 `COMPANY_ITEM_ATTACHMENT_MIME_TYPES` 覆盖。
 
 ### 1.2 通用约定
 
@@ -43,7 +47,7 @@
 - 日期时间：请求与响应使用 ISO 8601；数据库统一存储带时区时间，客户端按 `Asia/Shanghai` 显示。纯日期使用 `YYYY-MM-DD`。
 - 命名：JSON 字段建议统一使用 `snake_case`；主键统一为整数 ID 或 UUID，实际项目选定一种后保持一致。
 - 列表：建议统一 `page`、`page_size` 查询参数；响应包含 `count`、`next`、`previous`、`results`。日历/视图等按日期区间查询的接口也应限制区间长度。
-- 成功响应：业务接口统一使用 `{ "code": 200, "message": "success", "data": {}, "requestId": "<uuid>" }`；单条资源、操作结果或分页对象放入 `data`。
+- 成功响应：业务接口统一使用 `{ "code": 200, "message": "success", "data": {}, "requestId": "<uuid>" }`；单条资源、操作结果或分页对象放入 `data`。外层 `code` 与 HTTP 状态码保持一致：新建资源成功返回 `201`（如创建部门/团队/账号/标签/任务、创建公司事项、上传附件、提交进展或成果），其余查询、修改、删除与状态变更返回 `200`。
 - 错误：使用相同外层结构，`code` 与 HTTP 状态码一致，`message` 为可读说明，`data` 放字段校验或错误详情，`requestId` 用于日志追踪。
 - 状态码：`400` 参数/业务校验失败，`401` 未登录或令牌失效，`403` 已登录但无权，`404` 对象不存在或对当前用户不可见，`409` 状态冲突，`500` 未预期服务错误。
 - 每次请求都必须在服务端重新验证数据范围和对象权限；前端隐藏按钮不构成权限控制。
@@ -462,7 +466,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 10,
@@ -570,7 +574,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 21,
@@ -814,7 +818,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 7,
@@ -847,7 +851,9 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "status": "published",
     "sort_order": 1,
     "attachments": [],
-    "published_at": "2026-10-01T09:00:00+08:00"
+    "published_at": "2026-10-01T09:00:00+08:00",
+    "offline_at": null,
+    "offline_reason": ""
   },
   "requestId": "<uuid>"
 }
@@ -928,7 +934,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "data": {
     "id": 7,
     "status": "offline",
-    "offline_at": "2026-10-11T10:20:00+08:00"
+    "offline_at": "2026-10-11T10:20:00+08:00",
+    "offline_reason": "内容已过期"
   },
   "requestId": "<uuid>"
 }
@@ -983,7 +990,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 88,
@@ -1246,6 +1253,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 该聚合响应中，四个面板分别最多返回 5 条摘要；`recent_logs` 只含当前用户已提交日志，按日期倒序，不含草稿。公司重要事项对所有 App 用户相同；任务和日志字段按当前用户权限返回。`unread_notification_count` 供任务铃铛显示红点，通知列表仍通过独立通知接口读取。
 
+该接口属于“首次使用”入口：当前用户尚无个人重点初始化记录时，本次请求会在同一事务内按当时的公司十大预填最多 10 项并返回，因此新用户的 `personal_focus_tasks` 在首次打开首页时即有内容。初始化只发生一次，之后仅清理失效项。
+
 #### GET /api/v1/app/company-items/?page=1&page_size=10
 
 **请求：** 无 JSON 请求体；如有筛选条件，查询参数见接口 URL。
@@ -1321,7 +1330,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 }
 ```
 
-首次调用时，如果尚无个人重点初始化记录，服务端在事务中按当时的公司十大任务预填最多 10 项并设置 `initialized=true`；之后不因公司十大列表变化而自动重置。
+首次调用时，如果尚无个人重点初始化记录，服务端在事务中按当时的公司十大任务预填最多 10 项并设置 `initialized=true`；之后不因公司十大列表变化而自动重置。若用户在首次打开首页前就已直接调用本接口，初始化在本接口完成；两个入口共用同一初始化逻辑，不会重复预填。`PUT` 首次保存同样会写入初始化状态。
 
 #### GET /api/v1/app/home/company-top-tasks/?page=1&page_size=10
 
@@ -1679,7 +1688,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 105,
@@ -1795,7 +1804,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 801,
@@ -1823,7 +1832,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 901,
@@ -2332,7 +2341,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ```json
 {
-  "code": 200,
+  "code": 201,
   "message": "success",
   "data": {
     "id": 25,
@@ -2876,7 +2885,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 1. 管理员与业务用户采用独立 Django 用户模型还是同一认证表的类型隔离；JWT 的受众和密钥策略。
 2. 组织调整后，历史日志/任务查看权限按当前组织关系还是创建时组织快照计算。
-3. 事项附件的存储方式、文件大小/类型限制，以及 AI 厂商数据留存、MBTI 题目和计分方案。
+3. 事项附件的正式存储介质（当前开发期使用本地 `MEDIA_ROOT`，正式环境需确定对象存储与清理策略），以及 AI 厂商数据留存、MBTI 题目和计分方案。
 4. 精确分页上限、字段长度、错误码清单、访问频率限制和刷新令牌有效期。
 
 ## 7. 与 Swagger 的关系

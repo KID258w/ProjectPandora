@@ -8,6 +8,10 @@
 
 `tasks_task` 保存任务定义、创建人/负责人、创建与派发部门快照、截止时间、三个独立状态维度及完成/取消时间；内部 `returned_edit_required` 字段确保审批退回后必须先实际修改再重提。`tasks_taskapprovalrecord` 以 `(task_id, round)` 唯一约束保存每轮直属上级审批；`tasks_taskupdate` 和 `tasks_tasksubmission` 保存只追加文字进展及每次完成提交/验收；`tasks_taskchangehistory` 保存任务创建与定义修改的字段差异；`tasks_tasknotification` 使用唯一 `event_key` 保存审批、派发、取消及提交/验收通知，通知流程结束时间与已读状态分开保存，并按接收人/已读/创建时间建索引。`tags_tasktag` 保存任务与标签关系及首次关联时间，`(task_id, tag_id)` 唯一。任务实体由 `tasks/0001_initial` 创建，通知生命周期字段由 `tasks/0002_task_notification_lifecycle` 扩展；任务标签关联因迁移依赖关系由 `tags/0002` 和 `tags/0003` 创建。无任务树、进度百分比、跨部门任务类型或通知推送实体。当前使用 SQLite；正式迁移 MySQL 前须验证迁移和索引语义。
 
+## Issue #22 后端已落地的数据模型
+
+`content_company_item` 保存标题、摘要、正文、`draft/published/offline` 状态、手动顺序、发布人与发布/下线时间及最近一次下线原因（重新发布时清空），索引 `(status, sort_order)`；发布上限 10 条由服务层在事务内校验（SQLite 下靠单写入者，MySQL 下对已发布行加锁）。`content_company_item_attachment` 只保存文件引用与元数据（`file_key`、`original_name`、`mime_type`、`size_bytes`），开发期文件落在 `MEDIA_ROOT`，不把二进制写入关系表。`home_personal_focus_task` 保存用户自选的任务顺序，`(user_id, task_id)` 与 `(user_id, sort_order)` 唯一；`home_personal_focus_state` 以一对一保存首次预填时间。首页其余三个面板直接读取 `content_company_item`、`tasks_task` 与 `logs_daily_log`，不另建摘要表；`AdminAuditLog.module` 扩展 `company_items` 记录事项创建、编辑、发布、下线、排序与附件操作。管理端事项接口写审计，App 端全部只读。
+
 ## Issue #6 已落地的数据模型
 
 本节记录 Issue #6 已落地及 Issue1 账号创建对齐后的真实结构，后文其余模块仍为目标设计。初始化与旧数据库升级见 [账号录入契约](account-provisioning.md)。
@@ -273,6 +277,7 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 | `publisher_id` | 管理员/用户外键 | 发布人 |
 | `published_at` | 可空时间 | 发布时间 |
 | `offline_at` | 可空时间 | 最近一次下线时间 |
+| `offline_reason` | 短文本，可空 | 最近一次下线原因；重新发布时清空 |
 | `created_at`, `updated_at` | 时间 | 创建、编辑时间 |
 
 发布事项总数最多 10 条；不设置置顶。首页按已发布状态和手动顺序取最多 5 条，二级页展示全部已发布事项。最近日志直接读取 `logs_daily_log` 中当前用户的已提交记录，按 `log_date` 倒序取最多 5 条；不另建首页日志实体，也不返回草稿。
@@ -413,7 +418,7 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 1. 管理账号是否与业务用户共用认证表；`business_role`、直属上级的最终组织模型，以及一个部门经理直接管理哪些岗位。
 2. 组织调动后任务/日志授权按当前组织树还是创建时快照；是否需要组织调动历史表。
 3. 月视图历史状态是否只需还原完成态，还是还需还原标题、截止日期等字段历史。
-4. 管理员审计快照保留期限与脱敏细则；公司事项附件存储；AI 对话/授权数据的删除和供应商留存策略。
+4. 管理员审计快照保留期限与脱敏细则；公司事项附件的正式存储介质与清理策略（当前开发期为 `MEDIA_ROOT` 本地磁盘）；AI 对话/授权数据的删除和供应商留存策略。
 5. MBTI 题目、计分、结果保存最小化要求；业务数据在 SQLite 到 MySQL 迁移时的字符集、主键策略和迁移窗口。
 
 ## 7. 实施顺序建议

@@ -168,12 +168,16 @@ class TaskApiTests(APITestCase):
         self.auth(self.founder)
         self.assertEqual(self.client.get(f"/api/v1/app/tasks/subordinates/?task_scope=created&user_id={self.manager.pk}").data["data"]["count"], 1)
         self.assertEqual(self.client.get(f"/api/v1/app/tasks/subordinates/?task_scope=assigned&user_id={self.other_manager.pk}").data["data"]["count"], 1)
+        # 审批已处理：被取代的审批通知计入 resolve，不再计入未读数（spec: superseded 通知不计入未读）。
+        self.assertEqual(self.client.get("/api/v1/app/notifications/unread-count/").data["data"]["unread_count"], 0)
+        self.auth(self.other_manager)
         self.assertEqual(self.client.get("/api/v1/app/notifications/unread-count/").data["data"]["unread_count"], 1)
         notification = self.client.get("/api/v1/app/notifications/?unread_only=true").data["data"]["results"][0]
-        self.assertEqual(self.client.get("/api/v1/app/notifications/unread-count/").data["data"]["unread_count"], 1)
+        self.assertEqual(notification["notification_type"], TaskNotification.Type.ASSIGNMENT_RECEIVED)
+        self.assertEqual(self.client.post("/api/v1/app/notifications/mark-read/", {"notification_ids": [notification["id"]]}, format="json").data["data"]["marked_read_count"], 1)
+        self.assertEqual(self.client.get("/api/v1/app/notifications/unread-count/").data["data"]["unread_count"], 0)
         extra = TaskNotification.objects.create(recipient=self.founder, task=task,
             notification_type=TaskNotification.Type.APPROVAL_REQUIRED, event_key="test-extra")
-        self.assertEqual(self.client.post("/api/v1/app/notifications/mark-read/", {"notification_ids": [notification["id"]]}, format="json").data["data"]["marked_read_count"], 1)
         self.assertFalse(TaskNotification.objects.get(pk=extra.pk).is_read)
         self.auth(self.manager)
         self.assertEqual(self.client.post("/api/v1/app/notifications/mark-read/", {"notification_ids": [extra.pk]}, format="json").data["data"]["marked_read_count"], 0)
