@@ -256,6 +256,28 @@ class HomePanelApiTests(APITestCase):
         self.assertEqual(data["recent_logs"], [])
         self.assertEqual(data["unread_notification_count"], 0)
 
+    def test_home_does_not_expose_subordinate_tasks_or_logs(self):
+        """首页 API 只返回本人数据：经理看不到下属承担的任务和下属日志。"""
+        self.task(self.manager, self.employee, title="下属承担的任务")
+        self.log(self.employee, 0, text="下属的日志")
+        self.auth(self.manager)
+        data = self.client.get("/api/v1/app/home/").data["data"]
+        self.assertEqual(data["company_top_tasks"], [])
+        self.assertEqual(data["personal_focus_tasks"], [])
+        self.assertEqual(data["recent_logs"], [])
+
+    def test_personal_focus_removes_task_reassigned_to_someone_else(self):
+        """不再由本人承担的任务应从个人重点中移除。"""
+        moved = self.task(self.manager, self.employee, title="将被转派")
+        self.auth(self.employee)
+        self.client.put("/api/v1/app/home/personal-focus/", {"task_ids": [moved.pk]}, format="json")
+        moved.assignee = self.colleague
+        moved.save(update_fields=["assignee"])
+
+        data = self.client.get("/api/v1/app/home/personal-focus/").data["data"]
+        self.assertEqual(data["tasks"], [])
+        self.assertFalse(HomePersonalFocusTask.objects.filter(user=self.employee).exists())
+
     def test_home_requires_business_account(self):
         admin = User.objects.create_superuser(username="admin", password="Pandora-test-938!")
         self.auth(admin)

@@ -1,10 +1,10 @@
 ## 1. Aggregation and personal ordering
 
-- [ ] 1.1 Implement an authenticated home aggregation query that reads company items, current-user tasks, personal ordering, and submitted log summaries from their source modules.
-- [ ] 1.2 Implement Company Top Ten task filtering, source/deadline/creation ordering, binary status display, and exclusion of completed/cancelled-archived/non-owned tasks.
-- [ ] 1.3 Add per-user Personal Top Ten selection/order and one-time prefill state; remove ineligible records while preserving remaining order.
-- [ ] 1.4 Implement latest-ten eligible task/item secondary lists and latest-five submitted-log summary plus published-company-item preview queries.
-- [ ] 1.5 Enforce response-field limits, current-user scoping, and no progress percentages on Home task summaries.
+- [x] 1.1 Implement an authenticated home aggregation query that reads company items, current-user tasks, personal ordering, and submitted log summaries from their source modules.
+- [x] 1.2 Implement Company Top Ten task filtering, source/deadline/creation ordering, binary status display, and exclusion of completed/cancelled-archived/non-owned tasks.
+- [x] 1.3 Add per-user Personal Top Ten selection/order and one-time prefill state; remove ineligible records while preserving remaining order.
+- [x] 1.4 Implement latest-ten eligible task/item secondary lists and latest-five submitted-log summary plus published-company-item preview queries.
+- [x] 1.5 Enforce response-field limits, current-user scoping, and no progress percentages on Home task summaries.
 
 ## 2. Android home experience
 
@@ -16,10 +16,10 @@
 
 ## 3. Verification
 
-- [ ] 3.1 Test role-specific current-user scoping, source/deadline/creation ordering, binary task statuses, and task exclusion rules.
+- [x] 3.1 Test role-specific current-user scoping, source/deadline/creation ordering, binary task statuses, and task exclusion rules.
 - [ ] 3.2 Test first-use prefill, subsequent independence, per-user isolation, max-ten validation, drag ordering, and automatic ineligible-item removal.
 - [ ] 3.3 Test five-row Home previews, up-to-ten secondary lists, task-detail navigation, latest-five submitted logs, draft exclusion, common published items, and short/empty states.
-- [ ] 3.4 Verify Home APIs do not expose subordinate tasks/logs or enable full task/log mutations.
+- [x] 3.4 Verify Home APIs do not expose subordinate tasks/logs or enable full task/log mutations.
 - [ ] 3.5 Verify approval and approved-assignment notification triggers, read-state behavior, authorized task navigation, and that viewing a notification does not change task state.
 
 ## 4. Prototype scope
