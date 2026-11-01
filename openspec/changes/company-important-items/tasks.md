@@ -7,7 +7,7 @@
 
 ## 2. Client workflows
 
-- [ ] 2.1 Build Web list, create/edit, draft, publish/unpublish, ordering, and mobile-preview workflows.
+- [x] 2.1 Build Web list, create/edit, draft, publish/unpublish, ordering, and mobile-preview workflows.
 - [ ] 2.2 Build mobile company-important-item list and read-only detail/attachment presentation.
 
 ## 3. Verification
