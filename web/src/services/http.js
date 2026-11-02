@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 export const ACCESS_TOKEN_KEY = 'pandora_admin_access_token'
 export const REFRESH_TOKEN_KEY = 'pandora_admin_refresh_token'
 
@@ -56,6 +56,13 @@ export function getApiErrorMessage(error) {
     current_password: '当前密码',
     new_password: '新密码',
     new_password_confirm: '新密码确认',
+    title: '事项标题',
+    summary: '内容摘要',
+    body: '事项正文',
+    item_ids: '事项顺序',
+    file: '附件',
+    reason: '下线原因',
+    status: '事项状态',
   }
   const fieldMessages = details && typeof details === 'object'
     ? Object.entries(details).flatMap(([field, messages]) => {
@@ -86,6 +93,19 @@ export const adminApi = {
   createUser: (data) => http.post('/admin/users/', data),
   dashboard: () => http.get('/admin/dashboard/'),
   auditLogs: (params = {}) => http.get('/admin/audit-logs/', { params: { page_size: 100, ...params } }),
+  companyItems: (params = {}) => http.get('/admin/company-items/', { params: { page_size: 100, ...params } }),
+  companyItem: (id) => http.get(`/admin/company-items/${id}/`),
+  createCompanyItem: (data) => http.post('/admin/company-items/', data),
+  updateCompanyItem: (id, data) => http.patch(`/admin/company-items/${id}/`, data),
+  publishCompanyItem: (id, data = {}) => http.post(`/admin/company-items/${id}/publish/`, data),
+  offlineCompanyItem: (id, data = {}) => http.post(`/admin/company-items/${id}/offline/`, data),
+  orderCompanyItems: (itemIds) => http.put('/admin/company-items/order/', { item_ids: itemIds }),
+  uploadCompanyItemAttachment: (id, file) => {
+    const form = new FormData()
+    form.append('file', file)
+    return http.post(`/admin/company-items/${id}/attachments/`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+  deleteCompanyItemAttachment: (id, attachmentId) => http.delete(`/admin/company-items/${id}/attachments/${attachmentId}/`),
 }
 
 let refreshPromise
