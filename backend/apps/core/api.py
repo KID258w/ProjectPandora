@@ -5,7 +5,7 @@ from drf_spectacular.openapi import AutoSchema
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import generics
 
-from apps.accounts.authentication import IsBusinessUser, ScopedJWTAuthentication
+from apps.accounts.authentication import IsAdministrator, IsBusinessUser, ScopedJWTAuthentication
 
 
 class EnvelopeMixin:
@@ -68,6 +68,14 @@ class BusinessAPIView(EnvelopeMixin, generics.GenericAPIView):
     schema = EnvelopeSchema()
     authentication_classes = [ScopedJWTAuthentication]
     permission_classes = [IsBusinessUser]
+
+
+class AdministratorAPIView(EnvelopeMixin, generics.GenericAPIView):
+    """管理端入口：仅 Web 管理账号可访问，与 App 业务账号完全隔离。"""
+
+    schema = EnvelopeSchema()
+    authentication_classes = [ScopedJWTAuthentication]
+    permission_classes = [IsAdministrator]
 
 
 def paginated_response(view, request, queryset, serializer):

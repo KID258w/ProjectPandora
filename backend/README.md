@@ -45,6 +45,7 @@ gunicorn config.wsgi:application --bind 0.0.0.0:8000
 - drf-spectacular OpenAPI、Swagger UI 和 ReDoc 文档。
 - 可供后续扩展的自定义用户模型；登录名使用 Django 的 `username`，并已落地 `account_type`、`business_role`、部门/团队/上级关系及账号录入、当前用户、部门/团队接口。契约见 `../docs/backend/account-provisioning.md`。
 - App 日志、标签、任务中心、直属上级审批、完成验收、任务定义历史及站内通知接口；请求与权限规则见 `../docs/backend/api-design.md`。
+- 公司重要事项管理（草稿/发布/下线/排序/附件）、App 首页四面板聚合、个人十大重点工作；附件存 `backend/media/`（已 gitignore），开发期由 Django 提供 `/media/`，正式环境需持久化目录或对象存储。
 - Vue 开发服务器默认允许 `localhost:5173` 和 `127.0.0.1:5173` 跨域访问；可通过 `.env` 中的 `CORS_ALLOWED_ORIGINS` 调整。
 
 生产环境不要使用默认开发密钥或 `DEBUG=True`。本地 SQLite 文件适合原型开发；将来部署 Docker 时需要配置持久化卷，正式协作环境再切换 MySQL。

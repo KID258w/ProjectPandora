@@ -47,6 +47,8 @@ INSTALLED_APPS = [
     "apps.tags.apps.TagsConfig",
     "apps.logs.apps.LogsConfig",
     "apps.tasks.apps.TasksConfig",
+    "apps.content.apps.ContentConfig",
+    "apps.home.apps.HomeConfig",
 ]
 
 MIDDLEWARE = [
@@ -104,6 +106,23 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# 公司重要事项附件：开发期存本地磁盘；正式部署需改为对象存储并配置持久化卷。
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+# 附件大小与类型白名单；如需调整通过 .env 覆盖，避免改代码。
+COMPANY_ITEM_ATTACHMENT_MAX_BYTES = int(os.getenv("COMPANY_ITEM_ATTACHMENT_MAX_BYTES", str(10 * 1024 * 1024)))
+COMPANY_ITEM_ATTACHMENT_MIME_TYPES = [
+    item.strip().lower()
+    for item in os.getenv(
+        "COMPANY_ITEM_ATTACHMENT_MIME_TYPES",
+        "application/pdf,image/png,image/jpeg,text/plain,"
+        "application/msword,"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document,"
+        "application/vnd.ms-excel,"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ).split(",")
+    if item.strip()
+]
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = [
