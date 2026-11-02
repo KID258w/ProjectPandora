@@ -143,7 +143,8 @@ def task_summary(task):
             "assignee_id": task.assignee_id, "creator_name": task.creator.display_name or task.creator.username,
             "assignee_name": task.assignee.display_name or task.assignee.username,
             "approval_status": task.approval_status, "completion_status": task.completion_status,
-            "lifecycle_status": task.lifecycle_status, "due_at": task.due_at}
+            "lifecycle_status": task.lifecycle_status, "estimated_start_at": task.estimated_start_at,
+            "due_at": task.due_at}
 
 
 def task_detail(task):

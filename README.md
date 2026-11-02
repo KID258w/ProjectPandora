@@ -72,7 +72,13 @@ npm run dev
 
 ### 4. 运行 Android App（可选）
 
-在 Android Studio 中打开仓库的 `android/` 目录，等待 Gradle Sync 完成，选择模拟器或已开启 USB 调试的手机，然后点击 **Run**。模拟器访问电脑上的 Django 服务时使用 `10.0.2.2` 地址。具体说明见 [`Android 指南`](docs/android/android-guide.md)。
+先保持 Django 后端运行，并用 USB 连接已开启 USB 调试的手机；需要测试模拟器时也先启动模拟器。然后在仓库根目录的 Git Bash 运行：
+
+```bash
+bash scripts/connect-android-backend.sh
+```
+
+脚本会检查后端，并给所有已授权的手机和模拟器设置 ADB 端口转发。随后在 Android Studio 打开 `android/`，选择目标设备并点击 **Run**。Debug App 默认使用 `127.0.0.1:8000`，手机重连或模拟器重启后需重新运行脚本。详细步骤见 [`Android 指南`](docs/android/android-guide.md)。
 
 用于甲方演示的原型是单独的 `demo/` 项目；运行方式见 [`Demo 指南`](docs/demo/guide.md)。
 

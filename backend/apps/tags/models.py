@@ -15,8 +15,8 @@ class Tag(models.Model):
 
 
 PALETTE = (
-    "#4C9A8A", "#6587C5", "#C58B5D", "#AA77B8", "#D07272",
-    "#719B57", "#C3A248", "#5E9DB7", "#BA7891", "#7C88A3",
+    "#C7DDFF", "#BDEAF2", "#BFEBDD", "#CFE6B4", "#E7ECB0",
+    "#FFE59E", "#FFD0A3", "#FFBFB3", "#F1C1D8", "#D7C8F2",
 )
 
 

@@ -2,6 +2,9 @@ package com.projectpandora.app.feature.account
 
 import com.google.gson.JsonParser
 import kotlinx.coroutines.CancellationException
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Response
 import java.io.IOException
 
@@ -53,6 +56,55 @@ class ApiAccountRepository(
             this.request(isLogin = false) { api.updateCurrentUser(request) }.data.toBusinessUser()
         } catch (failure: AccountException) {
             throw resolveProtectedFailure(failure)
+        }
+    }
+
+    override suspend fun loadProfileAvatar(): ByteArray? = try {
+        val response = api.currentAvatar()
+        when {
+            response.code() == 404 -> {
+                response.errorBody()?.close()
+                null
+            }
+            response.isSuccessful -> response.body()?.use { it.bytes() }
+                ?: throw AccountException(AccountFailureKind.SERVER, AccountMessages.SERVER)
+            else -> throw avatarResponseFailure(response.code(), response.errorBody()?.string())
+        }
+    } catch (failure: CancellationException) {
+        throw failure
+    } catch (failure: AccountException) {
+        throw resolveProtectedFailure(failure)
+    } catch (failure: IOException) {
+        throw AccountException(AccountFailureKind.NETWORK, AccountMessages.NETWORK, failure)
+    } catch (failure: Exception) {
+        throw AccountException(AccountFailureKind.SERVER, AccountMessages.SERVER, failure)
+    }
+
+    override suspend fun updateProfileAvatar(image: ByteArray, contentType: String) {
+        val extension = when (contentType) {
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            else -> "jpg"
+        }
+        val part = MultipartBody.Part.createFormData(
+            "avatar",
+            "profile-avatar.$extension",
+            image.toRequestBody(contentType.toMediaType()),
+        )
+        try {
+            val response = api.updateAvatar(part)
+            if (!response.isSuccessful) {
+                throw avatarResponseFailure(response.code(), response.errorBody()?.string())
+            }
+            response.body()?.close()
+        } catch (failure: CancellationException) {
+            throw failure
+        } catch (failure: AccountException) {
+            throw resolveProtectedFailure(failure)
+        } catch (failure: IOException) {
+            throw AccountException(AccountFailureKind.NETWORK, AccountMessages.NETWORK, failure)
+        } catch (failure: Exception) {
+            throw AccountException(AccountFailureKind.SERVER, AccountMessages.SERVER, failure)
         }
     }
 
@@ -145,5 +197,18 @@ class ApiAccountRepository(
             }
     } catch (_: RuntimeException) {
         null
+    }
+
+    private fun avatarResponseFailure(status: Int, body: String?): AccountException {
+        val (kind, message) = when {
+            status == 401 -> AccountFailureKind.SESSION_EXPIRED to AccountMessages.SESSION_EXPIRED
+            status == 403 -> AccountFailureKind.FORBIDDEN to AccountMessages.FORBIDDEN
+            status in 400..499 -> AccountFailureKind.VALIDATION to AccountMessages.VALIDATION
+            else -> AccountFailureKind.SERVER to AccountMessages.SERVER
+        }
+        val safeMessage = if (kind == AccountFailureKind.VALIDATION) {
+            readDetail(body)?.takeIf(String::isNotBlank) ?: message
+        } else message
+        return AccountException(kind, safeMessage)
     }
 }

@@ -2,11 +2,11 @@
 
 > **Issue #6 实施更新**：账号录入、组织列表/创建与两端认证已实现。各接口请求/响应示例、错误、分页、身份规则以 [账号录入与登录契约](account-provisioning.md) 为准。旧 `/api/auth/token/` 入口已移除。
 
-> **Issue #15 实施更新**：部门/团队详情与启停、员工筛选与身份/组织调整、管理概况与操作审计、App 个人资料与密码已实现（见 2.1 节契约）。以下未标注已实现的业务内容仍为规划。
+> **Issue #15 实施更新**：部门/团队详情与启停、员工筛选与身份/组织调整、管理概况与操作审计、App 个人资料/密码/头像已实现（见 2.1 节契约）。头像二进制保存在用户数据库记录中，可在同一账号的不同设备读取。以下未标注已实现的业务内容仍为规划。
 
-> **Issue #20 后端实施更新**：`/api/v1/app/logs/`、`logs/calendar/`、`logs/{id}/`、`logs/mine/{log_date}/`、`logs/mine/{log_date}/submit/`、`log-viewers/` 与 `tags/` 已实现。日期窗口按服务端 `TIME_ZONE` 的自然日计算。日志列表对本人可返回草稿，对下属只返回已提交；日历标记仅包含已提交。标签创建返回 `201`，启用名称冲突返回 `409`，删除为不可逆停用。首页最近五篇已提交日志通过 `apps.logs.services.recent_submitted_logs` 提供数据源，首页聚合接口属于 Issue #22。
+> **Issue #20 后端实施更新**：`/api/v1/app/logs/`、`logs/calendar/`、`logs/{id}/`、`logs/{id}/comments/`、`logs/mine/{log_date}/`、`logs/mine/{log_date}/submit/`、`log-viewers/` 与 `tags/` 已实现。日期窗口按服务端 `TIME_ZONE` 的自然日计算。日志列表对本人可返回草稿，对下属只返回已提交；日历标记仅包含已提交。可查看日志的 App 用户可读取和添加评论，评论与日志正文分开保存。创始人创建标签时提交预设颜色，启用标签可修改名称和颜色；改色同步影响已有任务、日志及任务条颜色。启用名称冲突返回 `409`，删除为不可逆停用。首页最近五篇已提交日志通过 `apps.logs.services.recent_submitted_logs` 提供数据源，首页聚合接口属于 Issue #22。
 
-> **Issue #21 后端实施更新**：第 3.2、4.4 节所列任务、审批、进展、提交/验收、取消、组织候选人与站内通知接口已实现。任务创建、进展和完成提交返回 `201`，其他写操作返回 `200`。普通及下属任务列表用 `due_from`、`due_to` 过滤截止日期，边界均包含在内；默认仅返回活动任务。通知列表只读取，不自动标记已读；用户点击单条通知时，客户端将该通知 ID 送至 `mark-read/`；打开或浏览通知列表不会自动标记已读。任务详情返回创建人/负责人、状态、标签、审批历史、进展和提交记录；无权访问的详情返回 `404`。任务定义变更历史不保存密码等身份资料。
+> **Issue #21 后端实施更新**：第 3.2、4.4 节所列任务、审批、进展、提交/验收、取消、组织候选人与站内通知接口已实现。任务创建、进展和完成提交返回 `201`，其他写操作返回 `200`。任务摘要和详情增加可空的 `estimated_start_at`，表示预计开始时间；普通及下属任务列表支持按预计开始日期与截止日期的起止范围筛选，日期边界均包含在内。未填写预计开始时间的任务不匹配预计开始日期范围筛选。默认仅返回活动任务。通知列表只读取，不自动标记已读；用户点击单条通知时，客户端将该通知 ID 送至 `mark-read/`；打开或浏览通知列表不会自动标记已读。任务详情返回创建人/负责人、状态、标签、审批历史、进展和提交记录；无权访问的详情返回 `404`。任务定义变更历史不保存密码等身份资料。
 
 > 维护说明：由项目统筹与后端同学共同维护，作为 API 设计的持续文档。接口路径、字段名和错误格式可随开发协商调整。  
 > 依据：`docs/requirements/01` 至 `07`、`docs/cooperate/swagger-guide.md` 与当前 Django 骨架。需求变化时以最新确认的需求为准。
@@ -26,8 +26,8 @@
 | 组织详情/启停 | `GET, PATCH /api/v1/admin/departments/{id}/`、`GET, PATCH /api/v1/admin/teams/{id}/` |
 | 员工筛选/详情/调整 | `GET /api/v1/admin/users/`、`GET, PATCH /api/v1/admin/users/{id}/` |
 | 管理操作审计 | `GET /api/v1/admin/audit-logs/` |
-| App 个人资料与密码 | `GET, PATCH /api/v1/app/me/`、`POST /api/v1/app/me/password/` |
-| App 日志与授权查看对象 | `GET /api/v1/app/logs/`、`GET /api/v1/app/logs/calendar/`、`GET /api/v1/app/logs/{id}/`、`GET, PUT /api/v1/app/logs/mine/{log_date}/`、`POST /api/v1/app/logs/mine/{log_date}/submit/`、`GET /api/v1/app/log-viewers/` |
+| App 个人资料、头像与密码 | `GET, PATCH /api/v1/app/me/`、`GET, PUT /api/v1/app/me/avatar/`、`POST /api/v1/app/me/password/` |
+| App 日志与授权查看对象 | `GET /api/v1/app/logs/`、`GET /api/v1/app/logs/calendar/`、`GET /api/v1/app/logs/{id}/`、`GET, POST /api/v1/app/logs/{id}/comments/`、`GET, PUT /api/v1/app/logs/mine/{log_date}/`、`POST /api/v1/app/logs/mine/{log_date}/submit/`、`GET /api/v1/app/log-viewers/` |
 | App 标签 | `GET, POST /api/v1/app/tags/`、`PATCH, DELETE /api/v1/app/tags/{id}/` |
 | App 任务、审批及历史 | `GET, POST /api/v1/app/tasks/`、`GET /api/v1/app/tasks/subordinates/`、`GET, PATCH /api/v1/app/tasks/{id}/`、`GET /api/v1/app/tasks/{id}/history/`、`GET /api/v1/app/task-approvals/inbox/`、`GET /api/v1/app/task-approvals/outbox/`，以及第 3.2 节所列操作路径 |
 | App 任务通知和人员选择 | `GET /api/v1/app/notifications/`、`GET /api/v1/app/notifications/unread-count/`、`POST /api/v1/app/notifications/mark-read/`、`GET /api/v1/app/organization/assignable-users/`、`GET /api/v1/app/organization/visible-subordinates/` |
@@ -38,6 +38,10 @@
 下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口、Issue #21 的任务、审批、通知接口，以及 Issue #22 的公司重要事项、首页四面板与个人重点接口均已实现。其余仍为建议接口，不代表已上线。
 
 附件实现约定（Issue #22 落地）：`POST .../attachments/` 使用 `multipart/form-data`，字段名 `file`；开发环境文件写入 `MEDIA_ROOT`（默认 `backend/media/`）并由 Django 在 `DEBUG` 下提供 `/media/` 访问，正式部署须改为对象存储或由反向代理提供持久化目录。默认上限 10 MB，类型白名单为 PDF、PNG/JPEG、纯文本、Word、Excel，可用环境变量 `COMPANY_ITEM_ATTACHMENT_MAX_BYTES` 与 `COMPANY_ITEM_ATTACHMENT_MIME_TYPES` 覆盖。
+| App 组织关系 | `GET /api/v1/app/organization/tree/`、`GET /api/v1/app/organization/members/{id}/`、`GET /api/v1/app/organization/members/{id}/avatar/` |
+| OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
+
+下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料、头像和密码已实现（契约见 2.1）；Issue #20 的日志和标签接口及 Issue #21 的任务、审批、通知接口已实现。其余仍为建议接口，不代表已上线。
 
 ### 1.2 通用约定
 
@@ -47,8 +51,10 @@
 - 日期时间：请求与响应使用 ISO 8601；数据库统一存储带时区时间，客户端按 `Asia/Shanghai` 显示。纯日期使用 `YYYY-MM-DD`。
 - 命名：JSON 字段建议统一使用 `snake_case`；主键统一为整数 ID 或 UUID，实际项目选定一种后保持一致。
 - 列表：建议统一 `page`、`page_size` 查询参数；响应包含 `count`、`next`、`previous`、`results`。日历/视图等按日期区间查询的接口也应限制区间长度。
-- 成功响应：业务接口统一使用 `{ "code": 200, "message": "success", "data": {}, "requestId": "<uuid>" }`；单条资源、操作结果或分页对象放入 `data`。外层 `code` 与 HTTP 状态码保持一致：新建资源成功返回 `201`（如创建部门/团队/账号/标签/任务、创建公司事项、上传附件、提交进展或成果），其余查询、修改、删除与状态变更返回 `200`。
+- 成功响应：业务接口统一使用 `{ "code": 200, "message": "success", "data": {}, "requestId": "<uuid>" }`；单条资源、操作结果或分页对象放入 `data`。
+- 二进制头像接口 `GET /api/v1/app/me/avatar/` 是例外，直接返回受认证保护的图片字节；头像 PUT 成功后返回 `204` 空响应，不使用通用 JSON envelope。
 - 错误：使用相同外层结构，`code` 与 HTTP 状态码一致，`message` 为可读说明，`data` 放字段校验或错误详情，`requestId` 用于日志追踪。
+- 头像接口是错误响应格式的例外：上传校验和认证失败使用标准 DRF HTTP 错误响应；未设置头像的 GET 返回空的 `404`。
 - 状态码：`400` 参数/业务校验失败，`401` 未登录或令牌失效，`403` 已登录但无权，`404` 对象不存在或对当前用户不可见，`409` 状态冲突，`500` 未预期服务错误。
 - 每次请求都必须在服务端重新验证数据范围和对象权限；前端隐藏按钮不构成权限控制。
 
@@ -103,6 +109,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 - 团队重新启用时所属部门必须启用；团队改名不能与同部门其他团队重名，冲突返回名称字段校验错误。
 - 身份证号在所有业务账号中全局唯一，停用账号仍占用身份证号。创建和 App 修改时，后端去除首尾空格并将字母统一为大写后再保存和计算唯一哈希，因此末位 `x` 与 `X` 视为同一号码。迁移 0008 回填前检查原始历史重复值；迁移 0010 在规范化前检查大小写/空格规范化后重复的历史值，均只报告冲突账号 ID、不输出身份证号明文，解决冲突后方可重跑迁移。回退数据迁移保留哈希数据，避免暂时失去唯一性校验。
 - App `GET /api/v1/app/me/` 不返回完整身份证号。`PATCH /api/v1/app/me/` 允许员工本人修改 `display_name`、手机号（请求字段仍为 `username`，成功后更新登录标识）和 `id_number`，不接受身份、组织、直属上级或启用状态。姓名和身份证号可在同一请求中一起提交，也可分别修改；两者作为一个事务保存，任一字段校验失败时均不更新。手机号更新成功后，App 清除本机登录会话并返回登录页，提示员工使用新手机号重新登录。员工本人通过 `POST /api/v1/app/me/password/` 修改密码，提交当前密码、新密码和新密码确认；MVP 不要求短信验证，密码找回流程未定。密码更新成功后，App 清除本机登录会话并要求员工使用新密码重新登录；服务端不主动撤销已签发令牌，它们仍按现有有效期处理。
+- App `GET /api/v1/app/me/` 和 `PATCH /api/v1/app/me/` 响应还包含当前账号的 `avatar_url`（未设置时为 `null`）。头像接口 `GET, PUT /api/v1/app/me/avatar/` 仅允许业务账号操作令牌所属账号；头像由 App 上传到用户数据库行，读取返回原始图片二进制，PUT 为 multipart 上传并替换头像。它不是 JSON envelope 响应；格式和大小限制见下方契约。Web 管理员不获得头像读写能力。
 
 ## 3. Android 业务端 API
 
@@ -114,6 +121,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `POST /api/v1/app/auth/token/refresh/` | 刷新业务端令牌 |
 | `GET /api/v1/app/me/` | 当前用户姓名、手机号、业务角色、部门/团队、直属上级等；不返回完整身份证号 |
 | `PATCH /api/v1/app/me/` | 员工本人修改姓名、手机号、身份证号；手机号更新现有 `username` 登录标识 |
+| `GET, PUT /api/v1/app/me/avatar/` | 读取、上传或替换当前业务用户自己的头像；图片二进制存入账号数据库记录 |
 | `POST /api/v1/app/me/password/` | 员工本人验证当前密码后修改密码；不提供 Web 重置入口 |
 | `GET /api/v1/app/home/` | 返回首页四大面板摘要（每卡最多 5 条）及任务通知未读数；个人数据按当前登录用户隔离 |
 | `GET /api/v1/app/company-items/` | 已发布的公司重要事项列表，最多 10 条 |
@@ -132,14 +140,14 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 
 | 方法与路径 | 用途 / 规则 |
 |---|---|
-| `GET /api/v1/app/tasks/` | 普通任务中心列表；`scope=all|mine|created`，支持截止日期、完成状态及归档状态筛选；`all` 合并去重 |
-| `GET /api/v1/app/tasks/subordinates/` | 当前用户有权查看的下属已审批任务；支持 `task_scope=assigned|created`、截止日期、完成状态和授权下属筛选 |
+| `GET /api/v1/app/tasks/` | 普通任务中心列表；`scope=all|mine|created`，支持预计开始日期、截止日期、完成状态及归档状态筛选；`all` 合并去重 |
+| `GET /api/v1/app/tasks/subordinates/` | 当前用户有权查看的下属已审批任务；支持 `task_scope=assigned|created`、预计开始日期、截止日期、完成状态和授权下属筛选 |
 | `GET /api/v1/app/task-approvals/inbox/` | 待当前上级审批任务；不提供已完成/未完成筛选 |
 | `GET /api/v1/app/task-approvals/outbox/` | 当前用户创建、等待上级审批或已退回待修改的任务；不提供完成状态筛选 |
 | `GET /api/v1/app/tasks/{id}/` | 任务详情；返回审批/验收历史、进展和全部标签；服务端校验原任务可见性，App 按创建人、直属审批人、负责人或只读查看者关系展示相应内容 |
 | `GET /api/v1/app/tasks/{id}/history/` | 返回当前用户有权查看的任务创建及定义变更记录，含操作人、时间和变更字段 |
 | `POST /api/v1/app/tasks/` | 普通入口创建任务；可选提交 `tag_ids`；创始人可指派给本公司任一成员，其他角色按各自组织范围选择负责人；创建人有直属上级则进入待审批 |
-| `PATCH /api/v1/app/tasks/{id}/` | 按原任务编辑权限修改任务；可选提交 `tag_ids`；单独改标签不触发重新审批 |
+| `PATCH /api/v1/app/tasks/{id}/` | 按原任务编辑权限修改任务；可选提交 `estimated_start_at`（ISO 8601 或 `null`）；计划开始或截止时间变更按关键定义重新审批；单独改标签不触发重新审批 |
 | `POST /api/v1/app/tasks/{id}/resubmit/` | 创建人完成退回任务编辑后重新送直属上级审批 |
 | `POST /api/v1/app/tasks/{id}/approval/` | 上级审批通过或退回；退回必须附原因 |
 | `POST /api/v1/app/tasks/{id}/updates/` | 负责人追加进展说明；只追加记录，不设置百分比进度 |
@@ -151,16 +159,19 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `POST /api/v1/app/notifications/mark-read/` | 将请求中明确列出的本人通知标记为已读；不改变任务状态 |
 | `GET /api/v1/app/organization/assignable-users/` | 查询当前用户在普通任务表单中有权选择的负责人；创始人可查询本公司全体成员，其他角色按其派发范围返回，支持姓名关键词 |
 | `GET /api/v1/app/organization/visible-subordinates/` | 查看对象选择器可访问的下属；逐级查看时关键词仅匹配授权下属姓名 |
+| `GET /api/v1/app/organization/tree/` | 返回公司组织树；创始人与部门并列。所有 App 业务用户均可浏览；可选 `keyword` 按成员姓名或职级搜索，搜索时返回平铺人员列表 |
+| `GET /api/v1/app/organization/members/{id}/` | 返回启用业务成员的只读资料；所有 App 业务用户均可读取，不可用于修改成员信息 |
+| `GET /api/v1/app/organization/members/{id}/avatar/` | 返回启用业务成员已上传的头像二进制；所有 App 业务用户均可读取 |
 
 任务详情的 Android 展示按当前用户关系区分：创建人和本轮直属审批人可查看审批状态及审批记录；非创建人/审批人的负责人和层级只读查看者不显示审批状态或审批记录。负责人及授权只读查看者可查看已审批任务的执行信息；具体操作仍由服务端逐项校验。用户同时具备多种关系时，客户端合并展示其有权查看的信息。创始人免审批任务不展示空审批记录区块。
 
-普通任务列表通过一个筛选接口支持 `scope=all|mine|created`、`completion_status=all|unfinished|completed`、`lifecycle_status=active|cancelled|all`、`due_from` 和 `due_to`；日期边界均包含在结果中，默认 `scope=mine`、`completion_status=all`、`lifecycle_status=active` 且不限日期。`scope=all` 返回本人承担或创建的已审批任务并按任务 ID 去重。取消任务保留为归档记录，可通过 `lifecycle_status=cancelled` 查询。下属任务接口支持 `task_scope=assigned|created`，只返回审批通过的记录；具体人员筛选只能在服务端授权的下属范围内。审批列表仅按审批流程筛选。负责人选择接口只返回创建者有权派发给的对象：创始人为本公司全体成员；部门经理为本人、本部门团队长或其他部门经理；团队长为本人或本团队普通员工；普通员工仅本人。部门经理指派给其他部门经理仍调用统一创建接口，并由服务端按创建人的直属上级规则发起审批。任务被直属上级退回后，创建人通过 `PATCH` 修改，再调用 `POST /tasks/{id}/resubmit/` 新增审批轮次；审批通过后关键定义字段发生变化时，服务端自动重新送审并写入新审批轮次。单独修改标签不触发重新审批。
+普通任务列表通过一个筛选接口支持 `scope=all|mine|created`、`completion_status=all|unfinished|completed`、`lifecycle_status=active|cancelled|all`、`due_from`、`due_to`、`estimated_start_from` 和 `estimated_start_to`（启用预计开始日期筛选时，未设置预计开始时间的任务不匹配）；日期边界均包含在结果中，筛选精确到日。默认 `scope=mine`、`completion_status=all`、`lifecycle_status=active` 且不限日期。`scope=all` 返回本人承担或创建的已审批任务并按任务 ID 去重。取消任务保留为归档记录，可通过 `lifecycle_status=cancelled` 查询。下属任务接口支持 `task_scope=assigned|created`，只返回审批通过的记录；并使用相同的预计开始日期、截止日期、完成状态及归档状态筛选；具体人员筛选只能在服务端授权的下属范围内。审批列表仅按审批流程筛选。负责人选择接口只返回创建者有权派发给的对象：创始人为本公司全体成员；部门经理为本人、本部门团队长或其他部门经理；团队长为本人或本团队普通员工；普通员工仅本人。部门经理指派给其他部门经理仍调用统一创建接口，并由服务端按创建人的直属上级规则发起审批。任务被直属上级退回后，创建人通过 `PATCH` 修改，再调用 `POST /tasks/{id}/resubmit/` 新增审批轮次；审批通过后负责人、任务描述、预计开始时间、截止时间或预期材料等关键定义字段发生变化时，服务端自动重新送审并写入新审批轮次。单独修改标签不触发重新审批。
 
-通知只通过 App 内列表提供，不发送操作系统推送。创建人有直属上级时，任务进入待审批状态即向该直属上级生成审批通知；他人创建并派发给当前用户的任务在审批通过后生成新任务通知。本人创建并由本人承担的任务不生成新任务通知。
+通知只通过 App 内列表提供，不发送操作系统推送。创建人有直属上级时，任务进入待审批状态即向该直属上级生成审批通知；每轮审批通过或退回后，另向创建人生成“审批通过”或“审批退回”结果通知，退回通知包含原因。审批通过后，他人创建并派发给当前用户的任务生成新任务通知。本人创建并由本人承担的任务不生成新任务通知。
 
-任务通知类型为 `approval_required`、`assignment_received`、`task_cancelled`、`submission_received`、`submission_accepted` 和 `submission_returned`。取消待审批任务时，关闭其待审批通知并通知当前待审批的直属上级；取消已审批且派发给他人的任务时，关闭尚未处理的派发/提交/退回通知并通知负责人。审批退回后、重新审批通过前取消的任务尚未进入负责人任务列表，不向负责人发送取消通知。提交完成结果通知直接派发人；验收通过或退回通知负责人，退回通知包含原因。重新提交会结束上一次退回通知。取消、验收或重新提交等流程变化通过 `resolved_at` 结束旧通知，但不会自动标记为已读；所有通知历史仍可查询。`unread_only=true` 与未读数只包含 `is_read=false` 且 `resolved_at=null` 的通知。
+任务通知类型为 `approval_required`、`approval_approved`、`approval_returned`、`assignment_received`、`task_cancelled`、`submission_received`、`submission_accepted` 和 `submission_returned`。`approval_required` 发给待审批的直属上级；审批通过或退回后结束该条待审批通知，并按审批轮次向创建人生成独立结果通知。结果通知保留本轮决定和意见，不因后续重新送审而覆盖。取消待审批任务时，关闭其待审批通知并通知当前待审批的直属上级；取消已审批且派发给他人的任务时，关闭尚未处理的派发/提交/退回通知并通知负责人。审批退回后、重新审批通过前取消的任务尚未进入负责人任务列表，不向负责人发送取消通知。提交完成结果通知直接派发人；验收通过或退回通知负责人，退回通知包含原因。重新提交会结束上一次验收退回通知。取消、验收或重新提交等流程变化通过 `resolved_at` 结束待处理通知，但审批结果事件通知不会因后续轮次自动结束。`unread_only=true` 与未读数只包含 `is_read=false` 且 `resolved_at=null` 的通知。
 
-创建任务时 `assignee_id`、`title`、`description`、`due_at` 为必填字段；`required_materials`、`association_note` 和 `tag_ids` 为可选字段。编辑任务使用部分更新，字段可按需提交。
+创建任务时 `assignee_id`、`title`、`description`、`due_at` 为必填字段；`estimated_start_at`、`required_materials`、`association_note` 和 `tag_ids` 为可选字段。`estimated_start_at` 是可空的计划开始时间，不能晚于必填的 `due_at`；编辑时可以传 ISO 8601 日期时间或 `null` 清除。截止时间仍精确到分钟，列表筛选 `due_from`、`due_to`、`estimated_start_from` 和 `estimated_start_to` 均为含边界的 `YYYY-MM-DD` 日期筛选。编辑任务使用部分更新，字段可按需提交。任务创建及编辑的 `TaskSummary`、`TaskDetail` 响应始终包含 `estimated_start_at`，未设置时返回 `null`。
 
 建议创建任务请求示例：
 
@@ -170,6 +181,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
   "title": "完成客户需求梳理",
   "description": "整理本周收集到的需求并形成结论",
   "required_materials": "需求清单与评审结论",
+  "estimated_start_at": "2026-10-19T09:30:00+08:00",
   "due_at": "2026-10-20T18:00:00+08:00",
   "association_note": "与 Q4 项目方案相关"
 }
@@ -184,30 +196,32 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `GET /api/v1/app/logs/calendar/` | 按 `year`、`month` 返回本人或选中查看对象已提交日志的日期标记 |
 | `GET /api/v1/app/logs/` | 查询本人历史日志或有权查看的下属日志；按用户/日期筛选 |
 | `GET /api/v1/app/logs/{id}/` | 查看日志内容及全部标签名称/颜色；管理者只读且只能查看已提交日志 |
+| `GET /api/v1/app/logs/{id}/comments/` | 按创建时间查询当前用户可见日志的评论；沿用日志本身的可见范围 |
+| `POST /api/v1/app/logs/{id}/comments/` | 为当前用户可见的日志添加评论；作者、权限范围内的管理者均可评论 |
 | `GET /api/v1/app/logs/mine/{log_date}/` | 获取本人指定日期日志（含草稿及标签）；未创建时返回空表单态，并返回是否可编辑 |
 | `PUT /api/v1/app/logs/mine/{log_date}/` | 新建或更新本人指定日期唯一日志，可选提交 `tag_ids`；只允许今天、昨天或前天 |
 | `POST /api/v1/app/logs/mine/{log_date}/submit/` | 提交本人指定日期日志；只允许今天、昨天或前天 |
 | `GET /api/v1/app/log-viewers/` | 返回当前用户可选择查看的下属，支持姓名、团队或部门关键词搜索 |
 
-建议日志请求字段：`completed_work`（提交必填）、`next_day_plan`（可选）、`tag_ids`（可选标签 ID 数组）。MVP 不提供关联任务、问题与风险字段、附件和日志正文关键字搜索；标签选择器按标签名称搜索，不提供日志标签筛选。每人每天最多一条。作者可新建、修改及提交业务时区内今天、昨天和前天的日志；该窗口按自然日滚动，不是滚动 72 小时，超过前天的日期及未来日期拒绝写入并只读展示。读取本人历史记录仍允许。管理者查询草稿与无日志日期时不应泄露草稿内容，管理者写入接口不开放。详情返回标签关联名称和颜色；已停用标签不标明状态。更新中省略 `tag_ids` 表示不改关联，空数组表示清空；保存时仅保留已有关系并新增/移除差异。
+建议日志请求字段：`completed_work`（提交必填）、`next_day_plan`（可选）、`tag_ids`（可选标签 ID 数组）。MVP 不提供关联任务、问题与风险字段、附件和日志正文关键字搜索；标签选择器按标签名称搜索，不提供日志标签筛选。每人每天最多一条。作者可新建、修改及提交业务时区内今天、昨天和前天的日志；该窗口按自然日滚动，不是滚动 72 小时，超过前天的日期及未来日期拒绝修改正文并只读展示。读取本人历史记录仍允许。管理者查询草稿与无日志日期时不应泄露草稿内容；管理者不能修改日志正文，但可通过评论接口对授权范围内已提交日志进行评论。详情返回标签关联名称和颜色；已停用标签不标明状态。更新中省略 `tag_ids` 表示不改关联，空数组表示清空；保存时仅保留已有关系并新增/移除差异。评论长度为 1–2000 个字符；评论列表按创建时间升序，显示评论人姓名、职位和部门/团队（如有），日志作者评论额外标记 `is_log_author=true`。评论不修改日志正文、状态或 `updated_at`，不提供编辑、删除和回复接口。
 
 ### 3.4 月、周、日工作视图
 
 | 方法与路径 | 用途 |
 |---|---|
-| `GET /api/v1/app/work-views/month/?user_id=&year=&month=` | 月视图：返回任务条颜色 `bar_color`（首个添加的当前关联标签颜色；无标签为中性灰色）及原有日期信息 |
+| `GET /api/v1/app/work-views/month/?user_id=&year=&month=` | 月视图：返回任务条颜色 `bar_color`（首个添加的当前关联标签颜色；无标签为中性灰色）及日期信息。`start_date` 是 `estimated_start_at` 的本地日期；未设置时回退到原始 `created_at` 的本地日期 |
 | `GET /api/v1/app/work-views/week/?user_id=&date=` | 周视图：未完成任务全天条返回 `bar_color`；另含日期条和 24 小时时间轴动态事件 |
 | `GET /api/v1/app/work-views/day/?user_id=&date=` | 日视图：当天未完成任务条返回 `bar_color`；另含 24 小时时间轴动态事件 |
 
-视图为只读聚合，不单独保存日历副本。月视图任务条可点击进入详情，显示标题、未完成/已完成；个人重点可附 `is_personal_focus`。月视图任务及周/日全天任务响应均提供 `bar_color`，服务端按当前仍关联标签中最早建立的关系确定颜色；停用标签仍提供原颜色，无关联标签时提供中性灰色。任务条仅显示标题，工作视图响应不提供供任务条展示的标签名称。周/日动态项包括负责人进展更新、负责人提交、直接派发者验收通过；自我负责任务提交即完成只产生一条合并动态。上级验收事件归属于负责人的视图，不出现在验收人的视图。动态响应至少包含 `occurred_at`、`task_id`、`task_title`、`event_type`、`summary`。周视图全天未完成任务可横跨多天；固定日期条和全天区域不随时间轴滚动，动态按实际发生日期/小时归列。
+视图为只读聚合，不单独保存日历副本。月视图任务条可点击进入详情，个人重点可附 `is_personal_focus`。月视图响应中的 `start_date` 由服务端按业务时区计算：优先取 `estimated_start_at` 的本地日期；该字段为空时取任务原始 `created_at` 的本地日期。后者是显示回退值，不是实际开始时间；任务在待审批期间不进入视图，审批通过或重新审批不会改写原始创建时间。月视图任务及周/日全天任务响应均提供 `bar_color`，服务端按当前仍关联标签中最早建立的关系确定颜色；停用标签仍提供原颜色，无关联标签时提供中性灰色。任务条仅显示标题，工作视图响应不提供供任务条展示的标签名称。周/日动态项包括负责人进展更新、负责人提交、直接派发者验收通过；自我负责任务提交即完成只产生一条合并动态。上级验收事件归属于负责人的视图，不出现在验收人的视图。动态响应至少包含 `occurred_at`、`task_id`、`task_title`、`event_type`、`summary`。周视图全天未完成任务可横跨多天；固定日期条和全天区域不随时间轴滚动，动态按实际发生日期/小时归列。
 
 ### 3.5 标签系统
 
 | 方法与路径 | 用途 / 规则 |
 |---|---|
-| `GET /api/v1/app/tags/` | 所有 App 角色查询启用标签并按名称搜索；仅创始人可通过 `include_inactive=true` 查看管理列表中的停用标签 |
-| `POST /api/v1/app/tags/` | 创始人在 App“我的页面”的标签管理中心创建标签；服务端分配颜色 |
-| `PATCH /api/v1/app/tags/{id}/` | 创始人修改启用标签名称；不接受颜色或状态字段 |
+| `GET /api/v1/app/tags/` | 所有 App 角色查询启用标签并按名称搜索；仅创始人可通过 `include_inactive=true` 查询停用标签，管理中心列表只展示启用标签 |
+| `POST /api/v1/app/tags/` | 创始人在 App“我的页面”的标签管理中心创建标签，并从固定调色板中选择颜色 |
+| `PATCH /api/v1/app/tags/{id}/` | 创始人修改启用标签名称和/或颜色；不接受状态字段 |
 | `DELETE /api/v1/app/tags/{id}/` | 创始人不可逆停用标签；保留标签数据及任务/日志历史关联，不物理删除 |
 
 上述标签管理接口仅接受 Android 业务用户令牌；标签管理操作仅创始人可用。所有 App 角色可在本人有权编辑的任务/日志表单中关联多个启用标签。详情返回关联标签的 ID、名称和颜色，但不向关联标签附加停用状态标记。任务/日志列表不增加标签筛选。
@@ -1131,7 +1145,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "team_name": "客户端组",
     "manager_id": 31,
     "manager_name": "李经理",
-    "is_active": true
+    "is_active": true,
+    "avatar_url": "/api/v1/app/me/avatar/"
   },
   "requestId": "<uuid>"
 }
@@ -1164,11 +1179,20 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "id_number_masked": "***************1234",
     "business_role": "employee",
     "department_name": "产品部",
-    "team_name": "客户端组"
+    "team_name": "客户端组",
+    "avatar_url": "/api/v1/app/me/avatar/"
   },
   "requestId": "<uuid>"
 }
 ```
+
+#### GET, PUT /api/v1/app/me/avatar/
+
+**认证与权限：** 必须携带当前有效的 App 业务账号 access token。所有方法只作用于令牌对应的当前业务账号；Web 管理员不能通过此接口查看或修改头像。
+
+- `GET` 返回当前账号头像的原始图片二进制，不使用通用 JSON envelope。未设置头像时返回 `404`。响应设置 `Cache-Control: private, no-store` 与 `X-Content-Type-Options: nosniff`。
+- `PUT` 使用 `multipart/form-data` 上传，字段名为 `avatar`。支持 JPEG、PNG、WebP，文件最大 5 MiB，图片宽高各不超过 4096 且总像素不超过 1600 万。成功返回 `204` 并替换该账号原有头像；校验失败返回 `400`。
+头像内容以二进制和检测出的 MIME 类型保存在 `accounts_user` 数据库行中，不写入本机偏好、静态目录或媒体文件目录。同一账号在任意设备登录后可通过 `avatar_url` 获取最新头像。
 
 #### POST /api/v1/app/me/password/
 
@@ -1453,6 +1477,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
         "assignee_name": "张三",
         "completion_status": "unfinished",
         "approval_status": "approved",
+        "estimated_start_at": "2026-10-19T09:30:00+08:00",
         "due_at": "2026-10-20T18:00:00+08:00"
       }
     ]
@@ -1614,9 +1639,10 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "required_materials": "需求清单与评审结论",
     "association_note": "与 Q4 项目方案相关",
     "tags": [
-      { "id": 21, "name": "客户跟进", "color": "#4C9A8A" },
-      { "id": 24, "name": "需求分析", "color": "#6587C5" }
+      { "id": 21, "name": "客户跟进", "color": "#C7DDFF" },
+      { "id": 24, "name": "需求分析", "color": "#BDEAF2" }
     ],
+    "estimated_start_at": "2026-10-19T09:30:00+08:00",
     "due_at": "2026-10-20T18:00:00+08:00",
     "approval_status": "approved",
     "completion_status": "unfinished",
@@ -1678,6 +1704,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "title": "完成客户需求梳理",
   "description": "整理需求并形成结论",
   "required_materials": "需求清单与评审结论",
+  "estimated_start_at": "2026-10-19T09:30:00+08:00",
   "due_at": "2026-10-20T18:00:00+08:00",
   "association_note": "与 Q4 项目方案相关",
   "tag_ids": [21, 24]
@@ -1699,9 +1726,10 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "completion_status": "unfinished",
     "lifecycle_status": "active",
     "tags": [
-      { "id": 21, "name": "客户跟进", "color": "#4C9A8A" },
-      { "id": 24, "name": "需求分析", "color": "#6587C5" }
+      { "id": 21, "name": "客户跟进", "color": "#C7DDFF" },
+      { "id": 24, "name": "需求分析", "color": "#BDEAF2" }
     ],
+    "estimated_start_at": "2026-10-19T09:30:00+08:00",
     "due_at": "2026-10-20T18:00:00+08:00",
     "created_at": "2026-10-11T10:00:00+08:00"
   },
@@ -1716,6 +1744,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 ```json
 {
   "title": "完成客户需求与范围梳理",
+  "estimated_start_at": "2026-10-19T10:00:00+08:00",
   "due_at": "2026-10-21T18:00:00+08:00",
   "tag_ids": [21, 24]
 }
@@ -1730,10 +1759,11 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "data": {
     "id": 105,
     "title": "完成客户需求与范围梳理",
+    "estimated_start_at": "2026-10-19T10:00:00+08:00",
     "due_at": "2026-10-21T18:00:00+08:00",
     "tags": [
-      { "id": 21, "name": "客户跟进", "color": "#4C9A8A" },
-      { "id": 24, "name": "需求分析", "color": "#6587C5" }
+      { "id": 21, "name": "客户跟进", "color": "#C7DDFF" },
+      { "id": 24, "name": "需求分析", "color": "#BDEAF2" }
     ],
     "approval_status": "pending",
     "updated_at": "2026-10-11T10:15:00+08:00"
@@ -1938,7 +1968,18 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 }
 ```
 
-审批通知返回 `approval_round` 和 `approval_decision`，分别表示该通知对应的审批轮次及该轮审批结果（`pending`、`returned`、`approved`）；非审批通知的这两个字段为 `null`。通知保留所属轮次的结果，任务重新提交后旧通知不会显示成新一轮的状态。
+审批相关通知（`approval_required`、`approval_approved`、`approval_returned`）返回 `approval_round` 和 `approval_decision`，分别表示该通知对应的审批轮次及该轮审批结果（`pending`、`returned`、`approved`）；其他通知的这两个字段为 `null`。审批结果通知的 `summary` 返回本轮审批意见；退回时为必填退回原因。通知保留所属轮次的结果，任务重新提交后旧通知不会显示成新一轮的状态。
+
+创建人收到审批退回通知时，响应关键字段示例：
+
+```json
+{
+  "notification_type": "approval_returned",
+  "approval_round": 2,
+  "approval_decision": "returned",
+  "summary": "请补充任务交付标准后重新提交。"
+}
+```
 
 #### GET /api/v1/app/notifications/unread-count/
 
@@ -2038,6 +2079,132 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "requestId": "<uuid>"
 }
 ```
+
+#### GET /api/v1/app/organization/tree/
+
+返回 App“组织关系”页的公司组织树。所有已登录 App 用户（创始人、部门经理、团队长和普通员工）均可读取启用的业务成员、部门和团队；Web 管理员不适用业务 App 接口。创始人与各启用部门作为并列根节点返回。人员节点包含 `department_name` 和 `team_name`（无对应组织时为 `null`）。树节点不内嵌头像图片；App 对可见成员使用 `GET /api/v1/app/organization/members/{id}/avatar/` 单独加载头像，无头像时显示姓名首字。
+
+可选查询参数 `keyword` 按姓名或业务职级搜索。关键词非空时，响应中的 `roots` 是平铺的匹配人员列表，每项保留 `node_type: person`、姓名、职位及部门/团队名称，不包含部门或团队节点；清空关键词时恢复组织树。App 搜索行在姓名下方展示部门/团队（创始人不展示），职位在右侧显示。
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "scope": "company",
+    "roots": [
+      {
+        "node_type": "person",
+        "id": 1,
+        "display_name": "王总",
+        "business_role": "founder",
+        "department_name": null,
+        "team_name": null,
+        "children": []
+      },
+      {
+        "node_type": "department",
+        "id": 10,
+        "name": "产品部",
+        "children": [
+          {
+            "node_type": "person",
+            "id": 20,
+            "display_name": "张经理",
+            "business_role": "department_manager",
+            "department_name": "产品部",
+            "team_name": null,
+            "children": []
+          },
+          {
+            "node_type": "team",
+            "id": 30,
+            "name": "客户端组",
+            "children": [
+              {
+                "node_type": "person",
+                "id": 31,
+                "display_name": "李组长",
+                "business_role": "team_leader",
+                "department_name": "产品部",
+                "team_name": "客户端组",
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "requestId": "<uuid>"
+}
+```
+
+例如搜索 `keyword=bo` 时，`roots` 只含匹配到的人员并列返回，不包含部门/团队树节点：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "scope": "company",
+    "roots": [
+      {
+        "node_type": "person",
+        "id": 1,
+        "display_name": "Boss",
+        "business_role": "founder",
+        "department_name": null,
+        "team_name": null,
+        "children": []
+      },
+      {
+        "node_type": "person",
+        "id": 42,
+        "display_name": "Boy",
+        "business_role": "employee",
+        "department_name": "产品部",
+        "team_name": "客户端组",
+        "children": []
+      }
+    ]
+  },
+  "requestId": "<uuid>"
+}
+```
+
+#### GET /api/v1/app/organization/members/{id}/
+
+所有已登录 App 用户均可读取公司组织树中启用业务成员的只读资料。资料仅返回显示姓名、手机号、业务身份、部门和团队，不返回身份证号、直属上级或账号状态。不存在、非业务账号或停用成员返回 `404`。该资料权限不扩大任务和日志的访问范围；`can_view_tasks` 和 `can_view_logs` 分别表示当前用户能否通过既有下属查看接口读取此成员的任务或日志。
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": 42,
+    "is_self": false,
+    "can_view_tasks": true,
+    "can_view_logs": true,
+    "display_name": "张三",
+    "phone": "13800000000",
+    "business_role": "employee",
+    "department_name": "产品部",
+    "team_name": "客户端组"
+  },
+  "requestId": "<uuid>"
+}
+```
+
+`phone` 为业务账号当前使用的手机号；资料接口不返回身份证号。`can_view_tasks` 和 `can_view_logs` 分别指示当前用户是否可按原有下属查看权限访问该成员的任务或日志；对应值为 `true` 且目标不是本人时，App 显示相应快捷入口。快捷入口复用现有 `tasks/subordinates/`、`logs/` 与 `logs/calendar/` 接口，并以 `user_id` 查询参数指定成员。后端仍逐次校验原有成员授权；任务仅返回已审批记录，日志仅返回已提交记录。该功能复用现有 `User`、`Department`、`Team` 和直属关系，不新增数据库实体或迁移。
+
+#### GET /api/v1/app/organization/members/{id}/avatar/
+
+必须携带有效 App 业务账号令牌。所有 App 用户均可读取启用业务成员已上传的头像；无头像、成员不存在、停用或非业务账号均返回空的 `404`。成功时直接返回头像二进制及保存时检测出的图片 MIME 类型，不使用 JSON envelope，并设置 `Cache-Control: private, no-store` 和 `X-Content-Type-Options: nosniff`。头像内容沿用保存在用户数据库记录中的数据，不新增字段或迁移。
 
 
 审批退回使用同一路径，`decision` 改为 `returned` 且必须提供原因：
@@ -2173,11 +2340,88 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "completed_work": "完成接口梳理",
     "next_day_plan": "补充测试用例",
     "tags": [
-      { "id": 21, "name": "客户跟进", "color": "#4C9A8A" },
-      { "id": 24, "name": "需求分析", "color": "#6587C5" }
+      { "id": 21, "name": "客户跟进", "color": "#C7DDFF" },
+      { "id": 24, "name": "需求分析", "color": "#BDEAF2" }
     ],
     "created_at": "2026-10-11T16:00:00+08:00",
     "submitted_at": "2026-10-11T18:00:00+08:00"
+  },
+  "requestId": "<uuid>"
+}
+```
+
+进入日志详情后，不直接打开编辑表单。评论区紧跟日志正文，客户端通过下方独立接口读取列表，不将评论嵌入日志正文响应。详情页底部使用文本框样式的评论入口，点击后打开输入表单；所有可读取该日志的 App 用户都能评论。作者在今天、昨天或前天的日志详情页还会看到右侧“修改”按钮。
+
+#### GET /api/v1/app/logs/301/comments/?page=1&page_size=20
+
+仅当前有权读取父日志的 App 用户可读取评论。日志作者可读取本人日志的评论；其他人员仅可读取自己授权范围内的已提交日志评论。评论按创建时间升序返回。读取草稿评论时只有日志作者能通过现有本人日志权限访问。
+
+**请求：** 无 JSON 请求体；支持 `page`、`page_size` 分页参数。
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+      {
+        "id": 7001,
+        "content": "辛苦了，客户反馈已经同步到项目群。",
+        "author": {
+          "id": 31,
+          "display_name": "李组长",
+          "business_role": "team_leader",
+          "department_name": "产品部",
+          "team_name": "客户端组"
+        },
+        "is_log_author": false,
+        "created_at": "2026-10-11T18:30:00+08:00"
+      }
+    ]
+  },
+  "requestId": "<uuid>"
+}
+```
+
+`is_log_author=true` 表示评论由该日志作者发布，App 将该评论标记为“日志本人”。评论人姓名、业务职位及当前部门/团队由用户资料返回；不会返回手机号或身份证号。
+
+#### POST /api/v1/app/logs/301/comments/
+
+日志作者和当前权限范围内能读取该日志的 App 用户都可以评论。下属草稿和越权日志仍按现有日志可见性规则拒绝访问。评论与日志正文分开保存，不受日志正文三日编辑窗口限制，不改变日志状态或更新时间；评论不可修改、删除或回复。
+
+**请求 JSON**
+
+```json
+{
+  "content": "辛苦了，客户反馈已经同步到项目群。"
+}
+```
+
+`content` 去除首尾空格后必填，长度为 1–2000 个字符。空内容或超长内容返回 `400`；对象不存在、草稿对当前用户不可见或超出组织范围时返回 `404`。
+
+**响应 JSON（HTTP 201）**
+
+```json
+{
+  "code": 201,
+  "message": "success",
+  "data": {
+    "id": 7001,
+    "content": "辛苦了，客户反馈已经同步到项目群。",
+    "author": {
+      "id": 31,
+      "display_name": "李组长",
+      "business_role": "team_leader",
+      "department_name": "产品部",
+      "team_name": "客户端组"
+    },
+    "is_log_author": false,
+    "created_at": "2026-10-11T18:30:00+08:00"
   },
   "requestId": "<uuid>"
 }
@@ -2228,8 +2472,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "completed_work": "完成接口梳理",
     "next_day_plan": "补充测试用例",
     "tags": [
-      { "id": 21, "name": "客户跟进", "color": "#4C9A8A" },
-      { "id": 24, "name": "需求分析", "color": "#6587C5" }
+      { "id": 21, "name": "客户跟进", "color": "#C7DDFF" },
+      { "id": 24, "name": "需求分析", "color": "#BDEAF2" }
     ],
     "updated_at": "2026-10-11T17:30:00+08:00",
     "can_edit": true
@@ -2296,11 +2540,11 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 ### 4.6 Android 标签系统
 
-标签接口使用 Android 业务用户令牌。所有 App 角色都可读取启用标签；只有创始人可从“我的页面”的标签管理中心查看停用项、创建、改名或停用标签。管理接口不接受 Web 管理端令牌。颜色由服务端从固定 10 色调色板分配，创建后不可修改。
+标签接口使用 Android 业务用户令牌。所有 App 角色都可读取启用标签；只有创始人可从“我的页面”的标签管理中心创建、改名、改色或停用标签；管理中心列表只展示启用标签。管理接口不接受 Web 管理端令牌。创始人创建时选择一种固定调色板颜色，启用标签可改为其他预设颜色；停用标签不可编辑。改色同步影响所有已有任务、日志关联和工作视图任务条。
 
 #### GET /api/v1/app/tags/?keyword=客户&page=1&page_size=20
 
-默认只返回启用标签，支持按名称搜索。创始人的管理中心可追加 `include_inactive=true` 查看全部标签及启停状态；其他角色请求该参数返回 `403`。创始人任务/日志表单仍使用默认启用标签结果。
+默认只返回启用标签，支持按名称搜索。创始人可通过 `include_inactive=true` 查询停用标签，但管理中心列表使用默认查询，只展示启用标签及其名称和颜色；其他角色请求该参数返回 `403`。创始人任务/日志表单仍使用默认启用标签结果。
 
 **请求：** 无 JSON 请求体；查询参数：`keyword`（可选）、`include_inactive`（可选，创始人专用）、`page`、`page_size`。
 
@@ -2315,25 +2559,26 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "next": null,
     "previous": null,
     "results": [
-      { "id": 21, "name": "客户跟进", "color": "#4C9A8A", "is_active": true },
-      { "id": 18, "name": "客户跟进", "color": "#6587C5", "is_active": false }
+      { "id": 21, "name": "客户跟进", "color": "#C7DDFF", "is_active": true },
+      { "id": 18, "name": "客户跟进", "color": "#BDEAF2", "is_active": false }
     ]
   },
   "requestId": "<uuid>"
 }
 ```
 
-常规标签选择器只返回 `is_active=true` 的标签。`include_inactive=true` 只影响创始人的管理列表，不用于创建或编辑任务/日志时的选择器。
+常规标签选择器只返回 `is_active=true` 的标签。`include_inactive=true` 仅供创始人显式查询停用标签；管理中心和任务/日志选择器均不传该参数。
 
 #### POST /api/v1/app/tags/
 
-仅创始人可调用。请求只提交名称；服务端按当前标签库内各颜色的使用标签数，从使用最少的颜色中选择，平数时按固定调色板顺序。已停用标签也计入颜色使用数。
+仅创始人可调用。请求必须提交名称和固定调色板中的一个颜色。标签数超过 10 个时允许重复选择同一种颜色。可选色值为 `#C7DDFF`、`#BDEAF2`、`#BFEBDD`、`#CFE6B4`、`#E7ECB0`、`#FFE59E`、`#FFD0A3`、`#FFBFB3`、`#F1C1D8`、`#D7C8F2`。
 
 **请求 JSON**
 
 ```json
 {
-  "name": "客户跟进"
+  "name": "客户跟进",
+  "color": "#C7DDFF"
 }
 ```
 
@@ -2346,7 +2591,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "data": {
     "id": 25,
     "name": "客户跟进",
-    "color": "#4C9A8A",
+    "color": "#C7DDFF",
     "is_active": true,
     "created_at": "2026-10-27T10:00:00+08:00"
   },
@@ -2354,17 +2599,18 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 }
 ```
 
-创建或改名为另一个启用标签已使用的名称时返回 `409`；停用标签不参与名称唯一性校验。
+缺少颜色、颜色不在固定调色板中或其他字段校验失败时返回 `400`。创建或改名为另一个启用标签已使用的名称时返回 `409`；停用标签不参与名称唯一性校验。
 
 #### PATCH /api/v1/app/tags/25/
 
-仅创始人可调用，且仅启用标签可改名。`color`、`is_active` 等字段不接受。
+仅创始人可调用，且仅启用标签可编辑。可只提交 `name`、只提交 `color`，或同时提交两者；至少提交一项。`color` 只能是上述固定调色板中的值，`is_active` 等字段不接受。修改颜色后，已有任务和日志关联以及工作视图任务条同步显示新颜色，不改变关联关系或业务状态。
 
 **请求 JSON**
 
 ```json
 {
-  "name": "重点客户"
+  "name": "重点客户",
+  "color": "#D7C8F2"
 }
 ```
 
@@ -2377,7 +2623,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "data": {
     "id": 25,
     "name": "重点客户",
-    "color": "#4C9A8A",
+    "color": "#D7C8F2",
     "is_active": true,
     "updated_at": "2026-10-27T10:15:00+08:00"
   },
@@ -2429,7 +2675,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
       {
         "task_id": 101,
         "title": "完成需求梳理",
-        "bar_color": "#4C9A8A",
+        "bar_color": "#C7DDFF",
         "start_date": "2026-10-05",
         "due_date": "2026-10-20",
         "completion_status": "unfinished",
@@ -2469,7 +2715,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
       {
         "task_id": 101,
         "title": "完成需求梳理",
-        "bar_color": "#4C9A8A",
+        "bar_color": "#C7DDFF",
         "start_date": "2026-10-05",
         "due_date": "2026-10-20",
         "completion_status": "unfinished"
@@ -2508,7 +2754,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
       {
         "task_id": 101,
         "title": "完成需求梳理",
-        "bar_color": "#4C9A8A",
+        "bar_color": "#C7DDFF",
         "start_date": "2026-10-05",
         "due_date": "2026-10-20",
         "completion_status": "unfinished"

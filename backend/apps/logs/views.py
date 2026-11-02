@@ -14,9 +14,10 @@ from apps.accounts.models import User
 from apps.core.api import BusinessAPIView, StandardPagination, paginated_response
 from apps.tags.services import validate_tag_ids
 
-from .models import DailyLog, DailyLogTag
+from .models import DailyLog, DailyLogComment, DailyLogTag
 from .serializers import (LogCalendarSerializer, LogDetailSerializer, LogListSerializer,
-                          LogMineSerializer, LogSavedSerializer, LogViewerSerializer)
+                          LogMineSerializer, LogSavedSerializer, LogViewerSerializer,
+                          LogCommentSerializer)
 
 
 class LogInputSerializer(StrictInputMixin, serializers.Serializer):
@@ -150,6 +151,60 @@ class LogDetailView(BusinessAPIView):
     @extend_schema(tags=["App 日志"], summary="查看日志详情与历史标签", operation_id="app_logs_detail")
     def get(self, request, pk):
         return Response(log_data(visible_log(request, pk), detail=True))
+
+
+class LogCommentInputSerializer(StrictInputMixin, serializers.Serializer):
+    content = serializers.CharField(max_length=2000, allow_blank=False, trim_whitespace=True)
+
+
+def log_comment_data(comment, log):
+    author = comment.author
+    return {
+        "id": comment.pk,
+        "content": comment.content,
+        "author": {
+            "id": author.pk,
+            "display_name": author.display_name or author.username,
+            "business_role": author.business_role,
+            "department_name": author.department.name if author.department else None,
+            "team_name": author.team.name if author.team else None,
+        },
+        "is_log_author": comment.author_id == log.author_id,
+        "created_at": comment.created_at,
+    }
+
+
+class LogCommentListCreateView(BusinessAPIView):
+    serializer_class = LogCommentSerializer
+    pagination_class = StandardPagination
+
+    @extend_schema(tags=["App 日志"], summary="查看当前可见日志的评论")
+    def get(self, request, pk):
+        log = visible_log(request, pk)
+        comments = DailyLogComment.objects.filter(daily_log=log).select_related(
+            "author", "author__department", "author__team",
+        )
+        return paginated_response(self, request, comments, lambda rows: [log_comment_data(row, log) for row in rows])
+
+    @extend_schema(
+        tags=["App 日志"],
+        summary="评论当前可见的日志",
+        request=LogCommentInputSerializer,
+        responses={201: LogCommentSerializer},
+    )
+    def post(self, request, pk):
+        log = visible_log(request, pk)
+        form = LogCommentInputSerializer(data=request.data)
+        form.is_valid(raise_exception=True)
+        comment = DailyLogComment.objects.create(
+            daily_log=log,
+            author=request.user,
+            content=form.validated_data["content"],
+        )
+        comment = DailyLogComment.objects.select_related(
+            "author", "author__department", "author__team",
+        ).get(pk=comment.pk)
+        return Response(log_comment_data(comment, log), status=201)
 
 
 class LogMineView(BusinessAPIView):

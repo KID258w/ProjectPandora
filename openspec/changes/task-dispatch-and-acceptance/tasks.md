@@ -4,6 +4,7 @@
 - [x] 1.2 Implement server-side assignment validation for Founder, Department Manager (self, same-department Team Leaders, or other-department Department Managers), Team Leader, and Employee scopes.
 - [x] 1.3 Implement direct-supervisor lookup and approval records, including pending queues, required return reason, edit/resubmit, and reapproval for key changes.
 - [x] 1.4 Enforce creator, assignee, direct-supervisor, direct-dispatcher, and read-only hierarchical visibility for task APIs.
+- [x] 1.5 Add nullable `estimated_start_at` to tasks and task API responses; validate it does not exceed `due_at`, record edits in task history, and require reapproval when the planned schedule changes.
 
 ## 2. Execution and lifecycle
 
@@ -12,7 +13,7 @@
 - [x] 2.3 Implement direct-dispatcher accept/return, required return reason, and resubmission; self-assigned tasks are completed by their assignee without self-acceptance.
 - [x] 2.4 Implement task-definition editing, reapproval for key post-approval changes, and auditable edit history.
 - [x] 2.5 Implement reason-required cancellation of only the direct-dispatcher's unfinished task; preserve the record and do not cascade.
-- [x] 2.6 Implement in-app notifications with unread/read state, including direct-supervisor approval notices and assignment notices after another user's task is approved and visible to its assignee; preserve other lifecycle reminders as applicable.
+- [x] 2.6 Implement in-app notifications with unread/read state, including direct-supervisor approval notices, approval outcome notices for the creator, and assignment notices after another user's task is approved and visible to its assignee; preserve other lifecycle reminders as applicable.
 - [x] 2.7 Implement cancellation, result-submission, acceptance, and return notification events; resolve superseded notices without changing their read state, and exclude resolved notices from unread counts and unread-only queries.
 
 ## 3. Android task workflows
@@ -22,9 +23,11 @@
 - [ ] 3.3 Build a separate Approval Center with role-appropriate queues, reasoned return, edit/resubmit, and key-change reapproval interactions.
 - [ ] 3.4 Build task detail, text-update history, completion submission, direct-dispatcher acceptance/return, and self-completion flows.
 - [ ] 3.5 Build read-only subordinate-task inspection without granting workflow actions; limit selectable objects to authorized descendants.
-- [ ] 3.6 Add one ordinary-list filter form for task scope, inclusive deadline range, and completion status; add one subordinate-list filter form for assigned/created task scope, inclusive deadline range, completion status, and employee-name search limited to authorized descendants. Keep approval queues outside these filters and preserve the distinction between assignment-recipient and subordinate-view permissions.
+- [ ] 3.6 Add one ordinary-list filter form for task scope, inclusive estimated-start and deadline ranges, and completion status; add one subordinate-list filter form for assigned/created task scope, both inclusive date ranges, completion status, and employee-name search limited to authorized descendants. Exclude tasks without estimated start when that range is active. Keep approval queues outside these filters and preserve the distinction between assignment-recipient and subordinate-view permissions.
 - [ ] 3.7 Place Approval Center and subordinate-inspection shortcuts in the task-center top-right area; use a fixed bottom-right creation FAB on ordinary lists and hide it from approval, detail, and create/edit screens.
 - [x] 3.8 Make task detail sections role-aware; remove the standalone start button, `/start/` API, and `started_at` field because the MVP has no separate start state.
+- [x] 3.9 Add estimated-start and deadline date/time wheels with minute precision to the task form, and year/month/day wheels with day precision to ordinary and subordinate estimated-start/deadline filters.
+- [x] 3.10 Render ordinary and subordinate task lists as one horizontally scrollable aligned table with title, creator, assignee, estimated start, deadline, and completion status; preserve task-detail navigation and the separate Approval Center layout.
 
 ## 4. Verification
 

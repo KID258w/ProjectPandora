@@ -15,16 +15,23 @@ Month, week, and day views SHALL show tasks for one responsible person. Users SH
 - **WHEN** a user views any month, week, or day
 - **THEN** the system displays no log content, summary, draft state, or task-log association
 
-### Requirement: Month view spans task creation through deadline
-Month view SHALL draw each task bar from its actual creation date through its deadline. Bars show only the title; color distinguishes other-created assignments from self-created tasks, not status or department. A legend explains colors and bars have no leading dot. Each date shows at most three bars plus an exact “+N项” overflow; bars open task detail and dates/overflow open day view.
+### Requirement: Month task bars use planned start or original creation date
+For each approved task, month view SHALL start the bar on the business-local date of `estimated_start_at` when present, otherwise on the business-local date of original `created_at`, and end it on the deadline. The fallback is for display only and SHALL NOT imply actual work started. Approval and resubmission SHALL preserve the original creation time.
 
-#### Scenario: Month view shows creation date and deadline
-- **WHEN** a task is created on one date and has a later deadline in the selected month
-- **THEN** its bar starts at its actual creation date and ends at its deadline without implying a planned start date
+#### Scenario: Month view uses the estimated start date
+- **WHEN** an approved task has an estimated start and a later deadline in the selected month
+- **THEN** its bar starts on the estimated-start date and ends on its deadline without implying actual execution
 
-#### Scenario: Month bars show title and ordinary assignment source color only
+#### Scenario: Month view falls back to original creation date
+- **WHEN** an approved task has no estimated start and has been returned and resubmitted before approval
+- **THEN** its bar starts on the task's original creation date and ends on its deadline, regardless of the later approval date
+
+### Requirement: Month task bars show title and tag color
+Month task bars SHALL show only the task title and use the first associated tag's color, or neutral gray when no tag is associated. Each date SHALL show at most three bars plus an exact “+N项” overflow. Bars SHALL open task detail; dates and overflow SHALL open day view.
+
+#### Scenario: Month bars show title and tag color only
 - **WHEN** a user views tasks in the month calendar
-- **THEN** each bar displays its title only, its color distinguishes other-created assignments from self-created tasks according to the legend, and neither text nor color indicates completion status or a special cross-department type
+- **THEN** each bar displays its title only and uses the first associated tag's color, with neutral gray for tasks without tags; color does not indicate completion status or assignment source
 
 #### Scenario: Month view caps visible bars
 - **WHEN** more than three task bars overlap a calendar date

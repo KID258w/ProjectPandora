@@ -32,3 +32,14 @@ class DailyLogTag(models.Model):
     class Meta:
         ordering = ["added_at", "id"]
         constraints = [models.UniqueConstraint(fields=["daily_log", "tag"], name="unique_daily_log_tag")]
+
+
+class DailyLogComment(models.Model):
+    daily_log = models.ForeignKey(DailyLog, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="daily_log_comments")
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        indexes = [models.Index(fields=["daily_log", "created_at"])]

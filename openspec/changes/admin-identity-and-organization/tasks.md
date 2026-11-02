@@ -19,6 +19,8 @@
 - [x] 1.14 Run backend tests and migration/API schema checks for the post-merge corrections; record the results before closing backend acceptance.
 - [x] 1.15 Normalize national ID values before storage and hashing; preflight and canonicalize existing values in migration 0010; verify case variants are rejected as duplicates.
 - [x] 1.16 Include blocking active team/member counts and sample names in department/team deactivation validation errors.
+- [x] 1.17 Add database-backed avatar bytes, detected MIME type, migration, self-scoped multipart upload/read/delete endpoints, and profile `avatar_url` without exposing avatars to Web administrators.
+- [x] 1.18 Update the backend API/database contracts, account-management requirements, and this OpenSpec change for cross-device avatar storage.
 
 ## PR 2 — Web management (may proceed in parallel with Android after backend contract is set)
 
@@ -36,6 +38,7 @@
 - [x] 3.4 Preserve the existing phone login request field `username`; after a phone update, verify subsequent login uses the new phone. Keep role, organization, manager, and activation read-only in the App.
 - [x] 3.5 Update `docs/android/account-login-ui.md`; verify profile edits, atomic name/identity updates, password validation, and phone login behavior.
 - [x] 3.6 After a successful phone-number or password change, clear the local App session and require the employee to sign in again with the updated credential.
+- [x] 3.7 Replace device-local avatar storage with authenticated upload and retrieval; show the account's server-stored avatar on profile screens across devices.
 
 ## Acceptance across the three PRs
 

@@ -22,14 +22,14 @@ The system SHALL show a tag-management button on the Android App My Page only to
 
 #### Scenario: Founder opens tag management
 - **WHEN** the Founder taps the tag-management button on My Page
-- **THEN** the App opens the management center and displays tag names, colors, and active status, including inactive tags
+- **THEN** the App opens the management center and displays enabled tags only, with each tag's name and color; inactive tags are omitted from this list but remain visible on existing task/log associations. The create form displays ten preset colors as visible color samples and requires choosing one
 
 #### Scenario: Non-Founder attempts tag management
 - **WHEN** a non-Founder attempts to create, rename, list inactive tags, or deactivate a tag
 - **THEN** the system rejects the management operation and leaves the catalogue unchanged
 
 ### Requirement: Tag names and colors remain consistent
-The system SHALL require a name for each tag and enforce global uniqueness among enabled tags. Inactive tags SHALL NOT participate in that uniqueness rule. The system SHALL assign each created tag the least-used color from a fixed palette of ten colors, counting inactive tag rows; ties SHALL use fixed palette order. Users SHALL NOT change a tag's color. Renaming a tag SHALL update its displayed name on all associated records without changing its color.
+The system SHALL require a name for each tag and enforce global uniqueness among enabled tags. Inactive tags SHALL NOT participate in that uniqueness rule. When creating a tag, the Founder SHALL choose one color from the fixed ten-color palette and the App SHALL show visible color samples. The Founder MAY change an enabled tag's color to another palette value; inactive tags SHALL NOT be editable. Colors MAY be reused. Renaming a tag SHALL update its displayed name on all associated records.
 
 #### Scenario: Duplicate enabled name is rejected
 - **WHEN** the Founder creates or renames a tag to a name already used by an enabled tag
@@ -39,9 +39,25 @@ The system SHALL require a name for each tag and enforce global uniqueness among
 - **WHEN** the Founder creates a tag using a name that belongs only to inactive tags
 - **THEN** the system permits the new enabled tag and keeps the old inactive tag and its associations unchanged
 
-#### Scenario: Tag color is assigned and remains fixed
-- **WHEN** a tag is created and is later renamed or deactivated
-- **THEN** its color is assigned by the system from the fixed palette and remains unchanged
+#### Scenario: Founder chooses or changes a preset tag color
+- **WHEN** the Founder creates a tag or edits an enabled tag and chooses one of the ten visible color samples
+- **THEN** the system stores the selected palette color on the tag; the color remains fixed until the Founder changes it again or the tag is deactivated
+
+#### Scenario: App presents the fixed palette
+- **WHEN** the Founder opens the color selector while creating or editing an enabled tag
+- **THEN** the App displays exactly these ten colors as visible samples: `#C7DDFF`, `#BDEAF2`, `#BFEBDD`, `#CFE6B4`, `#E7ECB0`, `#FFE59E`, `#FFD0A3`, `#FFBFB3`, `#F1C1D8`, and `#D7C8F2`
+
+#### Scenario: Changing tag color updates existing associations
+- **WHEN** the Founder changes the color of an enabled tag that is associated with tasks or logs
+- **THEN** all existing task and log tag chips and work-view task bars using that tag display the new color without changing their associations or business states
+
+#### Scenario: Unsupported tag color is rejected
+- **WHEN** a tag create or update request contains a color value outside the fixed palette
+- **THEN** the system rejects the request and does not create the tag
+
+#### Scenario: Inactive tag color cannot be edited
+- **WHEN** the Founder attempts to change the color of an inactive tag
+- **THEN** the system rejects the update and preserves the tag and its historical associations
 
 ### Requirement: Deactivation preserves historical tag associations
 When the Founder deletes a tag, the system SHALL deactivate it without physically deleting the tag or removing existing task and log associations. Deactivation SHALL be irreversible through the App. Inactive tags SHALL NOT be available for new associations.
@@ -81,11 +97,11 @@ The system SHALL allow only a log's author to add or remove its tags while that 
 - **THEN** the system rejects the write and preserves the log and its associations
 
 ### Requirement: Task and log details show all associated tag names
-The system SHALL show every tag name associated with a task or log in its detail view, including names of inactive historical tags. The detail view SHALL NOT mark an associated tag as inactive. Tag names SHALL inherit the task or log's existing visibility scope.
+The system SHALL show every tag associated with a task or log in its form and detail view as an oval chip. Each chip SHALL show the tag name and use the color stored on that tag as its background, including inactive historical tags. The UI SHALL NOT mark an associated tag as inactive. Tag chips SHALL inherit the task or log's existing visibility scope.
 
 #### Scenario: User with record access opens detail
 - **WHEN** a user opens a task or log detail they are authorized to view
-- **THEN** the detail shows all associated tag names, including inactive historical names without an inactive marker
+- **THEN** the detail shows all associated tags as oval chips with their names and current stored background colors, including inactive historical tags without an inactive marker
 
 ### Requirement: Work-view task bars use the earliest current tag color
 Month, week, and day work views SHALL show only a task title on each task bar and SHALL color it using the earliest-added tag among the task's current associations. If that association is removed, the next-earliest current association SHALL determine the color. A task without tags SHALL use neutral gray. Inactive historical associations SHALL retain their tag color.

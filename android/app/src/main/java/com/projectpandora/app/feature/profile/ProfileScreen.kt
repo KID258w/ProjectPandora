@@ -17,18 +17,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.projectpandora.app.R
+import com.projectpandora.app.feature.account.AccountRepository
 import com.projectpandora.app.feature.account.BusinessUser
 import com.projectpandora.app.ui.*
 import com.projectpandora.app.ui.theme.PandoraColors as C
 
 @Composable
 fun ProfileScreen(user: BusinessUser, onPersonalInfo: () -> Unit, onNotifications: () -> Unit,
-    onHelp: () -> Unit, onLogout: () -> Unit, onTags: () -> Unit = {}) {
+    onHelp: () -> Unit, onLogout: () -> Unit, onTags: () -> Unit = {},
+    avatarRepository: AccountRepository? = null) {
     var confirmLogout by rememberSaveable { mutableStateOf(false) }
     PageColumn {
         BrandHeader()
         PageTitle("我的")
-        IdentityCard(user)
+        IdentityCard(user, avatarRepository, allowAvatarChange = true)
         PageTitle("个人设置", small = true)
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (user.role == "创始人") SettingsRow("标签管理", R.drawable.setting_profile, C.Orange, C.AmberPale, onClick = onTags)

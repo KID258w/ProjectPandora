@@ -6,7 +6,7 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.accounts.models import Department, Team, User
-from apps.tags.models import Tag
+from apps.tags.models import PALETTE, Tag
 
 from .models import Task, TaskApprovalRecord, TaskChangeHistory, TaskNotification, TaskSubmission
 
@@ -25,7 +25,7 @@ class TaskApiTests(APITestCase):
         self.other_manager = self.user("other-manager", User.Role.DEPARTMENT_MANAGER, self.other_dep, manager=self.founder)
         self.other_leader = self.user("other-leader", User.Role.TEAM_LEADER, self.other_dep, self.other_team, self.other_manager)
         self.other_employee = self.user("other-employee", User.Role.EMPLOYEE, self.other_dep, self.other_team, self.other_leader)
-        self.tag = Tag.objects.create(name="紧急", color="#4C9A8A")
+        self.tag = Tag.objects.create(name="紧急", color=PALETTE[0])
         self.due = (timezone.now() + timedelta(days=5)).isoformat()
 
     def user(self, username, role, department=None, team=None, manager=None):

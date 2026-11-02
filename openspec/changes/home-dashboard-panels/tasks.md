@@ -13,6 +13,7 @@
 - [ ] 2.3 Add “view all” navigation to secondary lists; keep up to ten company items/tasks/personal tasks there and route selected tasks to their authorized task detail.
 - [ ] 2.4 Keep full log editing/history and full task actions in their dedicated modules.
 - [ ] 2.5 Add a Home task-notification bell and notification list with unread red-dot behavior and navigation to the relevant task detail.
+- [x] 2.6 Render the task-notification entry as an icon-only bell button with an accessible label and unread indicator.
 
 ## 3. Verification
 

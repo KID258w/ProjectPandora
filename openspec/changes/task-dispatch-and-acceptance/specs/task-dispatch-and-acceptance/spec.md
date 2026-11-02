@@ -31,6 +31,36 @@ Assignee eligibility SHALL follow role: Founder—any company member; Department
 - **WHEN** a creator adds a note such as “来源于季度规划会议”
 - **THEN** the system stores and displays it as explanatory text only, without creating a parent relation or cascading behavior
 
+### Requirement: Estimated task start is optional and does not exceed the deadline
+The task form SHALL allow an optional `estimated_start_at` and require `due_at`. If an estimated start is supplied, it SHALL NOT be later than the deadline.
+
+#### Scenario: Creator provides an estimated start time
+- **WHEN** a creator sets an estimated start time no later than the required deadline
+- **THEN** the task stores and displays that planned time
+
+#### Scenario: Creator omits an estimated start time
+- **WHEN** a creator leaves the estimated start time empty
+- **THEN** the task is created with no estimated start time
+
+#### Scenario: Estimated start is later than the deadline
+- **WHEN** a creator submits an estimated start time later than the deadline
+- **THEN** the system rejects the task definition and creates no task
+
+### Requirement: Task date and time selectors match their precision
+The creation and edit form SHALL use year-month-day and hour-minute wheels to select estimated start and deadline to minute precision. Ordinary and subordinate task-list estimated-start and deadline filters SHALL use year-month-day wheels only and SHALL remain precise to the day.
+
+#### Scenario: Creator selects a task schedule
+- **WHEN** a creator selects an estimated start or deadline in the task form
+- **THEN** the date and time wheels allow selection to the minute
+
+#### Scenario: User selects a task date filter
+- **WHEN** a user selects either boundary of an estimated-start or deadline range
+- **THEN** the date wheel selects a calendar day without hour or minute controls
+
+#### Scenario: Estimated-start range excludes tasks with no estimate
+- **WHEN** a user applies either estimated-start date boundary
+- **THEN** tasks whose `estimated_start_at` is null are excluded from the filtered results
+
 ### Requirement: Tasks require direct-supervisor approval before assignment visibility
 Every task created by a user with a direct supervisor SHALL be approved by that supervisor before execution. Founder-created tasks bypass approval. Pending tasks appear only in the creator's and approver's queues; approved tasks appear in the creator's “我创建的” and assignee's “我的任务”. Returns require a reason and may be revised/resubmitted. Key definition changes after approval require reapproval.
 
@@ -76,8 +106,23 @@ Each approval notification SHALL identify its approval round and show that round
 - **WHEN** the creator edits a returned task and submits it again
 - **THEN** a new pending approval notification is created for the current direct supervisor, while the earlier notification retains its returned decision
 
+### Requirement: Task creators receive approval outcome notifications
+After each approval decision, the system SHALL create an unread result notification for the task creator: `approval_approved` or `approval_returned`. Each notice SHALL retain its approval round and decision comment after later resubmission; a return notice SHALL include the return reason and open the creator's task detail.
+
+#### Scenario: Creator is notified when a task is approved
+- **WHEN** the direct supervisor approves a task
+- **THEN** the creator receives an unread approval-approved notification for that round, and the assignee receives the existing assignment notification when applicable
+
+#### Scenario: Creator is notified when a task is returned
+- **WHEN** the direct supervisor returns a task with a reason
+- **THEN** the creator receives an unread approval-returned notification with that reason, which opens the creator's task detail
+
+#### Scenario: Approval result remains attached to its round
+- **WHEN** the creator resubmits a returned task for another approval round
+- **THEN** the earlier creator result notice retains its original decision and reason, and the new round has its own pending approval notice
+
 ### Requirement: Task details show information appropriate to the viewer
-The Android task detail SHALL select status/history and execution sections using the viewer's creator, approver, assignee, and read-only relationships. Every action SHALL remain subject to server-side authorization. The MVP SHALL NOT expose a separate task-start state, timestamp, or action.
+The Android task detail SHALL select status/history and execution sections using the viewer's creator, approver, assignee, and read-only relationships. It SHALL display the planned estimated start when present and the deadline. Every action SHALL remain subject to server-side authorization. The MVP SHALL NOT expose a separate actual task-start state, timestamp, or action.
 
 #### Scenario: Creator views a pending or returned task
 - **WHEN** the task creator opens a task awaiting approval or returned for revision
@@ -89,7 +134,7 @@ The Android task detail SHALL select status/history and execution sections using
 
 #### Scenario: Assignee views an approved task
 - **WHEN** the assignee who is not the creator opens an approved task
-- **THEN** the detail shows execution and completion information but omits approval state, approval history, and the standalone task-start action
+- **THEN** the detail shows the planned estimated start when present, deadline, execution, and completion information but omits approval state, approval history, and the standalone task-start action
 
 #### Scenario: Read-only supervisor views an approved descendant task
 - **WHEN** a supervisor who is neither creator nor designated approver opens an authorized descendant's approved task
@@ -142,11 +187,11 @@ The system SHALL show approved work in “我的任务” to its assignee and in
 - **THEN** “我的任务” contains approved tasks assigned to them, “我创建的” contains only their approved or approval-exempt created tasks, and approval queues are accessed separately in the Approval Center
 
 ### Requirement: Task lists use a unified scoped filter form
-The ordinary task-center list SHALL provide one filter-form entry for task scope, optional inclusive deadline range, and completion status. Defaults SHALL be “我的任务”, unrestricted deadline, and all statuses. “全部” SHALL de-duplicate the union of the current user's approved assigned and created tasks. Filtering SHALL NOT mutate tasks or grant workflow authority.
+The ordinary task-center list SHALL provide one filter-form entry for task scope, optional inclusive estimated-start and deadline ranges, and completion status. Defaults SHALL be “我的任务”, unrestricted date ranges, and all statuses. A set estimated-start boundary SHALL exclude tasks without `estimated_start_at`. “全部” SHALL de-duplicate the union of the current user's approved assigned and created tasks. Filtering SHALL NOT mutate tasks or grant workflow authority.
 
 #### Scenario: User filters ordinary tasks by scope, deadline, and status
 - **WHEN** a user applies one or more conditions in the ordinary task filter form
-- **THEN** the task list contains only approved tasks matching the selected scope, inclusive deadline range, and completion status, without changing task state
+- **THEN** the task list contains only approved tasks matching the selected scope, any inclusive estimated-start and deadline ranges, and completion status, without changing task state
 
 #### Scenario: All scope de-duplicates a self-assigned task
 - **WHEN** a task is both assigned to and created by the current user and the user selects “全部”
@@ -157,7 +202,7 @@ The ordinary task-center list SHALL provide one filter-form entry for task scope
 - **THEN** approval entries are organized by approval workflow state and do not show the ordinary-task filter form or task-completion filter
 
 ### Requirement: Subordinate task inspection uses authorized employee filters
-Only users with descendants SHALL see this read-only shortcut. Its filter SHALL offer “承担的任务” and “创建的任务” (default assigned), an optional inclusive deadline range, completion status, and an employee selector restricted to authorized descendants (default all). Both modes SHALL show only approved tasks, apply date/status filters, and grant no workflow actions or expanded permissions.
+Only users with descendants SHALL see this read-only shortcut. Its filter SHALL offer “承担的任务” and “创建的任务” (default assigned), optional inclusive estimated-start and deadline ranges, completion status, and an employee selector restricted to authorized descendants (default all). A set estimated-start boundary SHALL exclude tasks without `estimated_start_at`. Both modes SHALL show only approved tasks, apply date/status filters, and grant no workflow actions or expanded permissions.
 
 #### Scenario: Supervisor views an authorized descendant's assigned tasks by default
 - **WHEN** a supervisor opens subordinate inspection with the default “承担的任务” scope and selects an authorized descendant
@@ -174,6 +219,33 @@ Only users with descendants SHALL see this read-only shortcut. Its filter SHALL 
 #### Scenario: Supervisor attempts to select an out-of-scope person
 - **WHEN** a person outside the supervisor's authorized hierarchy is requested as the viewing object
 - **THEN** the system rejects or omits that person and returns no task data for them
+
+### Requirement: Ordinary and subordinate task lists use a horizontally scrollable table
+The ordinary task-center list and read-only subordinate task list SHALL render tasks in rows with title, creator, assignee, estimated-start, deadline, and completion-status columns. The header and rows SHALL scroll horizontally as one aligned table. Selecting a row SHALL open the existing role-aware task detail. The Approval Center SHALL retain its dedicated layout.
+
+#### Scenario: User views an ordinary task list on a narrow screen
+- **WHEN** the user opens an ordinary task list on a screen narrower than the table
+- **THEN** the user can horizontally scroll the aligned header and task rows to inspect all six columns
+
+#### Scenario: Supervisor views subordinate tasks
+- **WHEN** the supervisor opens an authorized subordinate task list
+- **THEN** each approved task uses the same table columns and remains read-only
+
+#### Scenario: Task has no estimated start time
+- **WHEN** an ordinary or subordinate task has no `estimated_start_at`
+- **THEN** its estimated-start cell displays “未设置”
+
+#### Scenario: Cancelled task remains identifiable
+- **WHEN** a listed task has been cancelled
+- **THEN** the row retains its completion status and also indicates “已取消”
+
+#### Scenario: User opens a task from the table
+- **WHEN** the user selects a task row
+- **THEN** the app opens the existing task detail and preserves the detail's current role-based content and actions
+
+#### Scenario: User opens Approval Center
+- **WHEN** the user opens an approval queue
+- **THEN** the app retains the dedicated approval-list presentation instead of rendering the ordinary task table
 
 ### Requirement: Task-center shortcuts and creation entry remain available in context
 The task center SHALL place the Approval Center and authorized subordinate-inspection shortcuts in the top-right area. The ordinary task list SHALL expose task creation through a fixed circular plus button at the bottom-right of the screen instead of a task-list footer button. The creation button SHALL be hidden in Approval Center, task detail, and task create/edit screens.

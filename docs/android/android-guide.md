@@ -16,9 +16,23 @@
 
 ## 打开与运行
 
-1. 用 Android Studio 打开仓库中的 `android/` 文件夹，等待 Gradle Sync 完成。
-2. 选择模拟器或已开启 USB 调试的手机作为目标设备。
-3. 点击绿色 **Run** 按钮运行 `app` 配置。
+1. 在一个终端启动 Django 后端，并保持它运行：
+
+   ```powershell
+   cd backend
+   python manage.py runserver
+   ```
+
+2. 用 USB 连接已开启 USB 调试的手机；需要测试模拟器时，先启动 Android Studio 模拟器。
+3. 在仓库根目录的 Git Bash 运行连接脚本：
+
+   ```bash
+   bash scripts/connect-android-backend.sh
+   ```
+
+   脚本会检查后端健康状态，并为所有已授权的手机和模拟器设置端口转发。成功时会列出设备序列号和“后端健康检查通过”。若手机弹出 USB 调试授权提示，请选择允许。
+
+4. 用 Android Studio 打开仓库中的 `android/` 文件夹，等待 Gradle Sync 完成，选择手机或模拟器，点击绿色 **Run** 按钮运行 `app` 配置。两台设备需要分别选择并运行一次。
 
 命令行构建（在 `android/` 目录执行）：
 
@@ -30,15 +44,9 @@
 
 ## Django 地址配置
 
-默认 Debug API 地址为 `http://10.0.2.2:8000/`，这是 Android 模拟器访问宿主机的地址。请求层从 `BuildConfig.API_BASE_URL` 读取基地址，API 路径须以 Django 实际路由及 Swagger 为准。
+Debug API 默认地址为 `http://127.0.0.1:8000/`。连接脚本通过 `adb reverse tcp:8000 tcp:8000` 将手机或模拟器上的这个地址转发到电脑后端；手机和模拟器使用相同配置。Django 继续按 README 中的本地启动命令运行。手机断开重连、模拟器重启或 ADB 服务重启后，重新运行连接脚本即可。
 
-如需用 USB/无线调试的实体手机连接开发电脑，可在启动 Gradle 命令时临时覆盖地址（不要提交个人 IP）：
-
-```powershell
-.\gradlew.bat :app:assembleDebug -PpandoraApiBaseUrl=http://192.168.1.10:8000/
-```
-
-将示例 IP 换成开发电脑的局域网 IP。实体手机和电脑需在同一网络，Django 开发服务需监听局域网地址，并允许防火墙通过相应端口。通过 Android Studio 运行时如需覆盖，可在个人 Gradle 属性文件中设置 `pandoraApiBaseUrl`；Windows 通常为 `%USERPROFILE%\.gradle\gradle.properties`。只在 Debug 构建中允许 HTTP；生产环境应使用 HTTPS。
+App 从 `BuildConfig.API_BASE_URL` 读取基地址；脚本确认后端可用后，再在 Android Studio 点击 **Run** 构建并安装。API 路径须以 Django 实际路由及 Swagger 为准。只在 Debug 构建中允许 HTTP；生产环境应使用 HTTPS。
 
 ## 目录结构
 

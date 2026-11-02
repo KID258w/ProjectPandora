@@ -54,7 +54,7 @@ internal fun TagSelectionDialog(
                         ) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(checked = checked, onCheckedChange = null)
-                                Text(tag.string("name"), Modifier.weight(1f))
+                                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { TagChip(tag) }
                             }
                         }
                     }
