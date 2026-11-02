@@ -8,7 +8,7 @@
 ## 2. Client workflows
 
 - [x] 2.1 Build Web list, create/edit, draft, publish/unpublish, ordering, and mobile-preview workflows.
-- [ ] 2.2 Build mobile company-important-item list and read-only detail/attachment presentation.
+- [x] 2.2 Build the mobile company-important-item list with inline expandable bodies; do not add a separate detail screen or attachment display/download to the current flow.
 
 ## 3. Verification
 

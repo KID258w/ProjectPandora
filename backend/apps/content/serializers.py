@@ -106,4 +106,3 @@ class AppItemSummarySerializer(serializers.Serializer):
 
 class AppItemDetailSerializer(AppItemSummarySerializer):
     body = serializers.CharField()
-    attachments = AttachmentSerializer(many=True)

@@ -10,7 +10,7 @@
 
 ## Issue #22 后端已落地的数据模型
 
-`content_company_item` 保存标题、摘要、正文、`draft/published/offline` 状态、手动顺序、发布人与发布/下线时间及最近一次下线原因（重新发布时清空），索引 `(status, sort_order)`；发布上限 10 条由服务层在事务内校验（SQLite 下靠单写入者，MySQL 下对已发布行加锁）。`content_company_item_attachment` 只保存文件引用与元数据（`file_key`、`original_name`、`mime_type`、`size_bytes`），开发期文件落在 `MEDIA_ROOT`，不把二进制写入关系表。`home_personal_focus_task` 保存用户自选的任务顺序，`(user_id, task_id)` 与 `(user_id, sort_order)` 唯一；`home_personal_focus_state` 以一对一保存首次预填时间。首页其余三个面板直接读取 `content_company_item`、`tasks_task` 与 `logs_daily_log`，不另建摘要表；`AdminAuditLog.module` 扩展 `company_items` 记录事项创建、编辑、发布、下线、排序与附件操作。管理端事项接口写审计，App 端全部只读。
+`content_company_item` 保存标题、摘要、正文、`draft/published/offline` 状态、手动顺序、发布人与发布/下线时间及最近一次下线原因（重新发布时清空），索引 `(status, sort_order)`；发布上限 10 条由服务层在事务内校验（SQLite 下靠单写入者，MySQL 下对已发布行加锁）。`content_company_item_attachment` 只保存文件引用与元数据（`file_key`、`original_name`、`mime_type`、`size_bytes`），开发期文件落在 `MEDIA_ROOT`，不把二进制写入关系表。该表及管理端上传/删除接口在后端保留；当前 App 公司事项流程只在列表内折叠/展开正文，不进入独立详情页，也不展示或下载附件。后续若确认增加公司事项详情页或附件上传/下载，应另行补充客户端需求与接口契约。任务模块目前仅有材料文字说明字段，不包含任务附件；若后续需要任务附件，应在任务模块单独定义。`home_personal_focus_task` 保存用户自选的任务顺序，`(user_id, task_id)` 与 `(user_id, sort_order)` 唯一；`home_personal_focus_state` 以一对一保存首次预填时间。首页其余三个面板直接读取 `content_company_item`、`tasks_task` 与 `logs_daily_log`，不另建摘要表；`AdminAuditLog.module` 扩展 `company_items` 记录事项创建、编辑、发布、下线、排序与附件操作。管理端事项接口写审计，App 端全部只读。
 
 ## Issue #6 已落地的数据模型
 
@@ -298,7 +298,7 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 | `mime_type`, `size_bytes` | 字符串/整数 | 类型及大小 |
 | `uploaded_at` | 时间 | 上传时间 |
 
-附件实际存储（本地、对象存储等）、大小限制和清理策略待定；该表可在附件功能明确后再实现。
+附件文件引用和元数据由该表保存；当前实现将二进制存于开发环境的 `MEDIA_ROOT`，不会存入关系表。该后端能力保留，但不构成当前 App 公司事项界面的附件功能要求。正式环境的持久化存储与清理策略仍需部署方案确认。任务附件不属于此表，若后续纳入任务模块需另行设计。
 
 ### 3.4 工作日志
 

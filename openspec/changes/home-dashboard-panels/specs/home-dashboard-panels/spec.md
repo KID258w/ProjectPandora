@@ -11,12 +11,19 @@ The system SHALL provide four mobile home panels: Company Important Items, Compa
 - **WHEN** a user has more than five eligible rows for a Home panel
 - **THEN** that card displays only the first five in its defined order and provides an entry to the corresponding secondary view where applicable
 
-### Requirement: Company important items open a full secondary list
-The system SHALL show at most five company-important-item summaries on Home. Its secondary list SHALL show up to ten published items in administrator-defined order with their complete item information.
+### Requirement: Home panel layout adapts to screen dimensions
+The four Home cards SHALL use a 2×2 grid with equal widths and equal heights on the same screen. Card widths SHALL divide the available row width evenly. Card height SHALL adapt to the preview row count and reserve enough room for all five preview rows without clipping. If the screen is too short to show the full grid, the Home page SHALL scroll vertically; card content MAY scroll internally to accommodate larger text.
+
+#### Scenario: Home opens on different screen heights
+- **WHEN** an authenticated user opens Home on a tall or short device
+- **THEN** all four panels remain equal in size on that device, unused card space is limited, and content or the page can scroll when the available height is insufficient
+
+### Requirement: Company important items expand inline in the secondary list
+The Home company-important-items card SHALL show only the titles of up to five published items in administrator-defined order. Its secondary list SHALL show up to ten published items in the same order, including their summaries. Each row SHALL expand inline to show the full item body without navigating to a separate detail screen; attachments are not part of the current mobile flow.
 
 #### Scenario: User opens all company-important items
 - **WHEN** the user selects “View all” from the Home company-items card
-- **THEN** the system opens the secondary list and displays up to ten published items with complete information
+- **THEN** the system opens the secondary list and displays up to ten published items; expanding a row shows the full body on that screen
 
 #### Scenario: Manager views Home
 - **WHEN** a Founder, Department Manager, or Team Leader opens Home

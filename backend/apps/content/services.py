@@ -75,7 +75,6 @@ def app_item_summary(item):
 def app_item_detail(item):
     return {
         "id": item.pk, "title": item.title, "summary": item.summary, "body": item.body,
-        "attachments": [attachment_data(row) for row in item.attachments.all()],
         "published_at": item.published_at,
     }
 

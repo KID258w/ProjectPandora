@@ -8,12 +8,13 @@
 
 ## 2. Android home experience
 
-- [ ] 2.1 Build the four-panel home layout with at most five preview rows per card and concise loading, empty, and error states.
+- [x] 2.1 Build the four-panel home layout with at most five preview rows per card and concise loading, empty, and error states.
 - [ ] 2.2 Build personal task selection capped at ten and long-press drag-handle reordering without exposing task-definition edits.
-- [ ] 2.3 Add “view all” navigation to secondary lists; keep up to ten company items/tasks/personal tasks there and route selected tasks to their authorized task detail.
+- [x] 2.3 Add “view all” navigation to secondary lists; keep up to ten company items/tasks/personal tasks there, expand company item bodies inline without an item detail screen or attachment flow, and route selected tasks to their authorized task detail.
 - [ ] 2.4 Keep full log editing/history and full task actions in their dedicated modules.
 - [ ] 2.5 Add a Home task-notification bell and notification list with unread red-dot behavior and navigation to the relevant task detail.
 - [x] 2.6 Render the task-notification entry as an icon-only bell button with an accessible label and unread indicator.
+- [x] 2.7 Render the four Home cards in an equal-width, equal-height adaptive 2×2 grid that keeps all five preview rows visible and allows page scrolling on short screens.
 
 ## 3. Verification
 

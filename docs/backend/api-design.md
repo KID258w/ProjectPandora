@@ -37,7 +37,7 @@
 
 下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口、Issue #21 的任务、审批、通知接口，以及 Issue #22 的公司重要事项、首页四面板与个人重点接口均已实现。其余仍为建议接口，不代表已上线。
 
-附件实现约定（Issue #22 落地）：`POST .../attachments/` 使用 `multipart/form-data`，字段名 `file`；开发环境文件写入 `MEDIA_ROOT`（默认 `backend/media/`）并由 Django 在 `DEBUG` 下提供 `/media/` 访问，正式部署须改为对象存储或由反向代理提供持久化目录。默认上限 10 MB，类型白名单为 PDF、PNG/JPEG、纯文本、Word、Excel，可用环境变量 `COMPANY_ITEM_ATTACHMENT_MAX_BYTES` 与 `COMPANY_ITEM_ATTACHMENT_MIME_TYPES` 覆盖。
+事项附件后端实现约定（Issue #22）：管理端 `POST .../attachments/` 使用 `multipart/form-data`，字段名 `file`；开发环境文件写入 `MEDIA_ROOT`（默认 `backend/media/`）并由 Django 在 `DEBUG` 下提供 `/media/` 访问，正式部署须改为对象存储或由反向代理提供持久化目录。默认上限 10 MB，类型白名单为 PDF、PNG/JPEG、纯文本、Word、Excel，可用环境变量 `COMPANY_ITEM_ATTACHMENT_MAX_BYTES` 与 `COMPANY_ITEM_ATTACHMENT_MIME_TYPES` 覆盖。该能力及管理端上传/删除 API 保留在后端，但当前 Web 页面和 App 公司事项流程均不提供附件入口；App 正文接口不返回附件元数据或 URL。未来如需增加公司事项详情页及附件上传/下载，另行确认客户端需求和文件访问规则。当前任务模块的材料字段是文字说明，不包含文件附件；如需任务附件，应作为任务模块的独立需求设计上传/下载接口和存储规则。
 | App 组织关系 | `GET /api/v1/app/organization/tree/`、`GET /api/v1/app/organization/members/{id}/`、`GET /api/v1/app/organization/members/{id}/avatar/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
@@ -87,11 +87,11 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 | 员工账号列表/创建 | `GET, POST /api/v1/admin/users/` | 按姓名/手机号、身份、组织和状态筛选；创建需姓名、手机号、身份证号及组织身份，自动启用并一次性返回初始密码 |
 | 员工账号详情/更新 | `GET, PATCH /api/v1/admin/users/{id}/` | 查看脱敏个人资料；PATCH 只改业务身份、部门/团队归属和启用状态 |
 | 公司重要事项列表/创建 | `GET, POST /api/v1/admin/company-items/` | 查询或新建事项草稿 |
-| 事项详情/更新 | `GET, PATCH /api/v1/admin/company-items/{id}/` | 编辑标题、摘要、正文、附件等 |
+| 事项详情/更新 | `GET, PATCH /api/v1/admin/company-items/{id}/` | 编辑标题、摘要、正文；附件由下列现有管理端附件接口维护 |
 | 发布/下线事项 | `POST /api/v1/admin/company-items/{id}/publish/`、`.../offline/` | 发布或下线事项；发布数量最多 10 条 |
 | 调整事项排序 | `PUT /api/v1/admin/company-items/order/` | 按请求中的 ID 顺序批量保存手动排序 |
-| 上传事项附件 | `POST /api/v1/admin/company-items/{id}/attachments/` | 可选；附件存储方案和限制待定 |
-| 删除事项附件 | `DELETE /api/v1/admin/company-items/{id}/attachments/{attachment_id}/` | 删除当前事项下指定附件引用及对应文件；仅管理员可操作 |
+| 上传事项附件 | `POST /api/v1/admin/company-items/{id}/attachments/` | 后端已实现但当前 Web 页面不调用；附件存储和限制见本节上方 |
+| 删除事项附件 | `DELETE /api/v1/admin/company-items/{id}/attachments/{attachment_id}/` | 后端已实现但当前 Web 页面不调用；删除指定附件引用及对应文件，仅管理员可操作 |
 | 审计记录 | `GET /api/v1/admin/audit-logs/` | 按时间、管理员、模块筛选审计记录；只读 |
 
 Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `username` 接收手机号，要求身份证号，自动启用账号并只在本次成功响应返回后端生成的初始密码。下文的员工筛选/更新、组织维护和 App 自助资料修改已在 Issue #15 实现：列表保留停用对象供管理员查询，但用于员工身份/组织调整的候选项只返回启用员工、部门和团队；用户筛选支持姓名或手机号关键词、`department_id`、`team_id`、`business_role`、`is_active`。组织负责人在员工管理界面通过员工业务身份和组织归属调整，不提供组织详情页直接换负责人或独立负责人写接口。停用部门/团队前后端都要校验没有仍启用的下级组织或成员。团队的所属部门仅在创建时指定。手机号继续使用现有唯一 `username` 字段存储；App 登录 JSON 的 `username` 字段不改名，业务账号的值为手机号。
@@ -125,7 +125,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `POST /api/v1/app/me/password/` | 员工本人验证当前密码后修改密码；不提供 Web 重置入口 |
 | `GET /api/v1/app/home/` | 返回首页四大面板摘要（每卡最多 5 条）及任务通知未读数；个人数据按当前登录用户隔离 |
 | `GET /api/v1/app/company-items/` | 已发布的公司重要事项列表，最多 10 条 |
-| `GET /api/v1/app/company-items/{id}/` | 公司重要事项详情 |
+| `GET /api/v1/app/company-items/{id}/` | 返回单条已发布事项正文数据，供列表项在当前页展开；不返回附件元数据或 URL，也不要求跳转到独立详情页 |
 
 首页“公司十大重要任务”是根据当前用户承担的未完成任务计算出的最多 10 条，不是管理员维护的全公司排行榜；按当前需求文档规定的来源和截止时间排序。个人十大重点工作由用户选择并拖拽排序，服务端持久化顺序；最多 10 条，任务完成、取消或不再由本人承担时应从可选范围中移除。首页聚合和个人重点列表首次读取时共用同一初始化逻辑：按当时的公司十大任务预填一次，之后不随公司榜单变化自动重置。
 
@@ -1321,7 +1321,6 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "title": "国庆值班安排",
     "summary": "查看值班表",
     "body": "各部门值班安排详见附件。",
-    "attachments": [],
     "published_at": "2026-10-01T09:00:00+08:00"
   },
   "requestId": "<uuid>"

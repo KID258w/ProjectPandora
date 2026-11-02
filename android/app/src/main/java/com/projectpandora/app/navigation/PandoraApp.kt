@@ -122,8 +122,7 @@ fun PandoraApp(
                     user?.let { HomeScreen(it, businessApi, { id -> nav.navigate("task-center/$id") },
                         { date -> if (date.isBlank()) selectTab(MainTab.LOGS) else nav.navigate("log-detail/$date") },
                         { id -> nav.navigate("approval-task/$id") },
-                        notificationRefreshKey = notificationRefreshKey,
-                        onViews = { selectTab(MainTab.VIEWS) }) }
+                        notificationRefreshKey = notificationRefreshKey) }
                 }
                 composable(MainTab.VIEWS.route) {
                     ViewsScreen(

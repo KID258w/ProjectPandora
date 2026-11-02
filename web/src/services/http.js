@@ -100,12 +100,6 @@ export const adminApi = {
   publishCompanyItem: (id, data = {}) => http.post(`/admin/company-items/${id}/publish/`, data),
   offlineCompanyItem: (id, data = {}) => http.post(`/admin/company-items/${id}/offline/`, data),
   orderCompanyItems: (itemIds) => http.put('/admin/company-items/order/', { item_ids: itemIds }),
-  uploadCompanyItemAttachment: (id, file) => {
-    const form = new FormData()
-    form.append('file', file)
-    return http.post(`/admin/company-items/${id}/attachments/`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
-  },
-  deleteCompanyItemAttachment: (id, attachmentId) => http.delete(`/admin/company-items/${id}/attachments/${attachmentId}/`),
 }
 
 let refreshPromise

@@ -30,11 +30,11 @@ class AppCompanyItemDetailView(BusinessAPIView):
     serializer_class = AppItemDetailSerializer
 
     @extend_schema(
-        tags=TAGS, summary="已发布事项详情", operation_id="app_company_items_detail",
-        description="草稿或已下线事项对 App 用户按不存在处理。",
+        tags=TAGS, summary="已发布事项正文（列表内展开）", operation_id="app_company_items_detail",
+        description="供 App 用户在公司事项列表中按需展开正文；草稿或已下线事项按不存在处理。",
     )
     def get(self, request, pk):
-        item = CompanyImportantItem.objects.prefetch_related("attachments").filter(
+        item = CompanyImportantItem.objects.filter(
             pk=pk, status=CompanyImportantItem.Status.PUBLISHED,
         ).first()
         if item is None:

@@ -1,13 +1,12 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, h, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { API_BASE_URL, adminApi, fetchAllPages, getApiErrorMessage, unwrapResponse } from '../services/http'
+import { adminApi, fetchAllPages, getApiErrorMessage, unwrapResponse } from '../services/http'
 import { showOperationError } from '../services/feedback'
 
 const items = ref([])
 const loading = ref(false)
 const saving = ref(false)
-const uploading = ref(false)
 const search = ref('')
 const statusFilter = ref('')
 const editorVisible = ref(false)
@@ -16,7 +15,6 @@ const detailVisible = ref(false)
 const editingId = ref(null)
 const selectedItem = ref(null)
 const editorRef = ref()
-const attachmentInput = ref()
 const form = reactive({ title: '', summary: '', body: '' })
 const rules = {
   title: [{ required: true, message: '请输入事项标题', trigger: 'blur' }, { max: 200, message: '标题不能超过 200 个字符', trigger: 'blur' }],
@@ -27,8 +25,11 @@ const visibleItems = computed(() => items.value.filter((item) => {
   const matchesStatus = !statusFilter.value || item.status === statusFilter.value
   const matchesSearch = !search.value.trim() || item.title.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase())
   return matchesStatus && matchesSearch
-}))
-const publishedCount = computed(() => items.value.filter((item) => item.status === 'published').length)
+}).sort((left, right) => Number(right.status === 'published') - Number(left.status === 'published')))
+const orderedPublishedItems = computed(() => items.value
+  .filter((item) => item.status === 'published')
+  .sort((left, right) => (left.sort_order || 0) - (right.sort_order || 0) || left.id - right.id))
+const publishedCount = computed(() => orderedPublishedItems.value.length)
 const statusOptions = [
   { label: '全部状态', value: '' },
   { label: '草稿', value: 'draft' },
@@ -99,8 +100,24 @@ async function saveDraft() {
 
 async function publish(row) {
   try {
-    await ElMessageBox.confirm(`发布后，所有 App 用户都可以看到“${row.title}”。已发布事项最多 10 条。`, '确认发布', {
-      confirmButtonText: '发布事项', cancelButtonText: '再检查一下', type: 'warning',
+    await ElMessageBox.confirm(actionPrompt({
+      tone: 'publish',
+      eyebrow: '内容面向全体用户',
+      title: '确认发布这条事项？',
+      description: '发布后，这条公司重要事项将展示给全体 App 用户。',
+      itemTitle: row.title,
+      note: `当前已发布 ${publishedCount.value} / 10 条；发布后将占用一个展示名额。`,
+    }), '发布公司事项', {
+      customClass: 'company-item-action-dialog company-item-action-dialog--publish',
+      modalClass: 'operation-feedback-mask',
+      confirmButtonText: '确认发布',
+      cancelButtonText: '再检查一下',
+      confirmButtonClass: 'company-item-action__confirm',
+      cancelButtonClass: 'company-item-action__cancel',
+      showClose: false,
+      closeOnClickModal: false,
+      closeOnPressEscape: true,
+      lockScroll: true,
     })
   } catch { return }
   try {
@@ -115,9 +132,26 @@ async function publish(row) {
 async function offline(row) {
   let reason = ''
   try {
-    const result = await ElMessageBox.prompt('可填写下线原因，最多 200 个字符。', '下线事项', {
-      confirmButtonText: '确认下线', cancelButtonText: '取消', inputPlaceholder: '下线原因（选填）',
+    const result = await ElMessageBox.prompt(actionPrompt({
+      tone: 'offline',
+      eyebrow: '调整 App 展示内容',
+      title: '确认下线这条事项？',
+      description: '下线后，这条事项会立即从 App 中移除。',
+      itemTitle: row.title,
+      note: '事项记录仍保留在管理列表中。下线原因可以选填。',
+    }), '下线公司事项', {
+      customClass: 'company-item-action-dialog company-item-action-dialog--offline',
+      modalClass: 'operation-feedback-mask',
+      confirmButtonText: '确认下线',
+      cancelButtonText: '暂不下线',
+      confirmButtonClass: 'company-item-action__confirm',
+      cancelButtonClass: 'company-item-action__cancel',
+      inputPlaceholder: '下线原因（选填，最多 200 字）',
       inputValidator: (value) => value.length <= 200 || '下线原因不能超过 200 个字符',
+      showClose: false,
+      closeOnClickModal: false,
+      closeOnPressEscape: true,
+      lockScroll: true,
     })
     reason = result.value.trim()
   } catch { return }
@@ -130,10 +164,40 @@ async function offline(row) {
   }
 }
 
-async function saveOrder() {
-  if (items.value.length < 2) return
+function actionPrompt({ tone, eyebrow, title, description, itemTitle, note }) {
+  return h('div', { class: `company-item-action company-item-action--${tone}` }, [
+    h('div', { class: 'company-item-action__heading' }, [
+      h('span', { class: 'company-item-action__icon', 'aria-hidden': 'true' }, tone === 'publish' ? '↗' : '↓'),
+      h('div', { class: 'company-item-action__heading-copy' }, [
+        h('p', { class: 'company-item-action__eyebrow' }, eyebrow),
+        h('h2', { class: 'company-item-action__title' }, title),
+      ]),
+    ]),
+    h('p', { class: 'company-item-action__description' }, description),
+    h('div', { class: 'company-item-action__item' }, [
+      h('span', '事项标题'),
+      h('strong', itemTitle),
+    ]),
+    h('div', { class: 'company-item-action__note' }, [
+      h('span', { 'aria-hidden': 'true' }, 'i'),
+      h('p', note),
+    ]),
+  ])
+}
+
+function publishedIndex(row) {
+  return orderedPublishedItems.value.findIndex((item) => item.id === row.id)
+}
+
+function publishedSequence(row) {
+  const index = publishedIndex(row)
+  return index < 0 ? '未设置' : index + 1
+}
+
+async function saveOrder(orderedItems) {
+  if (orderedItems.length < 2) return
   try {
-    const response = unwrapResponse(await adminApi.orderCompanyItems(items.value.map((item) => item.id)))
+    const response = unwrapResponse(await adminApi.orderCompanyItems(orderedItems.map((item) => item.id)))
     const orderById = new Map((response?.items ?? []).map((item) => [item.id, item.sort_order]))
     items.value = items.value.map((item) => ({ ...item, sort_order: orderById.get(item.id) ?? item.sort_order }))
     ElMessage.success('事项展示顺序已保存')
@@ -144,17 +208,20 @@ async function saveOrder() {
   }
 }
 
-async function moveItem(index, direction) {
+async function moveItem(row, direction) {
   if (search.value.trim() || statusFilter.value) {
-    ElMessage.warning('请先清除搜索和状态筛选，再调整完整列表顺序')
+    ElMessage.warning('请先清除搜索和状态筛选，再调整已发布事项顺序')
     return
   }
+  const publishedRows = orderedPublishedItems.value
+  const index = publishedRows.findIndex((item) => item.id === row.id)
   const target = index + direction
-  if (target < 0 || target >= items.value.length) return
-  const next = [...items.value]
+  if (index < 0 || target < 0 || target >= publishedRows.length) return
+  const next = [...publishedRows]
   ;[next[index], next[target]] = [next[target], next[index]]
-  items.value = next
-  await saveOrder()
+  const reorderedPublished = next.map((item, orderIndex) => ({ ...item, sort_order: orderIndex + 1 }))
+  items.value = [...reorderedPublished, ...items.value.filter((item) => item.status !== 'published')]
+  await saveOrder(next)
 }
 
 async function openDetail(row) {
@@ -175,47 +242,9 @@ async function openPreview(row) {
   }
 }
 
-function chooseAttachment() { attachmentInput.value?.click() }
-
-async function uploadAttachment(event) {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  if (!file || !selectedItem.value?.id) return
-  uploading.value = true
-  try {
-    await adminApi.uploadCompanyItemAttachment(selectedItem.value.id, file)
-    selectedItem.value = unwrapResponse(await adminApi.companyItem(selectedItem.value.id))
-    ElMessage.success('附件已上传')
-  } catch (error) {
-    showOperationError('附件未上传', getApiErrorMessage(error))
-  } finally {
-    uploading.value = false
-  }
-}
-
-async function deleteAttachment(attachment) {
-  try {
-    await ElMessageBox.confirm(`确定删除附件“${attachment.original_name}”吗？`, '删除附件', {
-      confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning',
-    })
-  } catch { return }
-  try {
-    await adminApi.deleteCompanyItemAttachment(selectedItem.value.id, attachment.id)
-    selectedItem.value = unwrapResponse(await adminApi.companyItem(selectedItem.value.id))
-    ElMessage.success('附件已删除')
-  } catch (error) {
-    showOperationError('附件未删除', getApiErrorMessage(error))
-  }
-}
-
 function formatDate(value) {
   if (!value) return '—'
   return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
-}
-
-function attachmentUrl(path) {
-  try { return new URL(path, `${API_BASE_URL.replace(/\/$/, '')}/`).href }
-  catch { return path }
 }
 
 onMounted(loadItems)
@@ -246,8 +275,8 @@ onMounted(loadItems)
     </div>
     <el-table v-loading="loading" :data="visibleItems" class="admin-table company-items-table" empty-text="暂无公司重要事项">
       <el-table-column label="顺序" width="116" align="center">
-        <template #default="{ $index, row }">
-          <div class="order-controls"><span>{{ row.sort_order || $index + 1 }}</span><el-button link :disabled="$index === 0 || loading || Boolean(search.trim()) || Boolean(statusFilter)" aria-label="上移" @click="moveItem($index, -1)">↑</el-button><el-button link :disabled="$index === items.length - 1 || loading || Boolean(search.trim()) || Boolean(statusFilter)" aria-label="下移" @click="moveItem($index, 1)">↓</el-button></div>
+        <template #default="{ row }">
+          <div v-if="row.status === 'published'" class="order-controls"><span>{{ publishedSequence(row) }}</span><el-button link :disabled="publishedIndex(row) === 0 || loading || Boolean(search.trim()) || Boolean(statusFilter)" aria-label="上移" @click="moveItem(row, -1)">↑</el-button><el-button link :disabled="publishedIndex(row) === publishedCount - 1 || loading || Boolean(search.trim()) || Boolean(statusFilter)" aria-label="下移" @click="moveItem(row, 1)">↓</el-button></div>
         </template>
       </el-table-column>
       <el-table-column label="事项内容" min-width="320">
@@ -261,7 +290,7 @@ onMounted(loadItems)
         </template>
       </el-table-column>
     </el-table>
-    <div class="table-footnote">排序操作会保存当前事项顺序；请先清除搜索和状态筛选再排序。发布上限由后端再次校验，达到 10 条时请先下线一条已发布事项。</div>
+    <div class="table-footnote">排序仅作用于已发布事项；请先清除搜索和状态筛选再调整。草稿和已下线事项不会参与排序。发布上限由后端再次校验，达到 10 条时请先下线一条已发布事项。</div>
   </el-card>
 
   <el-dialog v-model="editorVisible" :title="editingId ? '编辑公司重要事项' : '新建公司重要事项'" width="min(760px, 94vw)" destroy-on-close @closed="clearForm">
@@ -270,27 +299,21 @@ onMounted(loadItems)
       <el-form-item label="事项标题" prop="title"><el-input v-model="form.title" maxlength="200" show-word-limit placeholder="输入清晰、简短的标题" /></el-form-item>
       <el-form-item label="内容摘要" prop="summary"><el-input v-model="form.summary" type="textarea" :rows="2" maxlength="300" show-word-limit placeholder="用于列表和首页卡片展示" /></el-form-item>
       <el-form-item label="事项正文" prop="body"><el-input v-model="form.body" type="textarea" :rows="9" placeholder="填写事项背景、安排或说明" /></el-form-item>
-      <el-alert title="附件在草稿保存后可于详情中上传；发布需要填写标题、摘要和正文。" type="info" :closable="false" show-icon />
     </el-form>
     <template #footer><el-button @click="editorVisible = false">取消</el-button><el-button type="primary" :loading="saving" @click="saveDraft">{{ editingId ? '保存修改' : '保存草稿' }}</el-button></template>
   </el-dialog>
 
   <el-dialog v-model="detailVisible" :title="selectedItem?.title || '事项详情'" width="min(760px, 94vw)">
     <div v-if="selectedItem" class="item-detail">
-      <div class="item-detail-meta"><el-tag :type="statusMap[selectedItem.status]?.type || 'info'">{{ statusMap[selectedItem.status]?.label || selectedItem.status }}</el-tag><span>展示顺序 {{ selectedItem.sort_order || '未设置' }}</span><span v-if="selectedItem.published_at">发布于 {{ formatDate(selectedItem.published_at) }}</span></div>
+      <div class="item-detail-meta"><el-tag :type="statusMap[selectedItem.status]?.type || 'info'">{{ statusMap[selectedItem.status]?.label || selectedItem.status }}</el-tag><span v-if="selectedItem.status === 'published'">展示顺序 {{ publishedSequence(selectedItem) }}</span><span v-if="selectedItem.published_at">发布于 {{ formatDate(selectedItem.published_at) }}</span></div>
       <h3>{{ selectedItem.summary }}</h3><p class="item-detail-body">{{ selectedItem.body }}</p>
-      <div class="attachment-section"><div class="attachment-heading"><strong>附件</strong><el-button type="primary" plain size="small" :loading="uploading" @click="chooseAttachment">上传附件</el-button></div>
-        <input ref="attachmentInput" class="visually-hidden" type="file" accept=".pdf,.png,.jpg,.jpeg,.txt,.doc,.docx,.xls,.xlsx,application/pdf,image/png,image/jpeg,text/plain" @change="uploadAttachment" />
-        <div v-if="selectedItem.attachments?.length" class="attachment-list"><div v-for="attachment in selectedItem.attachments" :key="attachment.id" class="attachment-row"><a :href="attachmentUrl(attachment.url)" target="_blank" rel="noopener noreferrer">{{ attachment.original_name }}</a><span>{{ (attachment.size_bytes / 1024 / 1024).toFixed(2) }} MB</span><el-button link type="danger" @click="deleteAttachment(attachment)">删除</el-button></div></div>
-        <p v-else class="muted-text">暂无附件。支持 PDF、图片、文本、Word 和 Excel，默认单个文件不超过 10 MB。</p>
-      </div>
       <div v-if="selectedItem.offline_reason" class="offline-reason"><strong>下线原因：</strong>{{ selectedItem.offline_reason }}</div>
     </div>
     <template #footer><el-button @click="detailVisible = false">关闭</el-button><el-button type="primary" @click="detailVisible = false; openEdit(selectedItem)">编辑</el-button></template>
   </el-dialog>
 
   <el-dialog v-model="previewVisible" title="App 事项样式预览" width="min(470px, 94vw)" class="item-preview-dialog">
-    <div v-if="selectedItem" class="mobile-preview-shell"><div class="mobile-preview-status"><span>9:41</span><span>● ● ●</span></div><div class="mobile-preview-header"><span>首页</span><span>Pandora</span></div><div class="mobile-preview-section"><div class="mobile-preview-heading"><div><strong>公司重要事项</strong><small>Company updates</small></div><span>查看全部 ›</span></div><article class="mobile-preview-item"><div class="preview-date">{{ selectedItem.published_at ? formatDate(selectedItem.published_at) : '预览' }}</div><h3>{{ selectedItem.title }}</h3><p>{{ selectedItem.summary }}</p></article><div v-if="selectedItem.attachments?.length" class="preview-attachment">📎 {{ selectedItem.attachments.length }} 个附件</div></div><div class="mobile-preview-body"><strong>事项详情</strong><p>{{ selectedItem.body }}</p><div v-for="attachment in selectedItem.attachments || []" :key="attachment.id" class="preview-attachment">📎 {{ attachment.original_name }}</div></div></div>
+    <div v-if="selectedItem" class="mobile-preview-shell"><div class="mobile-preview-status"><span>9:41</span><span>● ● ●</span></div><div class="mobile-preview-header"><span>‹ 首页</span><span>Pandora</span></div><div class="mobile-preview-list"><div class="mobile-preview-list-heading"><strong>公司重要事项</strong><span>已发布事项</span></div><article class="mobile-preview-expanded-item"><div class="preview-date">{{ selectedItem.published_at ? formatDate(selectedItem.published_at) : '预览' }}</div><h3>{{ selectedItem.title }} <span>⌃</span></h3><p class="preview-summary">{{ selectedItem.summary }}</p><p class="preview-body">{{ selectedItem.body }}</p></article></div></div>
     <template #footer><el-button @click="previewVisible = false">关闭预览</el-button></template>
   </el-dialog>
 </template>
@@ -311,28 +334,21 @@ onMounted(loadItems)
 .item-detail-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; color: #8a94a7; font-size: 12px; }
 .item-detail h3 { margin: 20px 0 10px; color: #455269; font-size: 14px; font-weight: 600; line-height: 1.6; }
 .item-detail-body { margin: 0; color: #37445b; font-size: 14px; line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; }
-.attachment-section { margin-top: 24px; padding-top: 18px; border-top: 1px solid #edf0f5; }
-.attachment-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: #27334a; font-size: 14px; }
-.attachment-list { display: grid; gap: 8px; }
-.attachment-row { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 10px 12px; border: 1px solid #edf0f5; border-radius: 8px; }
-.attachment-row a { flex: 1; min-width: 0; overflow: hidden; color: #3269e8; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.attachment-row span { flex: 0 0 auto; color: #929aac; font-size: 11px; }
 .offline-reason { margin-top: 18px; padding: 12px; border-radius: 8px; background: #fff8ed; color: #7d6543; font-size: 13px; }
-.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
 .mobile-preview-shell { max-width: 350px; margin: 0 auto; overflow: hidden; border: 7px solid #202a3b; border-radius: 28px; background: #f4f6fa; box-shadow: 0 12px 28px #1d29401a; }
 .mobile-preview-status { display: flex; justify-content: space-between; padding: 12px 20px 8px; color: #263249; font-size: 10px; font-weight: 700; }
 .mobile-preview-header { display: flex; justify-content: space-between; padding: 11px 18px 15px; color: #263249; background: #fff; font-size: 14px; font-weight: 700; }
-.mobile-preview-section, .mobile-preview-body { margin: 10px; padding: 14px; border: 1px solid #edf0f5; border-radius: 12px; background: #fff; }
-.mobile-preview-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.mobile-preview-heading > div { display: grid; gap: 3px; }
-.mobile-preview-heading strong, .mobile-preview-body > strong { color: #263249; font-size: 13px; }
-.mobile-preview-heading small, .preview-date { color: #9aa4b6; font-size: 9px; }
-.mobile-preview-heading > span { color: #3269e8; font-size: 10px; }
-.mobile-preview-item { padding: 11px; border-radius: 9px; background: #f7f9fd; }
-.mobile-preview-item h3 { margin: 6px 0; color: #293650; font-size: 13px; }
-.mobile-preview-item p, .mobile-preview-body p { margin: 0; color: #758198; font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
-.mobile-preview-body > strong { display: block; margin-bottom: 8px; }
-.preview-attachment { margin-top: 9px; color: #6e7c94; font-size: 10px; }
+.mobile-preview-list { margin: 10px; padding: 14px; border: 1px solid #edf0f5; border-radius: 12px; background: #fff; }
+.mobile-preview-list-heading strong { color: #263249; font-size: 13px; }
+.preview-date { color: #9aa4b6; font-size: 9px; }
+.mobile-preview-expanded-item p { margin: 0; color: #758198; font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mobile-preview-list-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.mobile-preview-list-heading span { color: #9aa4b6; font-size: 9px; }
+.mobile-preview-expanded-item { padding: 11px; border: 1px solid #edf0f5; border-radius: 9px; background: #fff; }
+.mobile-preview-expanded-item h3 { display: flex; justify-content: space-between; margin: 6px 0; color: #293650; font-size: 13px; }
+.mobile-preview-expanded-item h3 span { color: #3269e8; }
+.mobile-preview-expanded-item .preview-summary { padding-bottom: 8px; color: #9aa4b6; }
+.mobile-preview-expanded-item .preview-body { padding-top: 8px; border-top: 1px solid #edf0f5; color: #455269; }
 @media (max-width: 760px) {
   .company-items-filters { width: 100%; }
   .item-search { flex: 1; min-width: 140px; }

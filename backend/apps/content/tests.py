@@ -236,9 +236,17 @@ class CompanyItemApiTests(APITestCase):
             self.assertNotIn("status", data["results"][0])
 
         first = CompanyImportantItem.objects.filter(status="published").order_by("sort_order").first()
+        CompanyItemAttachment.objects.create(
+            item=first,
+            file_key="company-items/private/attachment.pdf",
+            original_name="内部附件.pdf",
+            mime_type="application/pdf",
+            size_bytes=128,
+        )
         detail = self.client.get(f"/api/v1/app/company-items/{first.pk}/").data["data"]
         self.assertEqual(detail["body"], "正文")
         self.assertNotIn("status", detail)
+        self.assertNotIn("attachments", detail)
 
     # ---- 附件 ----
 
