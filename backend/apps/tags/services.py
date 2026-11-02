@@ -1,12 +1,6 @@
-from django.db.models import Count
 from rest_framework import serializers
 
-from .models import PALETTE, Tag
-
-
-def choose_color():
-    counts = dict(Tag.objects.values("color").annotate(total=Count("id")).values_list("color", "total"))
-    return min(PALETTE, key=lambda color: counts.get(color, 0))
+from .models import Tag
 
 
 def validate_tag_ids(ids, existing_ids=()):

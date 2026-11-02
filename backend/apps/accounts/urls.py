@@ -16,5 +16,6 @@ urlpatterns = [
     path("app/auth/token/", views.AppLoginView.as_view()),
     path("app/auth/token/refresh/", views.AppRefreshView.as_view()),
     path("app/me/", views.AppMeView.as_view()),
+    path("app/me/avatar/", views.AppProfileAvatarView.as_view()),
     path("app/me/password/", views.AppPasswordChangeView.as_view()),
 ]

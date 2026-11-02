@@ -1,8 +1,7 @@
 package com.projectpandora.app.feature.home
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
@@ -11,18 +10,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.gson.JsonObject
+import com.projectpandora.app.R
 import com.projectpandora.app.core.network.*
-import com.projectpandora.app.BuildConfig
 import com.projectpandora.app.feature.account.BusinessUser
 import com.projectpandora.app.ui.*
 import com.projectpandora.app.ui.theme.PandoraColors as C
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -31,14 +39,11 @@ import androidx.lifecycle.repeatOnLifecycle
 private const val ROOT = "api/v1/app/"
 
 @Composable
-fun HomeScreen(user: BusinessUser, api: BusinessApi, onTask: (Long) -> Unit, onLog: (String) -> Unit, onApprovalTask: (Long) -> Unit = onTask, notificationRefreshKey: Int = 0) {
-    val context = LocalContext.current
-    var page by remember { mutableStateOf("home") }; var itemReturn by remember { mutableStateOf("home") }; var data by remember { mutableStateOf<JsonObject?>(null) }
-    var list by remember { mutableStateOf<List<JsonObject>>(emptyList()) }; var item by remember { mutableStateOf<JsonObject?>(null) }
-    var error by remember { mutableStateOf("") }; var busy by remember { mutableStateOf(false) }; var reload by remember { mutableIntStateOf(0) }
+fun HomeScreen(user: BusinessUser, api: BusinessApi, onTask: (Long) -> Unit, onLog: (String) -> Unit, onApprovalTask: (Long) -> Unit = onTask, notificationRefreshKey: Int = 0, onViews: () -> Unit = {}) {
+    var page by remember { mutableStateOf("home") }
+    var reload by remember { mutableIntStateOf(0) }
     var unreadNotificationCount by remember { mutableLongStateOf(0L) }
     val lifecycleOwner = LocalLifecycleOwner.current
-    val scope = rememberCoroutineScope()
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) reload++
@@ -57,75 +62,69 @@ fun HomeScreen(user: BusinessUser, api: BusinessApi, onTask: (Long) -> Unit, onL
             }
         }
     }
-    LaunchedEffect(page, reload) {
-        error = ""; busy = true
-        try {
-            when (page) {
-                "home" -> {
-                    try { data = api.get(ROOT + "home/").data() }
-                    catch (e: Exception) { error = e.businessMessage() }
-                    try { unreadNotificationCount = api.get(ROOT + "notifications/unread-count/").data().long("unread_count") }
-                    catch (e: Exception) { if (error.isBlank()) error = e.businessMessage() }
-                }
-                "items" -> list = api.all(ROOT + "company-items/").take(10)
-                "company-tasks" -> list = api.all(ROOT + "home/company-top-tasks/").take(10)
-            }
-        } catch (e: Exception) { error = e.businessMessage() } finally { busy = false }
-    }
-    if (page == "focus") { FocusScreen(api, onBack = { page = "home"; reload++ }, onTask = onTask); return }
-    if (page == "notifications") { TaskNotificationsScreen(api, onBack = { page = "home"; reload++ }, onTask = { id, approval -> if (approval) onApprovalTask(id) else onTask(id) }, reloadKey = reload + notificationRefreshKey); return }
-    PageColumn {
-        if (page != "home") BackButton { page = if (page == "item") itemReturn else "home"; reload++ }
+    LaunchedEffect(page, reload, notificationRefreshKey) {
         if (page == "home") {
-            BrandHeader(); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                PageTitle("你好，${user.name}", small = true)
-                TextButton(onClick = { page = "notifications" }) {
-                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("任务通知", color = C.Ink)
-                        if (unreadNotificationCount > 0) Box(Modifier.size(8.dp).background(C.Error, CircleShape))
-                    }
+            try {
+                unreadNotificationCount = api.get(ROOT + "notifications/unread-count/").data().long("unread_count")
+            } catch (_: Exception) {
+                // The homepage panels use local sample data; preserve the last notification count while offline.
+            }
+        }
+    }
+    if (page == "notifications") {
+        TaskNotificationsScreen(api, onBack = { page = "home"; reload++ }, onTask = { id, approval -> if (approval) onApprovalTask(id) else onTask(id) }, reloadKey = reload + notificationRefreshKey)
+        return
+    }
+    val date = remember { SimpleDateFormat("M月d日 EEEE", Locale.SIMPLIFIED_CHINESE).format(Date()) }
+    PageColumn {
+        BrandHeader()
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            PageTitle("你好，${user.name}", small = true)
+            Box(Modifier.size(48.dp)) {
+                IconButton(
+                    onClick = { page = "notifications" },
+                    modifier = Modifier.align(androidx.compose.ui.Alignment.Center).testTag("task_notifications").semantics {
+                        contentDescription = if (unreadNotificationCount > 0) "任务通知，${unreadNotificationCount}条未读" else "任务通知"
+                    },
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.setting_notification),
+                        contentDescription = null,
+                        modifier = Modifier.size(25.dp),
+                        tint = C.Blue,
+                    )
+                }
+                if (unreadNotificationCount > 0) {
+                    Box(
+                        Modifier.align(androidx.compose.ui.Alignment.TopEnd).offset(x = (-4).dp, y = 4.dp)
+                            .size(10.dp).background(C.Error, CircleShape).border(1.dp, Color.White, CircleShape),
+                    )
                 }
             }
-            Text(user.organization)
-        } else PageTitle(when (page) { "items" -> "公司重要事项"; "item" -> "事项详情"; "company-tasks" -> "公司十大重要任务"; else -> "任务通知" }, small = true)
-        if (busy) CircularProgressIndicator()
-        if (error.isNotEmpty()) { Note(error); TextButton(onClick = { reload++ }) { Text("重试") } }
-        when (page) {
-            "home" -> data?.let { d ->
-                Panel("公司重要事项", d.array("company_items"), { it.string("title") }, { page = "items" }) { row -> scope.launch { try { item = api.get(ROOT + "company-items/${row.long("id")}/").data(); itemReturn = "home"; page = "item" } catch (e: Exception) { error = e.businessMessage() } } }
-                Panel("公司十大重要任务", d.array("company_top_tasks"), { it.string("title") }, { page = "company-tasks" }) { onTask(it.long("id")) }
-                Panel("个人十大重点工作", d.array("personal_focus_tasks"), { it.string("title") }, { page = "focus" }) { onTask(it.long("id", it.long("task_id"))) }
-                Panel("最近日志", d.array("recent_logs"), { it.string("log_date") + " · " + it.string("summary") }, { onLog("") }) { onLog(it.string("log_date")) }
-            }
-            "items" -> list.forEach { row -> TextButton(onClick = { scope.launch { try { item = api.get(ROOT + "company-items/${row.long("id")}/").data(); itemReturn = "items"; page = "item" } catch (e: Exception) { error = e.businessMessage() } } }, modifier = Modifier.fillMaxWidth()) { Text(row.string("title") + "  " + row.string("summary")) } }
-            "item" -> item?.let { Text(it.string("title")); Text(it.string("body")); it.array("attachments").forEach { attachment ->
-                val url = attachment.string("url")
-                TextButton(onClick = {
-                    try {
-                        val uri = Uri.parse(BuildConfig.API_BASE_URL).resolveAsset(url)
-                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                    } catch (_: Exception) { error = "无法打开附件。" }
-                }, enabled = url.isNotBlank()) { Text("附件：" + attachment.string("original_name")) }
-            } }
-            "company-tasks" -> list.forEach { row -> TextButton(onClick = { onTask(row.long("id")) }, modifier = Modifier.fillMaxWidth()) { Text(row.string("title")) } }
-            "notifications" -> list.forEach { row -> TextButton(onClick = { onTask(row.long("task_id")) }, modifier = Modifier.fillMaxWidth()) { Text(row.string("task_title") + " · " + row.string("notification_type")) } }
         }
-        if (page != "home" && page != "item" && !busy && list.isEmpty() && error.isEmpty()) Text("暂无内容")
+        Text(user.organization + "  " + date, fontSize = 12.sp, color = C.Muted)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SummaryCard("公司重要事项", listOf("产品阶段评审", "客户服务升级", "系统稳定性提升"), C.AmberPale, C.Orange, Modifier.weight(1f), onViews)
+            SummaryCard("公司十大重要任务", listOf("产品阶段评审", "客户需求复盘", "季度目标拆解"), C.BluePale, C.Blue, Modifier.weight(1f), onViews)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SummaryCard("个人重点工作", listOf("完成需求评审", "整理测试计划", "确认项目风险"), C.TealPale, C.Teal, Modifier.weight(1f), onViews)
+            SummaryCard("最近日志", listOf("完成产品需求评审", "整理项目进展", "同步团队工作"), C.VioletPale, C.Violet, Modifier.weight(1f), { onLog("") }, "填写今日日志 ›")
+        }
+        Note("今天也把重要的工作，稳稳向前推进。")
     }
-}
-
-private fun Uri.resolveAsset(path: String): Uri {
-    val resolved = java.net.URI(toString()).resolve(path)
-    require(resolved.scheme == "http" || resolved.scheme == "https")
-    return Uri.parse(resolved.toString())
 }
 
 @Composable
-private fun Panel(title: String, rows: List<JsonObject>, label: (JsonObject) -> String, onAll: () -> Unit, onRow: (JsonObject) -> Unit) {
-    Column(Modifier.fillMaxWidth().background(C.AmberPale, RoundedCornerShape(16.dp)).padding(16.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(title); TextButton(onClick = onAll) { Text("查看全部 ›") } }
-        if (rows.isEmpty()) Text("暂无内容")
-        rows.take(5).forEach { row -> Text(label(row), Modifier.fillMaxWidth().clickable { onRow(row) }.padding(vertical = 8.dp)) }
+private fun SummaryCard(title: String, rows: List<String>, pale: Color, accent: Color,
+    modifier: Modifier, onClick: () -> Unit, action: String = "查看全部 ›") {
+    Column(modifier.heightIn(min = 200.dp).background(pale, RoundedCornerShape(20.dp))
+        .border(1.dp, accent.copy(alpha = 0.13f), RoundedCornerShape(20.dp)).clickable(onClick = onClick).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(title, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold, color = accent)
+        rows.forEach { Text("• $it", fontSize = 12.sp, lineHeight = 18.sp, color = C.Ink) }
+        Spacer(Modifier.weight(1f))
+        Text(action, fontSize = 12.sp, color = accent)
     }
 }
 

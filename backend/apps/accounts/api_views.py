@@ -1,9 +1,14 @@
 from datetime import date
 
+from django.http import HttpResponse
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
+from django.utils import timezone
+from PIL import Image
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import generics, serializers
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -13,7 +18,8 @@ from rest_framework.views import APIView
 from apps.core.api import EnvelopeMixin, EnvelopeSchema, StandardPagination
 from .api_serializers import (
     AdminRefreshSerializer, AdminTokenSerializer, AppPasswordChangeSerializer, AppRefreshSerializer,
-    AppTokenSerializer, AppMeUpdateSerializer, AuditLogSerializer, BusinessUserCreateResponseSerializer,
+    AppTokenSerializer, AppMeSerializer, AppMeUpdateSerializer, AppAvatarUploadSerializer,
+    AuditLogSerializer, BusinessUserCreateResponseSerializer,
     BusinessUserCreateSerializer, DepartmentDetailSerializer, DepartmentSerializer, DepartmentUpdateSerializer,
     TeamDetailSerializer, TeamSerializer, TeamUpdateSerializer, UserSerializer, UserUpdateSerializer,
 )
@@ -310,14 +316,14 @@ class AuditLogListView(VersionedMixin, generics.ListAPIView):
 
 @extend_schema_view(
     get=extend_schema(tags=["App 认证"], summary="当前业务用户信息"),
-    patch=extend_schema(tags=["App 认证"], summary="修改本人资料", request=AppMeUpdateSerializer, responses=UserSerializer),
+    patch=extend_schema(tags=["App 认证"], summary="修改本人资料", request=AppMeUpdateSerializer, responses=AppMeSerializer),
 )
 class AppMeView(VersionedMixin, generics.RetrieveUpdateAPIView):
     http_method_names = ["get", "patch", "head", "options"]
     permission_classes = [IsBusinessUser]
 
     def get_serializer_class(self):
-        return AppMeUpdateSerializer if self.request.method == "PATCH" else UserSerializer
+        return AppMeUpdateSerializer if self.request.method == "PATCH" else AppMeSerializer
 
     def get_object(self):
         return self.request.user
@@ -329,7 +335,55 @@ class AppMeView(VersionedMixin, generics.RetrieveUpdateAPIView):
         serializer.is_valid(raise_exception=True)
         with transaction.atomic():
             serializer.save()
-        return Response(UserSerializer(instance).data)
+        return Response(AppMeSerializer(instance).data)
+
+
+@extend_schema_view(
+    get=extend_schema(
+        tags=["App 认证"], summary="读取本人头像",
+        responses={
+            (200, "image/jpeg"): OpenApiResponse(response=OpenApiTypes.BINARY, description="JPEG 头像二进制内容"),
+            (200, "image/png"): OpenApiResponse(response=OpenApiTypes.BINARY, description="PNG 头像二进制内容"),
+            (200, "image/webp"): OpenApiResponse(response=OpenApiTypes.BINARY, description="WebP 头像二进制内容"),
+            404: OpenApiResponse(description="当前账号尚未设置头像"),
+        },
+    ),
+    put=extend_schema(
+        tags=["App 认证"], summary="上传或替换本人头像",
+        request=AppAvatarUploadSerializer, responses={204: OpenApiResponse(description="头像已保存")},
+    ),
+)
+class AppProfileAvatarView(APIView):
+    """Authenticated self-service avatar stored in the user's database row."""
+
+    authentication_classes = [ScopedJWTAuthentication]
+    permission_classes = [IsBusinessUser]
+    parser_classes = [MultiPartParser, FormParser]
+    http_method_names = ["get", "put", "head", "options"]
+
+    def get(self, request):
+        user = request.user
+        if not user.avatar_data:
+            return HttpResponse(status=404)
+        response = HttpResponse(bytes(user.avatar_data), content_type=user.avatar_content_type)
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
+
+    def put(self, request):
+        serializer = AppAvatarUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        avatar = serializer.validated_data["avatar"]
+        avatar.seek(0)
+        image_format = Image.open(avatar).format
+        avatar.seek(0)
+        content_type = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}[image_format]
+        user = request.user
+        user.avatar_data = avatar.read()
+        user.avatar_content_type = content_type
+        user.avatar_updated_at = timezone.now()
+        user.save(update_fields=["avatar_data", "avatar_content_type", "avatar_updated_at"])
+        return Response(status=204)
 
 
 @extend_schema(tags=["App 认证"], summary="修改本人密码")

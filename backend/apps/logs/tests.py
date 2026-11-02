@@ -87,22 +87,22 @@ class LogAndTagApiTests(APITestCase):
 
     def test_tag_creation_colors_soft_delete_and_atomic_log_update(self):
         self.auth(self.founder)
-        created = self.client.post("/api/v1/app/tags/", {"name": "客户"}, format="json")
+        created = self.client.post("/api/v1/app/tags/", {"name": "客户", "color": PALETTE[0]}, format="json")
         self.assertEqual(created.status_code, 201, created.data)
         tag_id = created.data["data"]["id"]
         self.assertEqual(created.data["data"]["color"], PALETTE[0])
-        second = self.client.post("/api/v1/app/tags/", {"name": "开发"}, format="json")
+        second = self.client.post("/api/v1/app/tags/", {"name": "开发", "color": PALETTE[1]}, format="json")
         self.assertEqual(second.data["data"]["color"], PALETTE[1])
-        self.assertEqual(self.client.post("/api/v1/app/tags/", {"name": "客户"}, format="json").status_code, 409)
+        self.assertEqual(self.client.post("/api/v1/app/tags/", {"name": "客户", "color": PALETTE[0]}, format="json").status_code, 409)
         self.auth(self.employee)
-        self.assertEqual(self.client.post("/api/v1/app/tags/", {"name": "非法"}, format="json").status_code, 403)
+        self.assertEqual(self.client.post("/api/v1/app/tags/", {"name": "非法", "color": PALETTE[0]}, format="json").status_code, 403)
         self.assertEqual(self.client.get("/api/v1/app/tags/?include_inactive=true").status_code, 403)
         saved = self.client.put(self.url(), {"completed_work": "已完成", "tag_ids": [tag_id]}, format="json")
         self.assertEqual(saved.status_code, 200, saved.data)
         log_id = saved.data["data"]["id"]
         self.auth(self.founder)
         self.assertEqual(self.client.delete(f"/api/v1/app/tags/{tag_id}/").status_code, 200)
-        self.assertEqual(self.client.post("/api/v1/app/tags/", {"name": "客户"}, format="json").status_code, 201)
+        self.assertEqual(self.client.post("/api/v1/app/tags/", {"name": "客户", "color": PALETTE[2]}, format="json").status_code, 201)
         self.auth(self.employee)
         self.assertEqual(self.client.get(f"/api/v1/app/logs/{log_id}/").data["data"]["tags"][0]["id"], tag_id)
         self.assertEqual(self.client.put(self.url(), {"completed_work": "保留", "tag_ids": [tag_id]}, format="json").status_code, 200)

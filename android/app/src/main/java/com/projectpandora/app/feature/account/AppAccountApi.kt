@@ -1,12 +1,17 @@
 package com.projectpandora.app.feature.account
 
 import com.google.gson.annotations.SerializedName
+import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import retrofit2.Call
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Part
+import retrofit2.http.PUT
 
 data class ApiEnvelope<T>(
     val code: Int,
@@ -90,6 +95,13 @@ interface AppAccountApi {
 
     @PATCH("api/v1/app/me/")
     suspend fun updateCurrentUser(@Body request: ProfileUpdateRequest): Response<ApiEnvelope<AppUserResponse>>
+
+    @GET("api/v1/app/me/avatar/")
+    suspend fun currentAvatar(): Response<ResponseBody>
+
+    @Multipart
+    @PUT("api/v1/app/me/avatar/")
+    suspend fun updateAvatar(@Part avatar: MultipartBody.Part): Response<ResponseBody>
 
     @POST("api/v1/app/me/password/")
     suspend fun changePassword(@Body request: PasswordChangeRequest): Response<ApiEnvelope<PasswordChangeResponse>>

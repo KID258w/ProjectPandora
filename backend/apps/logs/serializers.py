@@ -60,3 +60,19 @@ class LogViewerSerializer(serializers.Serializer):
     business_role = serializers.CharField()
     department_name = serializers.CharField(allow_null=True)
     team_name = serializers.CharField(allow_null=True)
+
+
+class LogCommentAuthorSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    display_name = serializers.CharField()
+    business_role = serializers.CharField()
+    department_name = serializers.CharField(allow_null=True)
+    team_name = serializers.CharField(allow_null=True)
+
+
+class LogCommentSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    content = serializers.CharField()
+    author = LogCommentAuthorSerializer()
+    is_log_author = serializers.BooleanField()
+    created_at = serializers.DateTimeField()

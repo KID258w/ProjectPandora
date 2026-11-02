@@ -1,6 +1,9 @@
 package com.projectpandora.app.core.network
 
 import com.google.gson.JsonObject
+import okhttp3.ResponseBody
+import retrofit2.Response
+import retrofit2.http.Streaming
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -16,6 +19,7 @@ import retrofit2.http.Url
  */
 interface BusinessApi {
     @GET suspend fun get(@Url path: String, @QueryMap query: Map<String, String> = emptyMap()): JsonObject
+    @Streaming @GET suspend fun getBody(@Url path: String): Response<ResponseBody>
     @POST suspend fun post(@Url path: String, @Body body: JsonObject = JsonObject()): JsonObject
     @POST suspend fun postEmpty(@Url path: String): JsonObject
     @PUT suspend fun put(@Url path: String, @Body body: JsonObject): JsonObject

@@ -1,8 +1,10 @@
 from collections.abc import Mapping
 from secrets import token_urlsafe
+import warnings
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from PIL import Image, UnidentifiedImageError
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
@@ -281,6 +283,45 @@ class UserSerializer(serializers.ModelSerializer):
         if len(value) <= 4:
             return "*" * len(value)
         return "*" * (len(value) - 4) + value[-4:]
+
+
+class AppMeSerializer(UserSerializer):
+    avatar_url = serializers.SerializerMethodField()
+
+    class Meta(UserSerializer.Meta):
+        fields = UserSerializer.Meta.fields + ["avatar_url"]
+
+    def get_avatar_url(self, obj) -> str | None:
+        return "/api/v1/app/me/avatar/" if obj.avatar_data else None
+
+
+class AppAvatarUploadSerializer(serializers.Serializer):
+    avatar = serializers.ImageField()
+
+    def validate_avatar(self, value):
+        max_size = 5 * 1024 * 1024
+        if value.size > max_size:
+            raise serializers.ValidationError("头像文件不能超过 5 MiB。")
+
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", Image.DecompressionBombWarning)
+                value.seek(0)
+                with Image.open(value) as image:
+                    image_format = image.format
+                    width, height = image.size
+                    if image_format not in {"JPEG", "PNG", "WEBP"}:
+                        raise serializers.ValidationError("头像仅支持 JPEG、PNG 或 WebP 图片。")
+                    if width <= 0 or height <= 0 or width > 4096 or height > 4096 or width * height > 16_000_000:
+                        raise serializers.ValidationError("头像图片尺寸不能超过 4096 × 4096。")
+                    image.verify()
+        except serializers.ValidationError:
+            raise
+        except (Image.DecompressionBombError, Image.DecompressionBombWarning, UnidentifiedImageError, OSError, ValueError):
+            raise serializers.ValidationError("无法读取该图片，请选择有效的 JPEG、PNG 或 WebP 图片。")
+        finally:
+            value.seek(0)
+        return value
 
 
 class UserUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):

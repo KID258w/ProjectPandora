@@ -8,8 +8,7 @@ from apps.accounts.api_serializers import StrictInputMixin
 from apps.accounts.models import User
 from apps.core.api import BusinessAPIView, StandardPagination, paginated_response
 
-from .models import Tag
-from .services import choose_color
+from .models import PALETTE, Tag
 
 
 class Conflict(APIException):
@@ -17,8 +16,19 @@ class Conflict(APIException):
     default_detail = "启用标签名称已存在。"
 
 
-class TagInputSerializer(StrictInputMixin, serializers.Serializer):
+class TagCreateInputSerializer(StrictInputMixin, serializers.Serializer):
     name = serializers.CharField(max_length=100, allow_blank=False, trim_whitespace=True)
+    color = serializers.ChoiceField(choices=PALETTE)
+
+
+class TagUpdateInputSerializer(StrictInputMixin, serializers.Serializer):
+    name = serializers.CharField(max_length=100, allow_blank=False, trim_whitespace=True, required=False)
+    color = serializers.ChoiceField(choices=PALETTE, required=False)
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError("至少提交名称或颜色中的一项。")
+        return attrs
 
 
 class TagOutputSerializer(serializers.Serializer):
@@ -59,17 +69,17 @@ class TagListView(BusinessAPIView):
             queryset = queryset.filter(name__icontains=keyword)
         return paginated_response(self, request, queryset, lambda rows: [tag_data(row) for row in rows])
 
-    @extend_schema(tags=["App 标签"], summary="创始人创建标签", request=TagInputSerializer)
+    @extend_schema(tags=["App 标签"], summary="创始人创建标签", request=TagCreateInputSerializer)
     def post(self, request):
         founder_only(request)
-        form = TagInputSerializer(data=request.data)
+        form = TagCreateInputSerializer(data=request.data)
         form.is_valid(raise_exception=True)
         try:
             with transaction.atomic():
                 name = form.validated_data["name"]
                 if Tag.objects.filter(name=name, is_active=True).exists():
                     raise Conflict()
-                tag = Tag.objects.create(name=name, color=choose_color())
+                tag = Tag.objects.create(name=name, color=form.validated_data["color"])
         except IntegrityError as exc:
             raise Conflict() from exc
         return Response(tag_data(tag), status=status.HTTP_201_CREATED)
@@ -77,21 +87,25 @@ class TagListView(BusinessAPIView):
 
 class TagDetailView(BusinessAPIView):
     serializer_class = TagOutputSerializer
-    @extend_schema(tags=["App 标签"], summary="创始人重命名标签", request=TagInputSerializer)
+    @extend_schema(tags=["App 标签"], summary="创始人修改启用标签名称或颜色", request=TagUpdateInputSerializer)
     def patch(self, request, pk):
         founder_only(request)
-        form = TagInputSerializer(data=request.data)
+        form = TagUpdateInputSerializer(data=request.data)
         form.is_valid(raise_exception=True)
         try:
             with transaction.atomic():
                 tag = Tag.objects.select_for_update().filter(pk=pk, is_active=True).first()
                 if tag is None:
                     raise ValidationError("标签不存在或已停用。")
-                name = form.validated_data["name"]
-                if Tag.objects.filter(name=name, is_active=True).exclude(pk=pk).exists():
-                    raise Conflict()
-                tag.name = name
-                tag.save(update_fields=["name", "updated_at"])
+                changes = form.validated_data
+                if "name" in changes:
+                    name = changes["name"]
+                    if Tag.objects.filter(name=name, is_active=True).exclude(pk=pk).exists():
+                        raise Conflict()
+                    tag.name = name
+                if "color" in changes:
+                    tag.color = changes["color"]
+                tag.save(update_fields=[*changes.keys(), "updated_at"])
         except IntegrityError as exc:
             raise Conflict() from exc
         return Response(tag_data(tag))

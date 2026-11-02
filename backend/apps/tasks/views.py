@@ -1,13 +1,15 @@
 from django.db import IntegrityError, transaction
 from django.db.models import Q
+from django.http import HttpResponse
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from apps.accounts.authentication import has_complete_supervisor_chain
-from apps.accounts.models import User
+from apps.accounts.authentication import IsBusinessUser, ScopedJWTAuthentication, has_complete_supervisor_chain
+from apps.accounts.models import Department, Team, User
 from apps.core.api import BusinessAPIView, StandardPagination, paginated_response
 from apps.logs.views import descendants, parse_date
 
@@ -15,6 +17,7 @@ from .models import (Task, TaskApprovalRecord, TaskChangeHistory, TaskNotificati
                      TaskSubmission, TaskUpdate)
 from .serializers import (CancelInputSerializer, DecisionInputSerializer, HistoryItemSerializer,
                           MarkReadInputSerializer, NotificationSerializer, PersonSerializer,
+                          OrganizationMemberProfileSerializer, OrganizationTreeSerializer,
                           QueueItemSerializer, ReviewInputSerializer, SubmissionInputSerializer,
                           TaskCreateInputSerializer,
                           TaskDetailSerializer, TaskInputSerializer, TaskSummarySerializer,
@@ -24,6 +27,18 @@ from .services import (assignable_users, create_approval_round, create_task_noti
                        resolve_task_notifications, send_assignment, set_task_tags,
                        subordinate_ids, task_detail, task_summary, task_tags, user_brief,
                        validate_assignee, validated_task_tags, visible_task)
+
+
+TASK_DATE_FILTER_PARAMETERS = [
+    OpenApiParameter("estimated_start_from", OpenApiTypes.DATE, OpenApiParameter.QUERY,
+                     description="预计开始日期起始日，含边界；启用后未设置预计开始时间的任务不匹配。"),
+    OpenApiParameter("estimated_start_to", OpenApiTypes.DATE, OpenApiParameter.QUERY,
+                     description="预计开始日期结束日，含边界；启用后未设置预计开始时间的任务不匹配。"),
+    OpenApiParameter("due_from", OpenApiTypes.DATE, OpenApiParameter.QUERY,
+                     description="截止日期起始日，含边界。"),
+    OpenApiParameter("due_to", OpenApiTypes.DATE, OpenApiParameter.QUERY,
+                     description="截止日期结束日，含边界。"),
+]
 
 
 def form_data(serializer_class, data):
@@ -48,17 +63,40 @@ def filtered_tasks(request, queryset):
         queryset = queryset.filter(completion_status=completion)
     if lifecycle != "all":
         queryset = queryset.filter(lifecycle_status=lifecycle)
-    for key, lookup in (("due_from", "due_at__date__gte"), ("due_to", "due_at__date__lte")):
-        if request.query_params.get(key):
-            queryset = queryset.filter(**{lookup: parse_date(request.query_params[key], key)})
+    date_filters = (
+        ("due_from", "due_at__date__gte"),
+        ("due_to", "due_at__date__lte"),
+        ("estimated_start_from", "estimated_start_at__date__gte"),
+        ("estimated_start_to", "estimated_start_at__date__lte"),
+    )
+    parsed_dates = {
+        key: parse_date(request.query_params[key], key)
+        for key, _lookup in date_filters
+        if request.query_params.get(key)
+    }
+    for start_key, end_key, label in (
+        ("due_from", "due_to", "截止日期"),
+        ("estimated_start_from", "estimated_start_to", "预计开始日期"),
+    ):
+        if start_key in parsed_dates and end_key in parsed_dates and parsed_dates[start_key] > parsed_dates[end_key]:
+            raise ValidationError({end_key: f"{label}结束日期不能早于起始日期。"})
+    for key, lookup in date_filters:
+        if key in parsed_dates:
+            queryset = queryset.filter(**{lookup: parsed_dates[key]})
     return queryset
+
+
+def validate_task_schedule(estimated_start_at, due_at):
+    if estimated_start_at is not None and due_at is not None and estimated_start_at > due_at:
+        raise ValidationError({"estimated_start_at": "预计开始时间不能晚于截止时间。"})
 
 
 class TaskListView(BusinessAPIView):
     serializer_class = TaskSummarySerializer
     pagination_class = StandardPagination
 
-    @extend_schema(tags=["App 任务"], summary="查询本人已审批任务", operation_id="app_tasks_list")
+    @extend_schema(tags=["App 任务"], summary="查询本人已审批任务", operation_id="app_tasks_list",
+                   parameters=TASK_DATE_FILTER_PARAMETERS)
     def get(self, request):
         scope = request.query_params.get("scope", "mine")
         if scope not in ("mine", "created", "all"):
@@ -76,6 +114,7 @@ class TaskListView(BusinessAPIView):
     @extend_schema(tags=["App 任务"], summary="创建任务并送直属上级审批", request=TaskCreateInputSerializer, responses=TaskDetailSerializer)
     def post(self, request):
         values = form_data(TaskCreateInputSerializer, request.data)
+        validate_task_schedule(values.get("estimated_start_at"), values["due_at"])
         assignee = validate_assignee(request.user, values["assignee_id"])
         tags = validated_task_tags(None, values.get("tag_ids", []))
         try:
@@ -86,6 +125,7 @@ class TaskListView(BusinessAPIView):
                     required_materials=values.get("required_materials", ""),
                     association_note=values.get("association_note", ""),
                     creator_department=request.user.department, assignee_department=assignee.department,
+                    estimated_start_at=values.get("estimated_start_at"),
                     due_at=values["due_at"],
                     approval_status=(Task.Approval.APPROVED if request.user.business_role == User.Role.FOUNDER else Task.Approval.PENDING),
                 )
@@ -108,7 +148,8 @@ class SubordinateTaskListView(BusinessAPIView):
     serializer_class = TaskSummarySerializer
     pagination_class = StandardPagination
 
-    @extend_schema(tags=["App 任务"], summary="只读查询授权下属承担或创建的任务")
+    @extend_schema(tags=["App 任务"], summary="只读查询授权下属承担或创建的任务",
+                   parameters=TASK_DATE_FILTER_PARAMETERS)
     def get(self, request):
         allowed = subordinate_ids(request.user)
         scope = request.query_params.get("task_scope", "assigned")
@@ -175,6 +216,10 @@ class TaskDetailView(BusinessAPIView):
             if task is None:
                 raise NotFound("任务不存在。")
             require_creator(task, request.user)
+            validate_task_schedule(
+                values.get("estimated_start_at", task.estimated_start_at),
+                values.get("due_at", task.due_at),
+            )
             if task.lifecycle_status != Task.Lifecycle.ACTIVE or task.completion_status != Task.Completion.UNFINISHED:
                 raise ValidationError("已完成或取消的任务不能修改。")
             if task.submissions.filter(review_status=TaskSubmission.Review.WAITING).exists():
@@ -201,7 +246,7 @@ class TaskDetailView(BusinessAPIView):
                 elif getattr(task, field) != value:
                     changes[field] = {"before": json_value(getattr(task, field)), "after": json_value(value)}
                     setattr(task, field, value)
-                    if field in ("title", "description", "due_at", "required_materials"):
+                    if field in ("title", "description", "estimated_start_at", "due_at", "required_materials"):
                         key_changed = True
             if changes:
                 task.save()
@@ -282,6 +327,15 @@ class TaskApprovalView(BusinessAPIView):
             task.approval_status = values["decision"]
             task.returned_edit_required = values["decision"] == Task.Approval.RETURNED
             task.save(update_fields=["approval_status", "returned_edit_required", "updated_at"])
+            result_type = (TaskNotification.Type.APPROVAL_APPROVED
+                           if approval.decision == TaskApprovalRecord.Decision.APPROVED
+                           else TaskNotification.Type.APPROVAL_RETURNED)
+            create_task_notification(
+                task,
+                task.creator,
+                result_type,
+                f"approval:{task.pk}:{approval.round}:result:{approval.decision}",
+            )
             if approval.decision == TaskApprovalRecord.Decision.APPROVED:
                 send_assignment(task, approval.pk)
         return Response({"task_id": task.pk, "approval_status": task.approval_status,
@@ -421,6 +475,167 @@ def person_data(user):
             "team_name": user.team.name if user.team else None}
 
 
+def _organization_scope(user):
+    # Every authenticated App user can browse the full company roster.
+    # Work-record access is restricted separately by the existing APIs.
+    return "company"
+
+
+def _organization_people(user, scope):
+    return list(User.objects.filter(
+        account_type=User.AccountType.BUSINESS, is_active=True,
+    ).select_related("department", "team", "manager").order_by("id"))
+
+
+def _member_tree_node(user, children=None):
+    return {
+        "node_type": "person",
+        "id": user.pk,
+        "display_name": user.display_name or user.username,
+        "business_role": user.business_role,
+        "department_name": user.department.name if user.department else None,
+        "team_name": user.team.name if user.team else None,
+        "children": children or [],
+    }
+
+
+def _unit_tree_node(node_type, unit, children=None):
+    return {"node_type": node_type, "id": unit.pk, "name": unit.name, "children": children or []}
+
+
+def _build_organization_tree(user, scope, people, keyword=""):
+    keyword = keyword.strip().casefold()
+    labels = dict(User.Role.choices)
+    if keyword:
+        matched_people = [
+            person for person in people
+            if keyword in (person.display_name or person.username).casefold()
+            or keyword in person.business_role.casefold()
+            or keyword in labels.get(person.business_role, "").casefold()
+        ]
+        return {"scope": scope, "roots": [_member_tree_node(person) for person in matched_people]}
+
+    by_department = {}
+    by_team = {}
+    for person in people:
+        if person.department_id:
+            by_department.setdefault(person.department_id, []).append(person)
+        if person.team_id:
+            by_team.setdefault(person.team_id, []).append(person)
+
+    def keep_person(person, children=None):
+        children = children or []
+        return _member_tree_node(person, children)
+
+    def team_node(team):
+        members = by_team.get(team.pk, [])
+        leader = next((person for person in members if person.business_role == User.Role.TEAM_LEADER), None)
+        children = []
+        if leader:
+            leader_node = keep_person(leader)
+            if leader_node:
+                children.append(leader_node)
+        children.extend(
+            node for person in members if person.business_role == User.Role.EMPLOYEE
+            if (node := keep_person(person)) is not None
+        )
+        return _unit_tree_node("team", team, children)
+
+    def department_node(department):
+        members = by_department.get(department.pk, [])
+        children = []
+        manager = next((person for person in members if person.business_role == User.Role.DEPARTMENT_MANAGER), None)
+        if manager:
+            manager_node = keep_person(manager)
+            if manager_node:
+                children.append(manager_node)
+        teams = Team.objects.filter(department=department, is_active=True).order_by("id")
+        children.extend(node for team in teams if (node := team_node(team)) is not None)
+        return _unit_tree_node("department", department, children)
+
+    if scope == "company":
+        departments = Department.objects.filter(is_active=True).order_by("id")
+        children = [node for department in departments if (node := department_node(department)) is not None]
+        founder = next((person for person in people if person.business_role == User.Role.FOUNDER), None)
+        founder_root = [_member_tree_node(founder)] if founder else []
+        roots = founder_root + children
+    elif scope == "department":
+        roots = [node for node in [department_node(user.department)] if node is not None]
+    else:
+        roots = [node for node in [team_node(user.team)] if node is not None]
+    return {"scope": scope, "roots": roots}
+
+
+def _profile_data(person):
+    return {
+        "id": person.pk,
+        "is_self": False,
+        "display_name": person.display_name or person.username,
+        "phone": person.username,
+        "business_role": person.business_role,
+        "department_name": person.department.name if person.department else None,
+        "team_name": person.team.name if person.team else None,
+    }
+
+
+class OrganizationTreeView(BusinessAPIView):
+    serializer_class = OrganizationTreeSerializer
+
+    @extend_schema(tags=["App organization"], summary="Browse the company organization tree")
+    def get(self, request):
+        scope = _organization_scope(request.user)
+        people = _organization_people(request.user, scope)
+        keyword = request.query_params.get("keyword", "")
+        return Response(_build_organization_tree(request.user, scope, people, keyword))
+
+
+class OrganizationMemberProfileView(BusinessAPIView):
+    serializer_class = OrganizationMemberProfileSerializer
+
+    @extend_schema(tags=["App organization"], summary="Read a company member profile")
+    def get(self, request, pk):
+        scope = _organization_scope(request.user)
+        allowed_ids = {person.pk for person in _organization_people(request.user, scope)}
+        person = User.objects.select_related("department", "team", "manager").filter(
+            pk=pk, account_type=User.AccountType.BUSINESS, is_active=True,
+        ).first()
+        if person is None or person.pk not in allowed_ids:
+            raise NotFound("\u6210\u5458\u4e0d\u5b58\u5728\u6216\u5f53\u524d\u4e0d\u53ef\u67e5\u770b\u3002")
+        data = _profile_data(person)
+        data["is_self"] = person.pk == request.user.pk
+        task_subordinate_ids = subordinate_ids(request.user)
+        log_subordinate_ids = {member.pk for member in descendants(request.user)}
+        data["can_view_tasks"] = person.pk != request.user.pk and person.pk in task_subordinate_ids
+        data["can_view_logs"] = person.pk != request.user.pk and person.pk in log_subordinate_ids
+        return Response(data)
+
+
+@extend_schema(
+    tags=["App organization"],
+    summary="Read a company member avatar",
+    responses={
+        (200, "image/jpeg"): OpenApiResponse(response=OpenApiTypes.BINARY, description="JPEG avatar image"),
+        (200, "image/png"): OpenApiResponse(response=OpenApiTypes.BINARY, description="PNG avatar image"),
+        (200, "image/webp"): OpenApiResponse(response=OpenApiTypes.BINARY, description="WebP avatar image"),
+        404: OpenApiResponse(description="Member or avatar not found"),
+    },
+)
+class OrganizationMemberAvatarView(APIView):
+    authentication_classes = [ScopedJWTAuthentication]
+    permission_classes = [IsBusinessUser]
+
+    def get(self, request, pk):
+        person = User.objects.only("avatar_data", "avatar_content_type").filter(
+            pk=pk, account_type=User.AccountType.BUSINESS, is_active=True,
+        ).first()
+        if person is None or not person.avatar_data:
+            return HttpResponse(status=404)
+        response = HttpResponse(bytes(person.avatar_data), content_type=person.avatar_content_type)
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
+
+
 class AssignableUserListView(BusinessAPIView):
     serializer_class = PersonSerializer
     pagination_class = StandardPagination
@@ -468,14 +683,18 @@ def notification_data(row):
             summary = row.submission.completion_note
         else:
             summary = row.submission.review_comment
-    elif row.notification_type == TaskNotification.Type.APPROVAL_REQUIRED:
+    elif row.notification_type in (
+        TaskNotification.Type.APPROVAL_REQUIRED,
+        TaskNotification.Type.APPROVAL_APPROVED,
+        TaskNotification.Type.APPROVAL_RETURNED,
+    ):
         # Approval notifications describe one approval round. Resolve that round
         # from the event key so older notifications do not inherit the task's
         # current (possibly newer) approval status after a resubmission.
         prefix = f"approval:{row.task_id}:"
         if row.event_key.startswith(prefix):
             try:
-                approval_round = int(row.event_key[len(prefix):])
+                approval_round = int(row.event_key[len(prefix):].split(":", 1)[0])
             except ValueError:
                 approval_round = None
         if approval_round is not None:
@@ -483,6 +702,11 @@ def notification_data(row):
                              if record.round == approval_round), None)
             if approval is not None:
                 approval_decision = approval.decision
+                if row.notification_type in (
+                    TaskNotification.Type.APPROVAL_APPROVED,
+                    TaskNotification.Type.APPROVAL_RETURNED,
+                ):
+                    summary = approval.comment
     return {"id": row.pk, "notification_type": row.notification_type, "task_id": row.task_id,
             "approval_round": approval_round, "approval_decision": approval_decision,
             "task_title": row.task.title, "task_lifecycle_status": row.task.lifecycle_status,

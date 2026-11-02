@@ -115,6 +115,22 @@ The system SHALL let an authenticated employee update only their own name, phone
 - **WHEN** an employee submits a business role, department, team, manager, or activation change from the App
 - **THEN** the system rejects those fields
 
+### Requirement: App employees manage a database-backed profile avatar
+The system SHALL allow an authenticated business user to upload, replace, and read only their own avatar. The system SHALL store the image bytes and detected MIME type on the user's database record, and all devices authenticated as that account SHALL read the same current avatar. Web administrators SHALL NOT manage employee avatars.
+
+#### Scenario: Employee uploads a valid avatar
+- **WHEN** an employee uploads a valid JPEG, PNG, or WebP image up to 5 MiB and within the configured dimension limits
+- **THEN** the backend stores its bytes on that user's account record and the profile response includes a self-scoped avatar URL
+
+#### Scenario: Employee reads the avatar from another device
+- **WHEN** the same employee signs in on another device and requests their avatar URL
+- **THEN** the service returns the image stored for that account
+
+#### Scenario: Employee uploads an invalid avatar
+- **WHEN** an employee uploads an unsupported, malformed, oversized, or over-dimension image
+- **THEN** the service rejects it without replacing the existing avatar
+
+
 ### Requirement: App employees change their own password
 The system SHALL allow an authenticated employee to change only their own password after verifying the current password, matching confirmation, and configured password validators. It SHALL store only the password hash and SHALL NOT return or log password values.
 

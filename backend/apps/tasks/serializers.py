@@ -3,6 +3,8 @@ from rest_framework import serializers
 from apps.accounts.api_serializers import StrictInputMixin
 from apps.logs.serializers import TagBriefSerializer, AuthorBriefSerializer
 
+from .models import TaskNotification
+
 
 class TaskCreateInputSerializer(StrictInputMixin, serializers.Serializer):
     assignee_id = serializers.IntegerField(min_value=1)
@@ -10,8 +12,16 @@ class TaskCreateInputSerializer(StrictInputMixin, serializers.Serializer):
     description = serializers.CharField(allow_blank=False, trim_whitespace=True)
     required_materials = serializers.CharField(allow_blank=True, trim_whitespace=True, required=False)
     association_note = serializers.CharField(allow_blank=True, trim_whitespace=True, required=False)
+    estimated_start_at = serializers.DateTimeField(required=False, allow_null=True)
     due_at = serializers.DateTimeField()
     tag_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False)
+
+    def validate(self, attrs):
+        estimated_start = attrs.get("estimated_start_at")
+        due_at = attrs.get("due_at")
+        if estimated_start is not None and due_at is not None and estimated_start > due_at:
+            raise serializers.ValidationError({"estimated_start_at": "预计开始时间不能晚于截止时间。"})
+        return attrs
 
 
 class TaskInputSerializer(StrictInputMixin, serializers.Serializer):
@@ -20,8 +30,16 @@ class TaskInputSerializer(StrictInputMixin, serializers.Serializer):
     description = serializers.CharField(allow_blank=False, trim_whitespace=True, required=False)
     required_materials = serializers.CharField(allow_blank=True, trim_whitespace=True, required=False)
     association_note = serializers.CharField(allow_blank=True, trim_whitespace=True, required=False)
+    estimated_start_at = serializers.DateTimeField(required=False, allow_null=True)
     due_at = serializers.DateTimeField(required=False)
     tag_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False)
+
+    def validate(self, attrs):
+        estimated_start = attrs.get("estimated_start_at")
+        due_at = attrs.get("due_at")
+        if estimated_start is not None and due_at is not None and estimated_start > due_at:
+            raise serializers.ValidationError({"estimated_start_at": "预计开始时间不能晚于截止时间。"})
+        return attrs
 
 
 class DecisionInputSerializer(StrictInputMixin, serializers.Serializer):
@@ -71,6 +89,7 @@ class TaskSummarySerializer(serializers.Serializer):
     approval_status = serializers.CharField()
     completion_status = serializers.CharField()
     lifecycle_status = serializers.CharField()
+    estimated_start_at = serializers.DateTimeField(allow_null=True)
     due_at = serializers.DateTimeField()
 
 
@@ -142,7 +161,7 @@ class HistoryItemSerializer(serializers.Serializer):
 
 class NotificationSerializer(serializers.Serializer):
     id = serializers.IntegerField()
-    notification_type = serializers.CharField()
+    notification_type = serializers.ChoiceField(choices=TaskNotification.Type.choices)
     approval_round = serializers.IntegerField(allow_null=True)
     approval_decision = serializers.CharField(allow_null=True)
     task_id = serializers.IntegerField()
@@ -161,6 +180,37 @@ class NotificationSerializer(serializers.Serializer):
 class PersonSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     display_name = serializers.CharField()
+    business_role = serializers.CharField()
+    department_name = serializers.CharField(allow_null=True)
+    team_name = serializers.CharField(allow_null=True)
+
+
+class OrganizationTreeNodeSerializer(serializers.Serializer):
+    node_type = serializers.ChoiceField(choices=["person", "department", "team"])
+    id = serializers.IntegerField()
+    name = serializers.CharField(required=False)
+    display_name = serializers.CharField(required=False)
+    business_role = serializers.CharField(required=False)
+    department_name = serializers.CharField(required=False, allow_null=True)
+    team_name = serializers.CharField(required=False, allow_null=True)
+    children = serializers.SerializerMethodField()
+
+    def get_children(self, obj):
+        return OrganizationTreeNodeSerializer(obj.get("children", []), many=True).data
+
+
+class OrganizationTreeSerializer(serializers.Serializer):
+    scope = serializers.ChoiceField(choices=["company", "department", "team"])
+    roots = OrganizationTreeNodeSerializer(many=True)
+
+
+class OrganizationMemberProfileSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    is_self = serializers.BooleanField()
+    can_view_tasks = serializers.BooleanField()
+    can_view_logs = serializers.BooleanField()
+    display_name = serializers.CharField()
+    phone = serializers.CharField()
     business_role = serializers.CharField()
     department_name = serializers.CharField(allow_null=True)
     team_name = serializers.CharField(allow_null=True)

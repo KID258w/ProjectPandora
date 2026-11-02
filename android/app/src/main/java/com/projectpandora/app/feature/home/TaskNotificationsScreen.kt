@@ -102,10 +102,11 @@ fun TaskNotificationsScreen(api: BusinessApi, onBack: () -> Unit, onTask: (Long,
                             val summaryLabel = when (notificationType) {
                                 "task_cancelled" -> "取消原因"
                                 "submission_received" -> "完成说明"
-                                "submission_returned" -> "退回原因"
+                                "submission_returned", "approval_returned" -> "退回原因"
+                                "approval_approved" -> "审批意见"
                                 else -> "说明"
                             }
-                            Note("$summaryLabel：$summary", background = if (notificationType in setOf("task_cancelled", "submission_returned")) C.ErrorPale else C.BluePale, color = if (notificationType in setOf("task_cancelled", "submission_returned")) C.Error else C.Blue)
+                            Note("$summaryLabel：$summary", background = if (notificationType in setOf("task_cancelled", "submission_returned", "approval_returned")) C.ErrorPale else C.BluePale, color = if (notificationType in setOf("task_cancelled", "submission_returned", "approval_returned")) C.Error else C.Blue)
                         }
                         if (row.string("resolved_at").isNotBlank()) Text("该通知对应的流程已结束。", color = C.Muted, fontSize = 12.sp)
                         val approvalHasNoDestination = notificationType == "approval_required" &&
@@ -139,6 +140,8 @@ private fun notificationTypeLabel(row: JsonObject): String = when (row.string("n
             else -> if (row.string("resolved_at").isNotBlank()) "${prefix}已结束" else "待你审批"
         }
     }
+    "approval_approved" -> row.long("approval_round").let { if (it > 0) "第${it}轮审批通过" else "审批通过" }
+    "approval_returned" -> row.long("approval_round").let { if (it > 0) "第${it}轮审批退回" else "审批退回" }
     "assignment_received" -> "新任务"
     "task_cancelled" -> "任务已取消"
     "submission_received" -> "待验收"

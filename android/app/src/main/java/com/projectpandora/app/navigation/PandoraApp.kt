@@ -18,6 +18,8 @@ import com.projectpandora.app.feature.ai.AiMapScreen
 import com.projectpandora.app.feature.home.HomeScreen
 import com.projectpandora.app.feature.logs.LogsScreen
 import com.projectpandora.app.feature.logs.TagManagementScreen
+import com.projectpandora.app.feature.organization.OrganizationMemberProfileScreen
+import com.projectpandora.app.feature.organization.OrganizationRelationshipsScreen
 import com.projectpandora.app.feature.profile.*
 import com.projectpandora.app.feature.tasks.TaskCenterScreen
 import com.projectpandora.app.feature.views.ViewsScreen
@@ -65,8 +67,9 @@ fun PandoraApp(
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: AccountRoute.LAUNCH
     val selectedTab = MainTab.entries.find { it.route == route }
+    var hideBottomBar by remember { mutableStateOf(false) }
     val user = model.user
-    val canViewSubordinateLogs = user?.role?.let { it in setOf("创始人", "部门经理", "团队长") } == true
+    val canViewOrganizationRelationships = user != null
     fun resetTo(destination: String) {
         nav.navigate(destination) { popUpTo(nav.graph.id) { inclusive = true }; launchSingleTop = true }
     }
@@ -91,6 +94,7 @@ fun PandoraApp(
             resetTo(AccountRoute.LOGIN)
         }
     }
+    LaunchedEffect(route) { hideBottomBar = false }
     LaunchedEffect(route, model.initializing, model.startupDestination) {
         if (route == AccountRoute.LAUNCH && !model.initializing) {
             // Wait for NavHost to install its graph before resetting the initial route.
@@ -107,7 +111,7 @@ fun PandoraApp(
     Box(Modifier.fillMaxSize().background(if (route == AccountRoute.LAUNCH) C.Amber else Color.White)
         .windowInsetsPadding(WindowInsets.safeDrawing)) {
         Scaffold(containerColor = Color.White, contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = { if (selectedTab != null && user != null) PandoraBottomBar(selectedTab, ::selectTab) }) { padding ->
+            bottomBar = { if (selectedTab != null && user != null && !hideBottomBar) PandoraBottomBar(selectedTab, ::selectTab) }) { padding ->
             NavHost(nav, startDestination = AccountRoute.LAUNCH, Modifier.padding(padding)) {
                 composable(AccountRoute.LAUNCH) {
                     LaunchScreen()
@@ -118,23 +122,69 @@ fun PandoraApp(
                     user?.let { HomeScreen(it, businessApi, { id -> nav.navigate("task-center/$id") },
                         { date -> if (date.isBlank()) selectTab(MainTab.LOGS) else nav.navigate("log-detail/$date") },
                         { id -> nav.navigate("approval-task/$id") },
-                        notificationRefreshKey = notificationRefreshKey) }
+                        notificationRefreshKey = notificationRefreshKey,
+                        onViews = { selectTab(MainTab.VIEWS) }) }
                 }
-                composable(MainTab.VIEWS.route) { ViewsScreen { nav.navigate(AppRoute.TASK_CENTER) } }
-                composable(MainTab.LOGS.route) { LogsScreen(businessApi, canViewSubordinates = canViewSubordinateLogs) }
+                composable(MainTab.VIEWS.route) {
+                    ViewsScreen(
+                        canViewOrganization = canViewOrganizationRelationships,
+                        onOpenTaskCenter = { nav.navigate(AppRoute.TASK_CENTER) },
+                        onOpenOrganization = { nav.navigate("organization-relationships") },
+                    )
+                }
+                composable(MainTab.LOGS.route) {
+                    LogsScreen(businessApi, onFullscreenChange = { hideBottomBar = it })
+                }
                 composable("log-detail/{date}") { entry ->
                     LogsScreen(
                         businessApi,
-                        entry.arguments?.getString("date") ?: "",
+                        initialDate = entry.arguments?.getString("date") ?: "",
                         onBack = { nav.popBackStack() },
-                        canViewSubordinates = canViewSubordinateLogs,
+                        onFullscreenChange = { hideBottomBar = it },
                     )
+                }
+                composable("organization-relationships") {
+                    if (canViewOrganizationRelationships) {
+                        OrganizationRelationshipsScreen(
+                            api = businessApi,
+                            onBack = { nav.popBackStack() },
+                            onOpenMember = { memberId -> nav.navigate("organization-member/$memberId") },
+                        )
+                    }
+                }
+                composable("organization-member/{memberId}") { entry ->
+                    val memberId = entry.arguments?.getString("memberId")?.toLongOrNull()
+                    if (memberId != null) {
+                        OrganizationMemberProfileScreen(
+                            api = businessApi,
+                            memberId = memberId,
+                            onBack = { nav.popBackStack() },
+                            onOpenTasks = { nav.navigate("subordinate-tasks/$it") },
+                            onOpenLogs = { nav.navigate("subordinate-logs/$it") },
+                        )
+                    }
+                }
+                composable("subordinate-tasks/{memberId}") { entry ->
+                    val memberId = entry.arguments?.getString("memberId")?.toLongOrNull()
+                    if (memberId != null) TaskCenterScreen(businessApi, onBack = { nav.popBackStack() }, initialSubordinateId = memberId)
+                }
+                composable("subordinate-logs/{memberId}") { entry ->
+                    val memberId = entry.arguments?.getString("memberId")?.toLongOrNull()
+                    if (memberId != null) {
+                        LogsScreen(
+                            api = businessApi,
+                            initialPersonId = memberId,
+                            onBack = { nav.popBackStack() },
+                            onFullscreenChange = { hideBottomBar = it },
+                        )
+                    }
                 }
                 composable(MainTab.AI_MAP.route) { AiMapScreen() }
                 composable(MainTab.PROFILE.route) {
                     user?.let {
                         ProfileScreen(it, { nav.navigate(AccountRoute.INFO) }, { nav.navigate(AccountRoute.NOTIFICATIONS) },
-                            { nav.navigate(AccountRoute.HELP) }, { model.logout(); resetTo(AccountRoute.LOGIN) }, { nav.navigate(AccountRoute.TAGS) })
+                            { nav.navigate(AccountRoute.HELP) }, { model.logout(); resetTo(AccountRoute.LOGIN) }, { nav.navigate(AccountRoute.TAGS) },
+                            avatarRepository = repository)
                     }
                 }
                 composable(AccountRoute.INFO) {
@@ -144,6 +194,7 @@ fun PandoraApp(
                             onBack = { nav.popBackStack() },
                             onEdit = { nav.navigate(AccountRoute.EDIT_INFO) },
                             onChangePassword = { nav.navigate(AccountRoute.CHANGE_PASSWORD) },
+                            avatarRepository = repository,
                         )
                     }
                 }

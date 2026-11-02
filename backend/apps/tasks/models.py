@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 
 
 class Task(models.Model):
@@ -25,6 +25,7 @@ class Task(models.Model):
     association_note = models.TextField(blank=True)
     creator_department = models.ForeignKey("accounts.Department", null=True, blank=True, on_delete=models.PROTECT, related_name="creator_tasks")
     assignee_department = models.ForeignKey("accounts.Department", null=True, blank=True, on_delete=models.PROTECT, related_name="assignee_tasks")
+    estimated_start_at = models.DateTimeField(null=True, blank=True)
     due_at = models.DateTimeField()
     approval_status = models.CharField(max_length=10, choices=Approval.choices)
     completion_status = models.CharField(max_length=12, choices=Completion.choices, default=Completion.UNFINISHED)
@@ -41,6 +42,12 @@ class Task(models.Model):
         indexes = [
             models.Index(fields=["assignee", "approval_status", "completion_status", "lifecycle_status", "due_at"]),
             models.Index(fields=["creator", "approval_status", "created_at"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(estimated_start_at__isnull=True) | Q(estimated_start_at__lte=F("due_at")),
+                name="task_estimated_start_before_due",
+            ),
         ]
 
 
@@ -112,6 +119,8 @@ class TaskChangeHistory(models.Model):
 class TaskNotification(models.Model):
     class Type(models.TextChoices):
         APPROVAL_REQUIRED = "approval_required", "待审批"
+        APPROVAL_APPROVED = "approval_approved", "任务审批通过"
+        APPROVAL_RETURNED = "approval_returned", "任务审批退回"
         ASSIGNMENT_RECEIVED = "assignment_received", "新任务"
         TASK_CANCELLED = "task_cancelled", "任务已取消"
         SUBMISSION_RECEIVED = "submission_received", "待验收"

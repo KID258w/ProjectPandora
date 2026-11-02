@@ -3,10 +3,10 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Android Emulator accesses the host machine through 10.0.2.2.
-// Override locally with -PpandoraApiBaseUrl=http://<your-computer-ip>:8000/ when needed.
+// Phone and emulator reach the host backend through `adb reverse tcp:8000 tcp:8000`.
+// Run scripts/connect-android-backend.sh before using the app on a connected device.
 val pandoraApiBaseUrl = providers.gradleProperty("pandoraApiBaseUrl")
-    .orElse("http://10.0.2.2:8000/")
+    .orElse("http://127.0.0.1:8000/")
     .get()
 
 android {

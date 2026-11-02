@@ -6,9 +6,10 @@ The task workflow has been simplified after product-owner review. Work decomposi
 
 - Define task creation for Founder, Department Manager, Team Leader, and Employee with role-bounded assignees; Founder may select any member of the company, and a Department Manager may also select a Department Manager from another department.
 - Require approval from the creator's direct supervisor for every task they create; Founder-created tasks bypass approval.
-- Define task notifications for direct-subordinate approvals and newly approved work assigned to another user; keep notification read state separate from task workflow state.
+- Define task notifications for direct-subordinate approvals, approval results sent to creators, and newly approved work assigned to another user; keep notification read state separate from task workflow state.
 - Add a dedicated Approval Center for creator/approver queues; keep only approved tasks in `Created by Me` and `My Tasks`.
-- Use one filter form for ordinary task scope, deadline range, and completion state; subordinate inspection adds a task scope toggle (`承担的任务` / `创建的任务`, default assigned) and employee-name selection restricted to authorized descendants. Keep approval queues outside ordinary task filters.
+- Use one filter form for ordinary task scope, estimated-start and deadline ranges, and completion state; subordinate inspection adds a task scope toggle (`承担的任务` / `创建的任务`, default assigned) and employee-name selection restricted to authorized descendants. Keep approval queues outside ordinary task filters.
+- Add an optional estimated start date/time to task definitions. Use date and time wheels with minute precision for estimated start and deadline; use day-only date wheels for task-list estimated-start and deadline filters.
 - Place Approval Center and subordinate-inspection shortcuts in the task-center top-right area, with a fixed bottom-right plus button for task creation on ordinary lists.
 - Replace task percentage progress with timestamped text updates; keep completion status binary.
 - Present task details according to the viewer's relationship to the task; remove the standalone start-time action because task execution has no separate start state in the MVP.

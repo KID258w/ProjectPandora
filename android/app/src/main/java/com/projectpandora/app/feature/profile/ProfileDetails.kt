@@ -15,16 +15,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.projectpandora.app.feature.account.BusinessUser
 import com.projectpandora.app.feature.account.AccountPreferences
+import com.projectpandora.app.feature.account.AccountRepository
 import com.projectpandora.app.ui.*
 import com.projectpandora.app.ui.theme.PandoraColors as C
 
 @Composable
-fun IdentityCard(user: BusinessUser) {
+fun IdentityCard(
+    user: BusinessUser,
+    avatarRepository: AccountRepository? = null,
+    allowAvatarChange: Boolean = false,
+) {
     Row(Modifier.fillMaxWidth().background(C.AmberPale, RoundedCornerShape(24.dp)).padding(20.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(64.dp).background(Color.White, RoundedCornerShape(32.dp)), contentAlignment = Alignment.Center) {
-            Text(user.name.take(1), fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        }
+        ProfileAvatar(user, avatarRepository, allowAvatarChange)
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(user.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, lineHeight = 36.sp)
             Text(user.role, fontSize = 14.sp, color = C.Muted)
@@ -39,11 +42,12 @@ fun PersonalInfoScreen(
     onBack: () -> Unit,
     onEdit: () -> Unit,
     onChangePassword: () -> Unit,
+    avatarRepository: AccountRepository? = null,
 ) {
     PageColumn {
         BackButton(onBack)
         PageTitle("个人资料")
-        IdentityCard(user)
+        IdentityCard(user, avatarRepository, allowAvatarChange = true)
         PageTitle("基本资料", small = true)
         val personalRows = listOf(
             "姓名" to user.name,

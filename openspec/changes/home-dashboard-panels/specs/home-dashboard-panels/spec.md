@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Home shows four role-appropriate panels
-The system SHALL provide four mobile home panels: Company Important Items, Company Top Ten Tasks, Personal Top Ten Work, and Recent Logs. Each Home card SHALL preview no more than five rows and use its source module's authorized data; personal task and log cards SHALL contain only the current user's records. Company-item and Top Ten secondary lists SHALL continue to show up to ten items; the Home log preview remains limited to five.
+The system SHALL provide four mobile home panels: Company Important Items, Company Top Ten Tasks, Personal Top Ten Work, and Recent Logs. Each card SHALL preview up to five authorized rows; company items and Top Ten secondary lists SHALL show up to ten.
 
 #### Scenario: User opens the home page
 - **WHEN** an authenticated mobile business user opens Home
@@ -79,7 +79,7 @@ The system SHALL show concise summaries and provide navigation to the source mod
 - **THEN** the system opens the corresponding authorized secondary list or module without modifying the source record from Home
 
 ### Requirement: Home exposes unread task notifications
-Home SHALL show a task-notification bell with a red dot when unread notifications exist and refresh the unread count periodically while Home is active and when the app returns to the foreground. Opening or browsing the list SHALL NOT mark notifications as read. Tapping an individual notification SHALL mark only that notification as read; unselected notifications SHALL remain unread. Approval notification rows SHALL show the decision of their own approval round. Notification rows SHALL navigate to the corresponding task or Approval Center without changing task state.
+Home SHALL indicate unread task notifications and refresh their count while active. Opening the notification list SHALL NOT mark notices read; tapping one notice SHALL mark only that notice read. Approval rows SHALL retain their round-specific decision, and notification navigation SHALL NOT change task state.
 
 #### Scenario: User has an unread approval or assignment notification
 - **WHEN** the current user has an unread notice for a direct subordinate's pending approval or an approved task assigned by another user
@@ -112,3 +112,10 @@ Home SHALL show a task-notification bell with a red dot when unread notification
 #### Scenario: User follows an approved task notification
 - **WHEN** the user taps an approval notification for a task that has been approved
 - **THEN** the corresponding task detail opens
+
+### Requirement: Home task notifications use an icon button
+The notification entry SHALL be a bell icon button without a visible text label, with accessible label “任务通知”. It SHALL show a red dot when unread notifications exist.
+
+#### Scenario: User sees the task notification entry
+- **WHEN** an authenticated user views Home
+- **THEN** the task notification action appears as a bell icon with the accessible label and an unread dot only when needed

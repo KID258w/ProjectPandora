@@ -14,6 +14,8 @@ import com.projectpandora.app.feature.logs.LogsScreen
 import com.projectpandora.app.feature.logs.TagManagementScreen
 import com.projectpandora.app.feature.tasks.TaskCenterScreen
 import com.projectpandora.app.ui.theme.PandoraAppTheme
+import okhttp3.ResponseBody.Companion.toResponseBody
+import retrofit2.Response
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -36,13 +38,20 @@ class BusinessUiTest {
         assertFalse(api.calls.any { it.contains("/submit/") })
     }
 
-    @Test fun homeShowsAtMostFiveItemsAndOpensSelectedTask() {
-        val api = FakeBusinessApi(); var opened = 0L
-        compose.setContent { PandoraAppTheme { HomeScreen(BusinessUser("a", "小王", "员工"), api, { opened = it }, {}) } }
-        compose.waitUntil(10000) { compose.onAllNodesWithText("任务 1").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("任务 1").performScrollTo().performClick()
-        assertEquals(1L, opened)
-        compose.onNodeWithText("任务 6").assertDoesNotExist()
+    @Test fun homeShowsOriginalSamplePanelsAndOpensViews() {
+        val api = FakeBusinessApi(); var viewsOpened = false
+        compose.setContent {
+            PandoraAppTheme {
+                HomeScreen(BusinessUser("a", "小王", "员工"), api, {}, {}, onViews = { viewsOpened = true })
+            }
+        }
+        compose.onNodeWithText("公司重要事项").assertExists()
+        compose.onNodeWithText("公司十大重要任务").assertExists()
+        compose.onNodeWithText("个人重点工作").assertExists()
+        compose.onNodeWithText("最近日志").assertExists()
+        compose.onAllNodesWithText("产品阶段评审")[0].performScrollTo().performClick()
+        assertTrue(viewsOpened)
+        assertFalse(api.calls.any { it.contains("home/") })
     }
 
     @Test fun approvalReturnRequiresReasonAndSendsIt() {
@@ -165,6 +174,7 @@ class BusinessUiTest {
         compose.setContent { PandoraAppTheme { TagManagementScreen(api, {}) } }
         compose.onNodeWithText("新建标签").performScrollTo().performClick()
         compose.onNodeWithText("标签名称").performTextInput("新标签")
+        compose.onNodeWithContentDescription("蓝色，#C7DDFF").performClick()
         compose.onNodeWithText("保存").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("无法连接服务器", substring = true).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("新标签").assertExists()
@@ -174,8 +184,8 @@ class BusinessUiTest {
     @Test fun failedRenameKeepsInputAndDeleteExplainsHistoricalLinks() {
         val api = FakeBusinessApi(failTag = true)
         compose.setContent { PandoraAppTheme { TagManagementScreen(api, {}) } }
-        compose.waitUntil(10000) { compose.onAllNodesWithText("重命名").fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodesWithText("重命名")[0].performScrollTo().performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithText("编辑").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithText("编辑")[0].performScrollTo().performClick()
         compose.onNodeWithText("标签名称").performTextReplacement("改名后")
         compose.onNodeWithText("保存").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("无法连接服务器", substring = true).fetchSemanticsNodes().isNotEmpty() }
@@ -187,7 +197,7 @@ class BusinessUiTest {
 
     @Test fun selectedLogPersonIncludesDepartmentAndTeam() {
         val api = FakeBusinessApi()
-        compose.setContent { PandoraAppTheme { LogsScreen(api, canViewSubordinates = true) } }
+        compose.setContent { PandoraAppTheme { LogsScreen(api) } }
         compose.onNodeWithText("选择查看对象").performScrollTo().performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("王同事 · 产品部 客户端组").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("王同事 · 产品部 客户端组").performClick()
@@ -211,6 +221,10 @@ private class FakeBusinessApi(private val failFocus: Boolean = false, private va
     @Volatile var lastBody: JsonObject? = null
     val marked = java.util.concurrent.CopyOnWriteArrayList<Long>()
     private fun parse(json: String) = JsonParser.parseString("{\"code\":200,\"message\":\"success\",\"data\":$json}").asJsonObject
+    override suspend fun getBody(path: String): Response<okhttp3.ResponseBody> {
+        calls += "GET $path"
+        return Response.success(ByteArray(0).toResponseBody())
+    }
     override suspend fun get(path: String, query: Map<String, String>): JsonObject {
         calls += "GET $path"
         return when {
@@ -223,7 +237,7 @@ private class FakeBusinessApi(private val failFocus: Boolean = false, private va
             path.endsWith("tasks/9/history/") -> parse("""{"results":[]}""")
             path.endsWith("tasks/9/") -> parse("""{"id":9,"title":"审查任务","description":"审批说明","creator":{"id":${if (returnedTask) 7 else 1},"display_name":"派发人"},"assignee":{"id":2},"due_at":"2026-10-30T18:00:00+08:00","required_materials":"评审记录","association_note":"相关项目","approval_status":"${if (returnedTask) "returned" else "pending"}","completion_status":"unfinished","lifecycle_status":"active","approval_history":[],"updates":[],"submissions":[]}""")
             path.endsWith("log-viewers/") -> parse("""{"results":[{"id":5,"display_name":"王同事","department_name":"产品部","team_name":"客户端组"}],"next":null}""")
-            path.endsWith("tags/") -> parse("""{"results":[{"id":1,"name":"产品","is_active":true},{"id":2,"name":"协作","is_active":true}],"next":null}""")
+            path.endsWith("tags/") -> parse("""{"results":[{"id":1,"name":"产品","color":"#C7DDFF","is_active":true},{"id":2,"name":"协作","color":"#BDEAF2","is_active":true}],"next":null}""")
             path.contains("logs/calendar/") -> parse("""{"days":[]}""")
             path.contains("logs/mine/") -> parse("""{"log":null,"status":"not_created","can_edit":true}""")
             else -> parse("""{"results":[],"next":null}""")
