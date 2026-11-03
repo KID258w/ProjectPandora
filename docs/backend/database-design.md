@@ -21,7 +21,8 @@
 | User / accounts_user | 保留 AbstractUser 字段；username 全局唯一（业务账号保存手机号，管理员保留管理员用户名）、password 仅存 Django 哈希、display_name 最长 100；id_number 使用加密文本字段并允许历史记录暂空，保存前去除首尾空格并将字母转为大写；id_number_hash 为规范化后 id_number 的 HMAC-SHA256 哈希并全局唯一（包括停用账号；密钥由服务器保管；加密字段无法按明文做数据库唯一约束，故用带密钥的确定性哈希保证身份证号唯一）；account_type 为 admin/business；business_role 为 founder/department_manager/team_leader/employee（管理员为空字符串）；department_id、team_id、manager_id 可空外键；is_active 沿用 Django 字段 |
 | Department / accounts_department | id BigAutoField；name 最长 100 且全局唯一；description 文本默认空；is_active 布尔默认启用；created_at、updated_at 自动时间 |
 | Team / accounts_team | id BigAutoField；name 最长 100；description 默认空；department_id 必填外键；is_active 布尔默认启用；created_at、updated_at 自动时间；(department_id, name) 唯一 |
-| AdminAuditLog / accounts_adminauditlog | id BigAutoField；actor 外键 User（PROTECT）；module（users/departments/teams）；action；object_type、object_id；result（success/failure）；before_data、after_data（JSON，脱敏后）；created_at 自动时间 |
+| AdminAuditLog / accounts_adminauditlog | id BigAutoField；actor 外键 User（PROTECT）；module（users/departments/teams/company_items）；action；object_type、object_id；result（success/failure）；before_data、after_data（JSON，脱敏后）；created_at 自动时间 |
+| AppOperationAuditLog / accounts_appoperationauditlog | 员工 App 成功登录和成功写操作的独立审计表；操作者及组织快照、目标对象快照、变更字段和修改前后业务值；不与 AdminAuditLog 混用 |
 
 User 另有 `avatar_data`（可空二进制）、`avatar_content_type`（检测后的 MIME 类型）和 `avatar_updated_at` 字段。头像上传后直接保存在 `accounts_user` 行中，不使用服务器媒体文件目录；App 用户只能写入自己的头像，但可以通过组织关系查看启用业务成员的头像。迁移 `0011_user_profile_avatar` 为现有账号新增空头像字段，不影响已有资料。
 
@@ -387,7 +388,28 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 | `before_data`, `after_data` | JSON，可空 | 变更前后摘要；敏感字段必须脱敏 |
 | `created_at` | 时间 | 操作时间 |
 
-只记录管理端组织/账号/事项等操作；Issue5 公司重要事项管理操作也写入该表，`module` 扩展支持 `company_items`。不在审计内容中保存密码、令牌、AI 私密对话正文或完整日志正文。按时间/管理员/模块索引；按需求暂不自动清理。
+只记录 Web 管理端组织/账号/事项等操作；Issue5 公司重要事项管理操作也写入该表，`module` 扩展支持 `company_items`。不在此表中保存密码、令牌、AI 私密对话正文或完整日志正文。员工在 App 的任务、日志等操作使用下方独立的 `app_operation_audit_log`。按时间/管理员/模块索引；不与员工 App 操作记录混用。
+
+#### `app_operation_audit_log`（新增需求）
+
+| 字段 | 类型 / 约束 | 说明 |
+|---|---|---|
+| `id` | 主键 | App 操作记录 ID |
+| `actor_id` | User 外键，PROTECT | 实际执行 App 操作的员工 |
+| `actor_name_snapshot` | 字符串 | 操作发生时的员工姓名 |
+| `actor_business_role_snapshot` | 字符串 | 操作发生时的业务职位 |
+| `actor_department_id_snapshot`, `actor_department_name_snapshot` | 可空 ID / 字符串 | 操作发生时的部门快照 |
+| `actor_team_id_snapshot`, `actor_team_name_snapshot` | 可空 ID / 字符串 | 操作发生时的团队快照 |
+| `module` | 字符串/枚举 | `auth`、`profile`、`tasks`、`logs`、`tags` |
+| `action` | 字符串 | 登录、创建、修改、提交、审批、退回、验收、取消、评论、停用等操作类型 |
+| `object_type`, `object_id` | 可空字符串 | 被操作对象类型和 ID；登录等无业务对象操作可为空 |
+| `object_label_snapshot` | 可空字符串 | 对象名称或日期的操作时快照，用于列表识别目标 |
+| `result` | 枚举 | 当前仅记录 `success` |
+| `changed_fields` | JSON 数组 | 本次变更字段名；登录等无字段变更操作为空数组 |
+| `before_data`, `after_data` | JSON，可空 | 允许人工找回所需的变更前后字段值；创建时 `before_data` 为空 |
+| `created_at` | 时间 | 操作发生时间 |
+
+该表只保存成功登录和成功的核心 App 写操作；失败操作、只读访问、个人重点排序和通知已读不写入。对任务、日志、进度、验收和评论等可恢复业务值，按字段白名单记录修改前后值。不得保存密码、完整身份证号、认证令牌或头像二进制；密码、身份证号等敏感变更最多记录字段名。操作者姓名、职位和部门/团队名称使用操作时快照，避免后续个人资料或组织调整改写历史展示。审计行通过应用 API 只读，不提供修改或删除操作；Web 管理端分页查询时默认按 `created_at` 倒序，详情接口才返回 `before_data`/`after_data`。不新增任务或日志的常规 Web 浏览接口，也不提供一键恢复。留存期限待确认，MVP 建议不自动清理。
 
 #### `ai_consent_record`
 
@@ -411,14 +433,17 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 
 ## 4. 工作视图动态的存储方式
 
-月/周/日视图不设独立的 `calendar_event` 或“日历任务副本”表：
+月/周/日视图不设独立的 `calendar_event` 或“日历任务副本”表；动态按实际操作人聚合，依赖现有任务、审批、定义变更、进展、提交/验收和取消记录：
 
-- 未完成任务全天条来自 `tasks_task` 的负责人、截止时间及完成/取消状态。月视图任务条起点按 `estimated_start_at` 的业务时区日期计算；未设置时回退到任务原始 `created_at` 的业务时区日期。该回退值只用于视图展示，不代表实际开始时间；无需新增持久化起点字段，待审批任务不进入视图，审批/重审也不改写 `created_at`。
+- 未完成任务全天条来自 `tasks_task` 的负责人、截止时间及完成/取消状态。任务条按负责人过滤；动态按操作人过滤。月视图任务条起点按 `estimated_start_at` 的业务时区日期计算；未设置时回退到任务原始 `created_at` 的业务时区日期。该回退值只用于视图展示，不代表实际开始时间；无需新增持久化起点字段。待审批任务不进入任务条，但提交审批和审批决定可作为操作动态显示。
 - 月视图的历史完成态由 `completed_at`、任务动态及所选自然日推导。任务定义修改的前后值由 `tasks_task_change_history` 保存，可用于还原相应版本的标题和截止时间；视图是否读取并呈现历史版本仍按工作视图需求实现。
-- 周/日时间轴的任务更新来自 `tasks_task_update`；提交和验收来自 `tasks_task_submission`，按发生时间合并排序。自我负责任务产生一条 `self_completed` 记录。
-- 审批记录不展示为负责人任务视图动态，除非后续需求明确添加。
+- 创建、修改动态来自 `tasks_task_change_history` 的 `actor_id`、`created_at` 和 `change_type`；创建任务的动态可在任务待审批时显示，但不因此产生正式任务条。
+- 提交审批动态按每轮 `tasks_approval_record.created_at` 记录，操作人为任务创建人；审批通过/退回动态按 `decided_at` 记录，操作人为该轮 `approver_id`。
+- 进展动态来自 `tasks_task_update.author_id` 和 `created_at`；完成提交来自 `tasks_task_submission.submitted_by_id` 和 `submitted_at`；验收通过/退回来自 `reviewed_by_id` 和 `reviewed_at`。自我负责任务产生一条 `self_completed` 记录。
+- 取消动态使用 `tasks_task.cancelled_at` 作为发生时间；按当前“仅创建人可取消”的规则，由 `creator_id` 作为操作人，无需增加取消人字段。
+- 各动态只出现在对应操作人的视图，不复制到任务负责人视图。任何动态返回前仍按当前请求人对关联任务的既有读取权限校验。动态卡片颜色按任务当前最早建立的关联标签计算，未关联标签时使用固定中性灰色；不保存颜色副本。
 
-取消任务在历史视图中的显示方式、重复提交动态如何呈现，仍由工作视图需求确定；本数据库设计不为首页或工作视图复制任务记录。
+视图响应按动态发生时间合并上述记录；本数据库设计不为首页或工作视图复制任务记录，也不为本次归属规则新增表或字段。周、日视图都不返回动态摘要展示字段的要求属于 API 展示契约，不改变数据库中原有的进展、提交等记录。
 
 ## 5. 索引与约束建议
 
@@ -431,6 +456,7 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 - 标签：启用状态下的名称唯一；按 `(is_active, name)` 支持管理列表/搜索；关联表分别对 `(task_id, tag_id)`、`(daily_log_id, tag_id)` 唯一，并按 `(task_id, added_at, id)`、`(daily_log_id, added_at, id)` 读取关联顺序。
 - 个人重点：`(user_id, sort_order)` 索引、`(user_id, task_id)` 唯一。
 - 公司事项：`(status, sort_order)`；发布上限 10 由事务/服务层校验，不能只依赖单行约束。
+- Web 管理员操作记录：`(created_at, id)`、`(actor_id, created_at)`、`(module, created_at)`；员工 App 操作记录：`(created_at, id)`、`(actor_id, created_at)`、`(module, created_at)`、`(object_type, object_id, created_at)`。
 - JSON 字段只用于确有动态结构的数据（审计快照、问卷答案），核心业务查询字段应保持关系列。
 - 对 `User`、组织、已引用审计对象采用停用或保护删除；对个人 AI 会话的删除按隐私和留存政策另行设计。
 
@@ -439,7 +465,7 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 1. 管理账号是否与业务用户共用认证表；`business_role`、直属上级的最终组织模型，以及一个部门经理直接管理哪些岗位。
 2. 组织调动后任务/日志授权按当前组织树还是创建时快照；是否需要组织调动历史表。
 3. 月视图历史状态是否只需还原完成态，还是还需还原标题、截止日期等字段历史。
-4. 管理员审计快照保留期限与脱敏细则；公司事项附件的正式存储介质与清理策略（当前开发期为 `MEDIA_ROOT` 本地磁盘）；AI 对话/授权数据的删除和供应商留存策略。
+4. 管理员及员工 App 操作审计快照的保留期限、可记录的敏感业务字段白名单与脱敏细则；公司事项附件的正式存储介质与清理策略（当前开发期为 `MEDIA_ROOT` 本地磁盘）；AI 对话/授权数据的删除和供应商留存策略。
 5. MBTI 题目、计分、结果保存最小化要求；业务数据在 SQLite 到 MySQL 迁移时的字符集、主键策略和迁移窗口。
 
 ## 7. 实施顺序建议

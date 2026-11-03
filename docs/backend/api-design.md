@@ -2,7 +2,9 @@
 
 > **Issue #6 实施更新**：账号录入、组织列表/创建与两端认证已实现。各接口请求/响应示例、错误、分页、身份规则以 [账号录入与登录契约](account-provisioning.md) 为准。旧 `/api/auth/token/` 入口已移除。
 
-> **Issue #15 实施更新**：部门/团队详情与启停、员工筛选与身份/组织调整、管理概况与操作审计、App 个人资料/密码/头像已实现（见 2.1 节契约）。头像二进制保存在用户数据库记录中，可在同一账号的不同设备读取。以下未标注已实现的业务内容仍为规划。
+> **Issue #15 实施更新**：部门/团队详情与启停、员工筛选与身份/组织调整、管理概况与 Web 管理员操作审计、App 个人资料/密码/头像已实现（见 2.1 节契约）。头像二进制保存在用户数据库记录中，可在同一账号的不同设备读取。以下未标注已实现的业务内容仍为规划。
+
+> **员工 App 操作审计（规划）**：独立记录 App 成功登录和成功写操作，保存任务、日志等允许恢复的变更前后值，并由 Web 管理员只读核查；与已实现的 Web 管理员操作审计分开，详见 2.2 节。
 
 > **Issue #20 后端实施更新**：`/api/v1/app/logs/`、`logs/calendar/`、`logs/{id}/`、`logs/{id}/comments/`、`logs/mine/{log_date}/`、`logs/mine/{log_date}/submit/`、`log-viewers/` 与 `tags/` 已实现。日期窗口按服务端 `TIME_ZONE` 的自然日计算。日志列表对本人可返回草稿，对下属只返回已提交；日历标记仅包含已提交。可查看日志的 App 用户可读取和添加评论，评论与日志正文分开保存。创始人创建标签时提交预设颜色，启用标签可修改名称和颜色；改色同步影响已有任务、日志及任务条颜色。启用名称冲突返回 `409`，删除为不可逆停用。首页最近五篇已提交日志通过 `apps.logs.services.recent_submitted_logs` 提供数据源，首页聚合接口属于 Issue #22。
 
@@ -35,13 +37,13 @@
 | App 首页四面板与公司事项 | `GET /api/v1/app/home/`、`GET /api/v1/app/company-items/`、`GET /api/v1/app/company-items/{id}/`、`GET /api/v1/app/home/company-top-tasks/`、`GET, PUT /api/v1/app/home/personal-focus/`、`GET .../personal-focus/candidates/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
-下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口、Issue #21 的任务、审批、通知接口，以及 Issue #22 的公司重要事项、首页四面板与个人重点接口均已实现。其余仍为建议接口，不代表已上线。
+下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、Web 管理员操作审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口、Issue #21 的任务、审批、通知接口，以及 Issue #22 的公司重要事项、首页四面板与个人重点接口均已实现。员工 App 操作审计仍为规划（见 2.2）。
 
 事项附件后端实现约定（Issue #22）：管理端 `POST .../attachments/` 使用 `multipart/form-data`，字段名 `file`；开发环境文件写入 `MEDIA_ROOT`（默认 `backend/media/`）并由 Django 在 `DEBUG` 下提供 `/media/` 访问，正式部署须改为对象存储或由反向代理提供持久化目录。默认上限 10 MB，类型白名单为 PDF、PNG/JPEG、纯文本、Word、Excel，可用环境变量 `COMPANY_ITEM_ATTACHMENT_MAX_BYTES` 与 `COMPANY_ITEM_ATTACHMENT_MIME_TYPES` 覆盖。该能力及管理端上传/删除 API 保留在后端，但当前 Web 页面和 App 公司事项流程均不提供附件入口；App 正文接口不返回附件元数据或 URL。未来如需增加公司事项详情页及附件上传/下载，另行确认客户端需求和文件访问规则。当前任务模块的材料字段是文字说明，不包含文件附件；如需任务附件，应作为任务模块的独立需求设计上传/下载接口和存储规则。
 | App 组织关系 | `GET /api/v1/app/organization/tree/`、`GET /api/v1/app/organization/members/{id}/`、`GET /api/v1/app/organization/members/{id}/avatar/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
-下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、审计及 App 个人资料、头像和密码已实现（契约见 2.1）；Issue #20 的日志和标签接口及 Issue #21 的任务、审批、通知接口已实现。其余仍为建议接口，不代表已上线。
+下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、Web 管理员操作审计及 App 个人资料、头像和密码已实现（契约见 2.1）；Issue #20 的日志和标签接口及 Issue #21 的任务、审批、通知接口已实现。员工 App 操作审计仍为规划（见 2.2），其余未标注已实现的接口不代表已上线。
 
 ### 1.2 通用约定
 
@@ -72,7 +74,7 @@
 
 ## 2. Web 管理端 API
 
-Web 管理端只管理账号、组织、公司重要事项和审计记录；**不提供任务、员工日志或 AI 数据接口**。以下为建议接口，`{id}` 表示资源 ID。
+Web 管理端管理账号、组织、公司重要事项和审计记录；不提供常规任务、员工日志或 AI 数据接口。员工 App 操作记录接口是审计例外，只允许管理员读取操作元数据及限定的历史变更快照，不提供常规任务/日志列表或详情接口。以下为建议接口，`{id}` 表示资源 ID。
 
 | 功能 | 方法与路径 | 用途 / 主要权限 |
 |---|---|---|
@@ -92,7 +94,9 @@ Web 管理端只管理账号、组织、公司重要事项和审计记录；**�
 | 调整事项排序 | `PUT /api/v1/admin/company-items/order/` | 按请求中的 ID 顺序批量保存手动排序 |
 | 上传事项附件 | `POST /api/v1/admin/company-items/{id}/attachments/` | 后端已实现但当前 Web 页面不调用；附件存储和限制见本节上方 |
 | 删除事项附件 | `DELETE /api/v1/admin/company-items/{id}/attachments/{attachment_id}/` | 后端已实现但当前 Web 页面不调用；删除指定附件引用及对应文件，仅管理员可操作 |
-| 审计记录 | `GET /api/v1/admin/audit-logs/` | 按时间、管理员、模块筛选审计记录；只读 |
+| 管理员操作记录 | `GET /api/v1/admin/audit-logs/` | 按时间、管理员、模块筛选 Web 管理操作；只读 |
+| 员工 App 操作记录列表（规划） | `GET /api/v1/admin/app-operation-logs/` | 全局最新成功 App 操作记录；可按员工筛选；列表仅返回摘要 |
+| 员工 App 操作记录详情（规划） | `GET /api/v1/admin/app-operation-logs/{id}/` | 查看单条记录变更前后字段值；只读，仅管理员可访问 |
 
 Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `username` 接收手机号，要求身份证号，自动启用账号并只在本次成功响应返回后端生成的初始密码。下文的员工筛选/更新、组织维护和 App 自助资料修改已在 Issue #15 实现：列表保留停用对象供管理员查询，但用于员工身份/组织调整的候选项只返回启用员工、部门和团队；用户筛选支持姓名或手机号关键词、`department_id`、`team_id`、`business_role`、`is_active`。组织负责人在员工管理界面通过员工业务身份和组织归属调整，不提供组织详情页直接换负责人或独立负责人写接口。停用部门/团队前后端都要校验没有仍启用的下级组织或成员。团队的所属部门仅在创建时指定。手机号继续使用现有唯一 `username` 字段存储；App 登录 JSON 的 `username` 字段不改名，业务账号的值为手机号。
 
@@ -110,6 +114,55 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 - 身份证号在所有业务账号中全局唯一，停用账号仍占用身份证号。创建和 App 修改时，后端去除首尾空格并将字母统一为大写后再保存和计算唯一哈希，因此末位 `x` 与 `X` 视为同一号码。迁移 0008 回填前检查原始历史重复值；迁移 0010 在规范化前检查大小写/空格规范化后重复的历史值，均只报告冲突账号 ID、不输出身份证号明文，解决冲突后方可重跑迁移。回退数据迁移保留哈希数据，避免暂时失去唯一性校验。
 - App `GET /api/v1/app/me/` 不返回完整身份证号。`PATCH /api/v1/app/me/` 允许员工本人修改 `display_name`、手机号（请求字段仍为 `username`，成功后更新登录标识）和 `id_number`，不接受身份、组织、直属上级或启用状态。姓名和身份证号可在同一请求中一起提交，也可分别修改；两者作为一个事务保存，任一字段校验失败时均不更新。手机号更新成功后，App 清除本机登录会话并返回登录页，提示员工使用新手机号重新登录。员工本人通过 `POST /api/v1/app/me/password/` 修改密码，提交当前密码、新密码和新密码确认；MVP 不要求短信验证，密码找回流程未定。密码更新成功后，App 清除本机登录会话并要求员工使用新密码重新登录；服务端不主动撤销已签发令牌，它们仍按现有有效期处理。
 - App `GET /api/v1/app/me/` 和 `PATCH /api/v1/app/me/` 响应还包含当前账号的 `avatar_url`（未设置时为 `null`）。头像接口 `GET, PUT /api/v1/app/me/avatar/` 仅允许业务账号操作令牌所属账号；头像由 App 上传到用户数据库行，读取返回原始图片二进制，PUT 为 multipart 上传并替换头像。它不是 JSON envelope 响应；格式和大小限制见下方契约。Web 管理员不获得头像读写能力。
+
+### 2.2 员工 App 操作审计契约（规划）
+
+员工 App 操作审计独立于 `GET /api/v1/admin/audit-logs/`：后者只返回 Web 管理员的管理操作。新接口只向有效的 Web 管理员令牌开放，不向业务 App 用户开放，不提供新增、修改、删除或恢复审计记录的接口。
+
+系统在成功登录后及成功提交受支持的 App 状态变更后记录操作；写操作的业务变更与审计记录应在同一事务中提交。审计事件范围为个人资料/头像/密码变更、任务及审批/进度/验收操作、日志保存/提交/编辑/评论，以及创始人标签创建/修改/停用。失败操作、只读请求、个人重点排序和通知已读不记录。
+
+#### GET /api/v1/admin/app-operation-logs/
+
+**权限：** 仅 Web 管理员。**查询参数：** `actor_id`（可选，按员工筛选）、`page`、`page_size`。未提供 `actor_id` 时查询全体员工。固定按 `created_at`、`id` 倒序分页；不得按任务或日志正文搜索。
+
+**列表响应 JSON**（列表不返回修改前后正文）：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "count": 1,
+    "results": [
+      {
+        "id": 501,
+        "actor_id": 42,
+        "actor_name": "张三",
+        "actor_business_role": "employee",
+        "actor_department_name": "产品部",
+        "actor_team_name": "客户端组",
+        "occurred_at": "2026-11-03T09:30:00+08:00",
+        "module": "logs",
+        "action": "update",
+        "object_type": "daily_log",
+        "object_id": "901",
+        "object_label": "2026-11-03",
+        "changed_fields": ["completed_work", "tag_ids"],
+        "result": "success"
+      }
+    ]
+  },
+  "requestId": "<uuid>"
+}
+```
+
+姓名、业务职位、部门和团队名称，以及目标对象显示名，均取操作发生时的快照。对象显示名为任务标题、日志日期或标签名称等，不包含正文。
+
+#### GET /api/v1/admin/app-operation-logs/{id}/
+
+返回列表摘要字段，并额外返回 `before_data` 与 `after_data` 中允许展示的变更字段值。任务、日志及其进度/验收/评论等用于人工找回的业务内容可在详情中显示；密码、完整身份证号、令牌和头像二进制永不返回。创建操作的 `before_data` 为空。该接口不提供一键恢复，管理员需按正常业务流程人工处理。
+
+列表与详情响应均设置 `Cache-Control: no-store`。未登录返回 `401`，非管理员返回 `403`，记录不存在返回 `404`。审计读取不改变记录状态，也不产生新的员工 App 操作记录。
 
 ## 3. Android 业务端 API
 
@@ -210,10 +263,14 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | 方法与路径 | 用途 |
 |---|---|
 | `GET /api/v1/app/work-views/month/?user_id=&year=&month=` | 月视图：返回任务条颜色 `bar_color`（首个添加的当前关联标签颜色；无标签为中性灰色）及日期信息。`start_date` 是 `estimated_start_at` 的本地日期；未设置时回退到原始 `created_at` 的本地日期 |
-| `GET /api/v1/app/work-views/week/?user_id=&date=` | 周视图：未完成任务全天条返回 `bar_color`；另含日期条和 24 小时时间轴动态事件 |
-| `GET /api/v1/app/work-views/day/?user_id=&date=` | 日视图：当天未完成任务条返回 `bar_color`；另含 24 小时时间轴动态事件 |
+| `GET /api/v1/app/work-views/week/?user_id=&date=` | 周视图：未完成任务全天条返回 `bar_color`；另含日期条和按实际操作人归属的 24 小时时间轴动态事件，事件返回任务标签颜色 |
+| `GET /api/v1/app/work-views/day/?user_id=&date=` | 日视图：当天未完成任务条返回 `bar_color`；另含按实际操作人归属的 24 小时时间轴动态事件，事件返回任务标签颜色 |
 
-视图为只读聚合，不单独保存日历副本。月视图任务条可点击进入详情，个人重点可附 `is_personal_focus`。月视图响应中的 `start_date` 由服务端按业务时区计算：优先取 `estimated_start_at` 的本地日期；该字段为空时取任务原始 `created_at` 的本地日期。后者是显示回退值，不是实际开始时间；任务在待审批期间不进入视图，审批通过或重新审批不会改写原始创建时间。月视图任务及周/日全天任务响应均提供 `bar_color`，服务端按当前仍关联标签中最早建立的关系确定颜色；停用标签仍提供原颜色，无关联标签时提供中性灰色。任务条仅显示标题，工作视图响应不提供供任务条展示的标签名称。周/日动态项包括负责人进展更新、负责人提交、直接派发者验收通过；自我负责任务提交即完成只产生一条合并动态。上级验收事件归属于负责人的视图，不出现在验收人的视图。动态响应至少包含 `occurred_at`、`task_id`、`task_title`、`event_type`、`summary`。周视图全天未完成任务可横跨多天；固定日期条和全天区域不随时间轴滚动，动态按实际发生日期/小时归列。
+视图为只读聚合，不单独保存日历副本。普通 App 用户默认查询本人视图；查看下属视图统一从“组织关系”成员资料页的“查看视图”入口进入。`user_id` 可指定本人或当前用户有权限查看的下属，服务端每次请求均校验目标成员是否在该用户的工作视图授权范围内；组织树和成员资料可见不代表视图数据可见。月视图任务条可点击进入详情，个人重点可附 `is_personal_focus`。月视图响应中的 `start_date` 由服务端按业务时区计算：优先取 `estimated_start_at` 的本地日期；该字段为空时取任务原始 `created_at` 的本地日期。后者是显示回退值，不是实际开始时间；待审批任务不进入任务条，审批通过或重新审批不会改写原始创建时间。月视图任务及周/日全天任务响应均提供 `bar_color`，服务端按当前仍关联标签中最早建立的关系确定颜色；停用标签仍提供原颜色，无关联标签时提供中性灰色。任务条仅显示标题，工作视图响应不提供供任务条展示的标签名称。
+
+任务条与动态采用不同归属口径：月视图任务条、周/日未完成任务条按 `assignee_id` 查询；周/日动态按具体操作记录中的操作人查询。动态包括任务创建/提交审批、任务定义修改、重新提交审批、审批通过/退回、任务取消、负责人进展更新、完成提交、验收通过/退回；自我负责任务提交即完成只产生一条“提交并完成”动态。创建/修改/审批/取消等操作显示在实际操作人的视图，不复制给负责人；验收事件归验收人，不归负责人。待审批任务可有创建人或审批人的动态，但不显示任务条。每条动态还须通过当前请求人的任务可见权限校验，不能因操作人视图扩大任务详情访问权。
+
+周/日动态响应至少包含 `occurred_at`、`task_id`、`task_title`、`event_type`、`tag_color`。`tag_color` 根据任务当前最早建立的关联标签计算；无标签时为中性灰色，不返回供动态卡片展示的标签名称。周、日动态卡片采用相同展示信息：时间点、任务标题和动态类型；响应不提供动态摘要字段。周视图全天未完成任务可横跨多天；固定日期条和全天区域不随时间轴滚动，动态按实际发生日期/小时归列。
 
 ### 3.5 标签系统
 
@@ -2176,7 +2233,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 #### GET /api/v1/app/organization/members/{id}/
 
-所有已登录 App 用户均可读取公司组织树中启用业务成员的只读资料。资料仅返回显示姓名、手机号、业务身份、部门和团队，不返回身份证号、直属上级或账号状态。不存在、非业务账号或停用成员返回 `404`。该资料权限不扩大任务和日志的访问范围；`can_view_tasks` 和 `can_view_logs` 分别表示当前用户能否通过既有下属查看接口读取此成员的任务或日志。
+所有已登录 App 用户均可读取公司组织树中启用业务成员的只读资料。资料仅返回显示姓名、手机号、业务身份、部门和团队，不返回身份证号、直属上级或账号状态。不存在、非业务账号或停用成员返回 `404`。该资料权限不扩大任务、日志和工作视图的访问范围；`can_view_tasks`、`can_view_logs` 和 `can_view_views` 分别表示当前用户能否通过既有下属查看接口读取此成员的任务、日志或月/周/日工作视图。
 
 **响应 JSON**
 
@@ -2189,6 +2246,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "is_self": false,
     "can_view_tasks": true,
     "can_view_logs": true,
+    "can_view_views": true,
     "display_name": "张三",
     "phone": "13800000000",
     "business_role": "employee",
@@ -2199,7 +2257,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 }
 ```
 
-`phone` 为业务账号当前使用的手机号；资料接口不返回身份证号。`can_view_tasks` 和 `can_view_logs` 分别指示当前用户是否可按原有下属查看权限访问该成员的任务或日志；对应值为 `true` 且目标不是本人时，App 显示相应快捷入口。快捷入口复用现有 `tasks/subordinates/`、`logs/` 与 `logs/calendar/` 接口，并以 `user_id` 查询参数指定成员。后端仍逐次校验原有成员授权；任务仅返回已审批记录，日志仅返回已提交记录。该功能复用现有 `User`、`Department`、`Team` 和直属关系，不新增数据库实体或迁移。
+`phone` 为业务账号当前使用的手机号；资料接口不返回身份证号。`can_view_tasks`、`can_view_logs` 和 `can_view_views` 分别指示当前用户是否可按各自既有权限访问该成员的任务、日志或工作视图；对应值为 `true` 且目标不是本人时，App 才显示相应快捷入口。任务和日志入口复用现有下属任务、日志日历/详情接口；视图入口复用月、周、日工作视图接口，并以 `user_id` 查询参数指定成员。后端仍逐次校验目标成员授权；任务仅返回已审批记录，日志仅返回已提交记录。该功能复用现有 `User`、`Department`、`Team` 和直属关系，不新增数据库实体或迁移。
 
 #### GET /api/v1/app/organization/members/{id}/avatar/
 
@@ -2728,7 +2786,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
         "task_id": 101,
         "task_title": "完成需求梳理",
         "event_type": "update",
-        "summary": "已完成访谈提纲，正在整理反馈。"
+        "tag_color": "#159A84"
       }
     ]
   },
@@ -2766,7 +2824,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
         "task_id": 101,
         "task_title": "完成需求梳理",
         "event_type": "submitted",
-        "summary": "已整理并与产品组确认需求。"
+        "tag_color": "#159A84"
       }
     ]
   },
