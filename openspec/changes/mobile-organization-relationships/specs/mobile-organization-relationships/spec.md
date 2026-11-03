@@ -22,7 +22,7 @@ The system SHALL provide an Organization Relationships entry beside Task Center 
 
 ### Requirement: App members have a read-only profile with permitted work shortcuts
 
-The system SHALL allow every App user to open any active business member's profile. The page SHALL show the stored avatar when available, name, phone, role, department, and team, without edit controls. The profile SHALL NOT display or return national ID, supervisor, or account status. It SHALL provide task and log shortcuts only when the current user has existing permission to access that member's work records.
+The system SHALL allow every App user to open any active business member's profile. The page SHALL show the stored avatar when available, name, phone, role, department, and team, without edit controls. The profile SHALL NOT display or return national ID, supervisor, or account status. It SHALL provide task, log, and work-view shortcuts independently only when the current user has existing permission to access that member's corresponding work records; browsing organization data alone grants none of these permissions.
 
 #### Scenario: App user opens a member profile
 - **WHEN** an App user taps a member within the company organization tree
@@ -30,7 +30,7 @@ The system SHALL allow every App user to open any active business member's profi
 
 #### Scenario: App user opens a member without work access
 - **WHEN** an App user opens a member profile whose tasks and logs are outside their existing subordinate scope
-- **THEN** the server returns the read-only profile with work shortcuts disabled, and existing task/log APIs continue to deny out-of-scope requests
+- **THEN** the server returns the read-only profile with task, log, and view shortcuts disabled, and the corresponding APIs continue to deny out-of-scope requests
 
 #### Scenario: Manager follows the task shortcut
 - **WHEN** a manager taps “查看任务” on an authorized subordinate's profile
@@ -40,9 +40,13 @@ The system SHALL allow every App user to open any active business member's profi
 - **WHEN** a manager taps “查看日志” on an authorized subordinate's profile
 - **THEN** the App opens the member's log calendar and exposes only submitted logs in read-only mode
 
+#### Scenario: Manager follows the work-view shortcut
+- **WHEN** a manager taps “查看视图” on an authorized subordinate's profile
+- **THEN** the App opens that member's current-month work view, allows switching between month, week, and day, keeps the view read-only, and provides a route back to the member profile
+
 ### Requirement: Task Center and Approval Center actions have fixed top-right positions
 
-The Views page SHALL place Task Center at the top right, with Organization Relationships beside it for every App role. Task Center SHALL place Approval Center at the top right only for users who have an approval queue. Task Center SHALL NOT expose a separate subordinate-task shortcut; subordinate tasks SHALL be reached from a member profile when existing task permissions allow access.
+The Views page SHALL place Task Center at the top right, with Organization Relationships beside it for every App role. Task Center SHALL place Approval Center at the top right only for users who have an approval queue. Task Center SHALL NOT expose a separate subordinate-task shortcut; subordinate tasks, logs, and work views SHALL be reached from a member profile when their corresponding existing permissions allow access. The Views page SHALL NOT expose a separate subordinate selector.
 
 #### Scenario: User opens Views
 - **WHEN** a user opens the Views page

@@ -22,6 +22,12 @@
 - [x] 3.4 Simplify the member profile presentation, omit national ID from its API response, and expose uploaded member avatars.
 - [x] 3.5 Show Founder and departments as sibling roots; show search matches as flat person rows with their department/team except for Founder.
 
+## 4. Follow-up: subordinate work-view entry
+
+- [ ] 4.1 Extend the member profile contract with a separate `can_view_views` flag and document service-side authorization for the selected member's work-view queries.
+- [ ] 4.2 Add a permission-aware “查看视图” action to authorized subordinate profiles; route to that member's month/week/day views and provide return navigation to the profile.
+- [ ] 4.3 Keep work-view selection out of the Views page and verify unauthorized users cannot access another member's view by changing `user_id`.
+
 ### Verification record
 
 - `python manage.py check` — passed.

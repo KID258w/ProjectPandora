@@ -1,11 +1,15 @@
 ## ADDED Requirements
 
 ### Requirement: Work views are responsibility-scoped and read-only
-Month, week, and day views SHALL show tasks for one responsible person. Users SHALL default to their own view; authorized managers MAY select one descendant. Views SHALL be read-only, subordinate details SHALL remain read-only, and no DailyLog data SHALL be shown.
+Month, week, and day views SHALL show task bars for one responsible person and task dynamics for one action actor. Users SHALL default to their own view. To view a descendant, an authorized manager SHALL open that member's profile through Organization Relationships and use its “查看视图” action; the Views page SHALL NOT provide a separate subordinate selector. Views SHALL be read-only, subordinate details SHALL remain read-only, and no DailyLog data SHALL be shown.
 
 #### Scenario: Manager drills down to a subordinate's views
-- **WHEN** a manager selects an authorized subordinate or subordinate of a subordinate and switches between month, week, and day
-- **THEN** each view shows only tasks for the selected responsible person, preserves that selected person across view changes, and remains read-only
+- **WHEN** a manager opens an authorized subordinate's profile through Organization Relationships, taps “查看视图”, and switches between month, week, and day
+- **THEN** each view shows only tasks for that responsible person, preserves that person across view changes, provides a route back to their profile, and remains read-only
+
+#### Scenario: Views do not provide a subordinate selector
+- **WHEN** a manager is viewing their own or an authorized subordinate's work view
+- **THEN** the page has no independent control for selecting another subordinate; another member can be selected only through Organization Relationships and the member profile's permission-aware action
 
 #### Scenario: User opens a task from any view bar
 - **WHEN** a user selects any task bar in a month, week, or day view
@@ -67,35 +71,46 @@ The month period header SHALL open a quick year/month selector. The week and day
 - **WHEN** a user opens the calendar from week/day mode and taps a specific date
 - **THEN** week mode jumps to the containing week and highlights that date, while day mode opens the exact selected date
 
-### Requirement: Work view minimizes redundant headers
-The work-view page SHALL omit its redundant brand masthead and large page title. It SHALL keep object selection and Task Center access in a compact control row and reserve the remaining height for the schedule board. In week/day mode the date strip and all-day tasks SHALL remain pinned, and the timeline SHALL occupy the remaining viewport and scroll vertically. Other main-tab pages MAY retain their own branding and page headings.
+### Requirement: Work view has compact controls without a subordinate selector
+The work-view page SHALL omit its redundant brand masthead and large page title. It SHALL show the selected member and provide compact Task Center and Organization Relationships buttons at the top right. It SHALL NOT provide a subordinate selector; another member can be selected only through the authorized member profile in Organization Relationships.
 
 #### Scenario: Work view prioritizes the timeline viewport
 - **WHEN** a user opens week or day view on a phone
-- **THEN** redundant brand and page-title headers are omitted, essential controls remain compact, the date strip and all-day task bars stay fixed, and the timeline receives the remaining visible height for vertical scrolling
+- **THEN** redundant brand and page-title headers are omitted, and the selected member and two navigation buttons remain in a compact row
 
-### Requirement: Week and day views show timestamped task events as bars
-Week/day views SHALL place actual task updates, completion submissions, and acceptance completion at their recorded local hour. Cards show time, title, type, and full summary; they wrap and hour rows expand as needed without overlap or misalignment. Events belong to the task assignee's view, not the actor's. Approval, return, cancellation, and ordinary task edits are excluded.
+### Requirement: Week and day dynamics belong to the action actor
+Week/day views SHALL place task creation/submission, edits/resubmission, approval decisions, cancellation, progress updates, completion submissions, and acceptance decisions at their recorded local time. Each event SHALL appear in the view of the member who performed that action. Pending tasks SHALL NOT appear as task bars, but creation and approval events MAY appear in the views of their respective actors.
 
-#### Scenario: Responsible person adds a task update
-- **WHEN** the responsible person appends a textual progress update
-- **THEN** the person's week and day views show a timestamped card with task title, “任务更新”, and the complete update text, wrapping without truncation as needed
+#### Scenario: A member's task actions appear in that member's view
+- **WHEN** a member creates or edits a task, submits or resubmits it for approval, approves or returns a task, cancels a task, adds progress, submits completion, or accepts/returns completion
+- **THEN** the event appears in the view of the member who performed the action, at its actual recorded time, and does not appear in another member's view merely because that member is assigned the task
 
-#### Scenario: Dispatcher accepts a subordinate's task
-- **WHEN** a dispatcher accepts a task owned by a subordinate
-- **THEN** the acceptance-completion bar appears in that subordinate's view and is absent from the dispatcher's own view unless the dispatcher owns the task
+#### Scenario: Pending task actions appear without creating task bars
+- **WHEN** a task is awaiting approval
+- **THEN** its creation/submission event may appear in the creator's view and the approval event may appear in the approver's view, while the task itself remains absent from all unfinished task-bar areas until approved
+
+### Requirement: Week and day event cards use the same compact information
+Week and day event cards SHALL use the task's first associated tag color, or neutral gray when no tag exists. Both SHALL show only time, task title, and event type, without a summary.
+
+#### Scenario: Day events show their compact fields with tag color
+- **WHEN** a user opens a day containing task events
+- **THEN** each event card uses the task's first associated tag color (neutral gray when there is no tag) and displays only the time, task title, and event type
+
+#### Scenario: Week events use the same compact fields
+- **WHEN** a user opens a week containing task events
+- **THEN** each event card uses the task's first associated tag color and displays only the time, task title, and event type
 
 #### Scenario: Responsible person is also task creator
 - **WHEN** the responsible person marks their own created task complete
 - **THEN** the view shows one combined “提交并完成” event rather than separate submission and acceptance events
 
 #### Scenario: Crowded hour expands without clipping events
-- **WHEN** multiple events with long titles or summaries occur within the same hour
-- **THEN** the hour row expands to contain every full event card, cards remain ordered by exact time and do not cross into an adjacent hour, and all week date columns retain the same row height
+- **WHEN** multiple events with long titles occur within the same hour
+- **THEN** the hour row expands to contain every event card at its mode-specific information density, cards remain ordered by exact time and do not cross into an adjacent hour, and all week date columns retain the same row height
 
-#### Scenario: Day timeline expands for its event details
-- **WHEN** multiple events or a long update occur within one hour of the selected day
-- **THEN** the day hour row expands to show every full event card and its complete text without clipping or crossing the neighboring hour boundary
+#### Scenario: Day timeline expands for its event cards
+- **WHEN** multiple events occur within one hour of the selected day
+- **THEN** the day hour row expands to show every compact event card without clipping or crossing the neighboring hour boundary
 
 ### Requirement: Current unfinished tasks appear in the all-day area
 The current week SHALL show the selected person's active unfinished tasks as clickable “全天” bars from Monday through the deadline column, or through Sunday when due outside the week. Bar length only cues whether the deadline is in this week; it does not show duration. Today shows full-width bars. Past/future periods omit this area, and future events are not fabricated.

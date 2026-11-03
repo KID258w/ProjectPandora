@@ -96,7 +96,7 @@ private enum class RootTab(val title: String, val symbol: String) {
     MINE("我的", "○")
 }
 
-private enum class ChildPage { TASKS, LOG_EDITOR, TAG_MANAGEMENT, COMPANY_MATTERS, COMPANY_TASKS, PERSONAL_FOCUS, NOTIFICATIONS }
+private enum class ChildPage { TASKS, LOG_EDITOR, TAG_MANAGEMENT, COMPANY_MATTERS, COMPANY_TASKS, PERSONAL_FOCUS, NOTIFICATIONS, ORGANIZATION, MEMBER_PROFILE }
 private enum class ViewMode(val title: String) { MONTH("月"), WEEK("周"), DAY("日") }
 private data class WorkViewUiState(
     val mode: ViewMode = ViewMode.MONTH,
@@ -138,12 +138,20 @@ private data class DemoTask(
     val status: String,
     val deadline: String,
     val color: Color,
-    val tagIds: List<Int> = emptyList()
+    val tagIds: List<Int> = emptyList(),
+    val assigneeName: String? = null
 )
 private enum class WorkEventKind(val label: String, val accent: Color, val tint: Color) {
+    CREATE("创建任务", Blue, BluePale),
+    CREATE_AND_SUBMIT("创建并提交审批", Blue, BluePale),
+    EDIT_AND_RESUBMIT("修改并重新提交", Violet, VioletPale),
+    APPROVAL_PASSED("审批通过", Teal, TealPale),
+    APPROVAL_RETURNED("审批退回", Rose, RosePale),
+    CANCELLED("取消任务", Rose, RosePale),
     UPDATE("任务更新", Blue, BluePale),
     SUBMISSION("完成提交", Amber, AmberPale),
     ACCEPTANCE("验收完成", Teal, TealPale),
+    ACCEPTANCE_RETURNED("验收退回", Rose, RosePale),
     SUBMIT_AND_COMPLETE("提交并完成", Violet, VioletPale)
 }
 private data class DemoWorkEvent(
@@ -151,7 +159,8 @@ private data class DemoWorkEvent(
     val time: String,
     val task: DemoTask,
     val kind: WorkEventKind,
-    val summary: String
+    val summary: String,
+    val actor: DemoPerson
 )
 private data class UnfinishedViewTask(val task: DemoTask, val weekEndColumn: Int)
 private data class DemoMatter(val title: String, val context: String, val detail: String)
@@ -318,11 +327,6 @@ private fun isBelowInHierarchy(candidate: DemoPerson, ancestor: DemoPerson): Boo
     return false
 }
 
-private fun workViewTargetOptions(person: DemoPerson): List<String> =
-    listOf("本人") + demoPeople
-        .filter { isBelowInHierarchy(it, person) }
-        .map { "${it.unit} · ${it.name}（${it.role.label}）" }
-
 private fun taskAssigneeOptions(person: DemoPerson): List<DemoPerson> {
     if (person.role == DemoRole.FOUNDER) {
         return demoPeople.distinctBy { it.optionLabel }
@@ -447,67 +451,93 @@ private val otherMyTasks = listOf(
     DemoTask("协助财务核对项目预算", "他人派发", "未完成", "10月28日", Blue)
 )
 
-private fun demoUnfinishedViewTasks(target: String): List<UnfinishedViewTask> {
-    val teamLeader = target.contains("周晓") || target.contains("王磊")
-    val employee = target.contains("陈宁") || target.contains("李敏") || target.contains("赵薇") || target.contains("郑凯")
-    val tasks = if (employee) {
+private fun demoUnfinishedViewTasks(target: DemoPerson, tags: List<DemoTag>): List<UnfinishedViewTask> {
+    val tasks = if (target.role == DemoRole.EMPLOYEE) {
         listOf(
-            DemoTask("完善接口异常处理", "上级分配", "未完成", "10月10日", tagPalette[0], listOf(102)) to 5,
-            DemoTask("补充测试用例", "团队自主", "未完成", "10月14日", tagPalette[1], listOf(103)) to 6,
-            DemoTask("整理版本问题清单", "上级分配", "未完成", "10月11日", tagPalette[2], listOf(101)) to 6
+            DemoTask("完善接口异常处理", "上级分配", "未完成", "10月10日", tagColor(listOf(102), tags), listOf(102)) to 5,
+            DemoTask("补充测试用例", "团队自主", "未完成", "10月14日", tagColor(listOf(103), tags), listOf(103)) to 6,
+            DemoTask("整理版本问题清单", "上级分配", "未完成", "10月11日", tagColor(listOf(101), tags), listOf(101)) to 6
         )
-    } else if (teamLeader) {
+    } else if (target.role == DemoRole.TEAM_LEADER) {
         listOf(
-            DemoTask("完成产品阶段评审材料", "上级分配", "未完成", "10月10日", tagPalette[2], listOf(101)) to 5,
-            DemoTask("整理测试验收清单", "团队自主", "未完成", "10月14日", tagPalette[1], listOf(103)) to 6,
-            DemoTask("跟进需求变更说明", "上级分配", "未完成", "10月11日", tagPalette[0], listOf(102)) to 6
+            DemoTask("完成产品阶段评审材料", "上级分配", "未完成", "10月10日", tagColor(listOf(101), tags), listOf(101)) to 5,
+            DemoTask("整理测试验收清单", "团队自主", "未完成", "10月14日", tagColor(listOf(103), tags), listOf(103)) to 6,
+            DemoTask("跟进需求变更说明", "上级分配", "未完成", "10月11日", tagColor(listOf(102), tags), listOf(102)) to 6
+        )
+    } else if (target.role == DemoRole.FOUNDER) {
+        listOf(
+            DemoTask("公司季度经营计划", "部门自主", "未完成", "10月12日", tagColor(listOf(101), tags), listOf(101)) to 5,
+            DemoTask("统筹重点项目风险", "部门自主", "未完成", "10月14日", tagColor(listOf(104), tags), listOf(104)) to 6
         )
     } else {
         listOf(
-            DemoTask("补充跨部门资料", "他人派发", "未完成", "10月10日", tagPalette[3], listOf(104)) to 5,
-            DemoTask("完善产品交付规范", "部门自主", "未完成", "10月15日", tagPalette[0], listOf(102)) to 6,
-            DemoTask("整理新版本评审材料", "上级分配", "未完成", "10月11日", tagPalette[2], listOf(101)) to 6
+            DemoTask("补充跨部门资料", "他人派发", "未完成", "10月10日", tagColor(listOf(104), tags), listOf(104)) to 5,
+            DemoTask("完善产品交付规范", "部门自主", "未完成", "10月15日", tagColor(listOf(102), tags), listOf(102)) to 6,
+            DemoTask("整理新版本评审材料", "上级分配", "未完成", "10月11日", tagColor(listOf(101), tags), listOf(101)) to 6
         )
     }
     return tasks.map { (task, weekEndColumn) -> UnfinishedViewTask(task, weekEndColumn) }
 }
 
-private fun demoWorkEvents(target: String): List<DemoWorkEvent> {
-    val teamLeader = target.contains("周晓") || target.contains("王磊")
-    val employee = target.contains("陈宁") || target.contains("李敏") || target.contains("赵薇") || target.contains("郑凯")
-    if (employee) {
-        val assignedTask = DemoTask("完善接口异常处理", "上级分配", "未完成", "10月14日", tagPalette[0], listOf(102))
-        val ownTask = DemoTask("整理测试用例", "团队自主", "已完成", "10月9日", tagPalette[1], listOf(103))
-        return listOf(
-            DemoWorkEvent(-3, "09:15", assignedTask, WorkEventKind.UPDATE, "补充异常分支说明，并完成相关接口验证。"),
-            DemoWorkEvent(-1, "15:40", assignedTask, WorkEventKind.UPDATE, "修复边界问题，准备提交测试结果。"),
-            DemoWorkEvent(0, "14:05", assignedTask, WorkEventKind.SUBMISSION, "接口验证结果已提交周晓验收。"),
-            DemoWorkEvent(0, "16:25", assignedTask, WorkEventKind.ACCEPTANCE, "周晓验收通过，任务已完成。"),
-            DemoWorkEvent(0, "18:10", ownTask, WorkEventKind.SUBMIT_AND_COMPLETE, "测试用例已整理并完成。")
-        )
-    }
-    if (teamLeader) {
-        val assignedTask = DemoTask("产品阶段评审", "上级分配", "未完成", "10月14日", tagPalette[2], listOf(101))
-        val ownTask = DemoTask("整理团队周会事项", "团队自主", "已完成", "10月9日", tagPalette[3], listOf(104))
-        return listOf(
-            DemoWorkEvent(-3, "10:05", assignedTask, WorkEventKind.UPDATE, "补齐阶段交付清单，确认各项材料负责人。"),
-            DemoWorkEvent(-1, "14:30", assignedTask, WorkEventKind.UPDATE, "完成评审材料初稿，正在核对数据。"),
-            DemoWorkEvent(0, "15:20", assignedTask, WorkEventKind.SUBMISSION, "评审材料已整理完成，提交林经理验收。"),
-            DemoWorkEvent(0, "17:20", assignedTask, WorkEventKind.ACCEPTANCE, "林经理验收通过，任务已完成。"),
-            DemoWorkEvent(0, "19:20", ownTask, WorkEventKind.SUBMIT_AND_COMPLETE, "周会安排已整理并完成。")
-        )
-    }
-    val assignedTask = DemoTask("公司级工作方案", "上级分配", "未完成", "10月14日", tagPalette[0], listOf(102))
-    val peerAssignedTask = DemoTask("跨部门资料整理", "他人派发", "未完成", "10月14日", tagPalette[3], listOf(104))
-    val ownTask = DemoTask("部门月度评审准备", "部门自主", "已完成", "10月9日", tagPalette[2], listOf(101))
-    return listOf(
-        DemoWorkEvent(-4, "09:35", assignedTask, WorkEventKind.UPDATE, "补充阶段目标和交付边界，待团队确认。"),
-        DemoWorkEvent(-2, "14:10", peerAssignedTask, WorkEventKind.UPDATE, "已汇总协作资料，补充缺失的业务口径。"),
-        DemoWorkEvent(-1, "16:45", assignedTask, WorkEventKind.SUBMISSION, "方案及配套材料已提交周总验收。"),
-        DemoWorkEvent(0, "10:15", assignedTask, WorkEventKind.ACCEPTANCE, "周总验收通过，任务已完成。"),
-        DemoWorkEvent(0, "10:40", peerAssignedTask, WorkEventKind.UPDATE, "补齐协作材料中的验收口径、交付清单和遗留问题，等待相关部门确认。"),
-        DemoWorkEvent(0, "17:20", ownTask, WorkEventKind.SUBMIT_AND_COMPLETE, "本月评审安排已整理并完成。")
+private fun demoWorkEvents(actor: DemoPerson, tags: List<DemoTag>): List<DemoWorkEvent> {
+    fun task(title: String, tagId: Int, assignee: DemoPerson) = DemoTask(
+        title = title,
+        source = if (assignee.name == actor.name) "部门自主" else "上级分配",
+        status = "未完成",
+        deadline = "10月14日",
+        color = tagColor(listOf(tagId), tags),
+        tagIds = listOf(tagId),
+        assigneeName = assignee.name
     )
+    fun event(offset: Int, time: String, title: String, tagId: Int, assignee: DemoPerson, kind: WorkEventKind, summary: String) =
+        DemoWorkEvent(offset, time, task(title, tagId, assignee), kind, summary, actor)
+
+    return when (actor.role) {
+        DemoRole.FOUNDER -> {
+            val manager = demoPeople.first { it.role == DemoRole.DEPARTMENT_MANAGER }
+            val managerTask = task("公司级工作方案", 102, manager)
+            listOf(
+                event(-3, "09:10", "公司级工作方案", 102, manager, WorkEventKind.CREATE_AND_SUBMIT, "创建任务并提交审批。"),
+                DemoWorkEvent(-1, "11:25", managerTask, WorkEventKind.APPROVAL_PASSED, "已通过部门经理提交的工作方案。", actor),
+                event(-1, "16:45", "过期测试事项", 104, actor, WorkEventKind.CANCELLED, "取消已不再执行的测试事项。"),
+                event(0, "10:15", "季度经营计划", 101, actor, WorkEventKind.UPDATE, "补充阶段目标和交付边界，待团队确认。"),
+                event(0, "17:20", "季度经营计划", 101, actor, WorkEventKind.SUBMIT_AND_COMPLETE, "季度经营计划已整理并完成。")
+            )
+        }
+        DemoRole.DEPARTMENT_MANAGER -> {
+            val report = demoPeople.firstOrNull { it.role == DemoRole.TEAM_LEADER && it.parentUnit == actor.unit }
+                ?: demoPeople.first { it.role == DemoRole.TEAM_LEADER }
+            val assigned = task("产品阶段评审", 101, report)
+            listOf(
+                event(-3, "10:05", "产品阶段评审", 101, report, WorkEventKind.CREATE, "创建任务并分配给团队长。"),
+                event(-2, "14:10", "部门月度评审准备", 104, actor, WorkEventKind.EDIT_AND_RESUBMIT, "根据上级意见补充材料并重新提交审批。"),
+                DemoWorkEvent(-1, "16:20", assigned, WorkEventKind.APPROVAL_PASSED, "通过团队长提交的阶段评审任务。", actor),
+                DemoWorkEvent(0, "10:15", assigned, WorkEventKind.ACCEPTANCE, "已验收团队长提交的阶段评审成果。", actor),
+                event(0, "13:30", "接口联调复核", 102, report, WorkEventKind.ACCEPTANCE_RETURNED, "验收退回，请补充异常场景的联调结果。"),
+                event(0, "10:40", "跨部门资料整理", 104, actor, WorkEventKind.UPDATE, "补齐验收口径和交付清单，等待相关部门确认。"),
+                event(0, "16:45", "产品路线确认", 102, actor, WorkEventKind.APPROVAL_RETURNED, "退回审批，请补充风险评估和交付计划。")
+            )
+        }
+        DemoRole.TEAM_LEADER -> {
+            val directReport = demoPeople.firstOrNull { it.role == DemoRole.EMPLOYEE && it.parentUnit == actor.unit }
+                ?: demoPeople.first { it.role == DemoRole.EMPLOYEE }
+            listOf(
+                event(-3, "10:05", "补充测试验收材料", 103, directReport, WorkEventKind.CREATE, "创建并分配测试任务给组员。"),
+                event(-2, "14:30", "整理团队周会事项", 104, actor, WorkEventKind.CREATE_AND_SUBMIT, "创建任务并提交给部门经理审批。"),
+                event(-1, "15:20", "产品阶段评审", 101, actor, WorkEventKind.UPDATE, "完成评审材料初稿，正在核对数据。"),
+                event(0, "15:20", "产品阶段评审", 101, actor, WorkEventKind.SUBMISSION, "评审材料已整理完成，提交部门经理验收。"),
+                event(0, "19:20", "整理团队周会事项", 104, actor, WorkEventKind.SUBMIT_AND_COMPLETE, "周会安排已整理并完成。")
+            )
+        }
+        DemoRole.EMPLOYEE -> {
+            listOf(
+                event(-3, "09:15", "整理测试用例", 103, actor, WorkEventKind.CREATE_AND_SUBMIT, "创建任务并提交直属团队长审批。"),
+                event(-1, "15:40", "完善接口异常处理", 102, actor, WorkEventKind.UPDATE, "修复边界问题，准备提交测试结果。"),
+                event(0, "14:05", "完善接口异常处理", 102, actor, WorkEventKind.SUBMISSION, "接口验证结果已提交直属负责人验收。"),
+                event(0, "18:10", "整理测试用例", 103, actor, WorkEventKind.SUBMIT_AND_COMPLETE, "测试用例已整理并完成。")
+            )
+        }
+    }.filter { it.actor.name == actor.name }
 }
 
 private val recentLogSummaries = listOf(
@@ -569,8 +599,11 @@ private fun PandoraPrototype() {
         )
     }
     var demoTags by remember { mutableStateOf(initialDemoTags) }
-    var viewTarget by remember { mutableStateOf("本人") }
+    var viewTarget by remember { mutableStateOf(demoPeople.first { it.role == DemoRole.DEPARTMENT_MANAGER }) }
     var workViewState by remember { mutableStateOf(WorkViewUiState()) }
+    var organizationProfileTarget by remember { mutableStateOf<DemoPerson?>(null) }
+    var taskCenterInitialTarget by remember { mutableStateOf<String?>(null) }
+    var taskCenterReturnPage by remember { mutableStateOf<ChildPage?>(null) }
     var taskDetailReadOnly by remember { mutableStateOf(false) }
     var orderedPersonalTasks by remember { mutableStateOf(personalFocusTasks) }
     var workflowTasks by remember { mutableStateOf(initialWorkflowTasks) }
@@ -632,18 +665,33 @@ private fun PandoraPrototype() {
         childPage = ChildPage.TASKS
     }
 
-    fun openTaskCenter() {
+    fun openTaskCenter(subordinateTarget: DemoPerson? = null, returnPage: ChildPage? = null) {
         initialTaskDetailId = null
         taskDetailReturnPage = null
         taskDetailReadOnly = false
+        taskCenterInitialTarget = subordinateTarget?.optionLabel
+        taskCenterReturnPage = returnPage
         childPage = ChildPage.TASKS
     }
 
     BackHandler(enabled = childPage != null) {
-        childPage = taskDetailReturnPage
-        taskDetailReturnPage = null
-        initialTaskDetailId = null
-        taskDetailReadOnly = false
+        when (childPage) {
+            ChildPage.MEMBER_PROFILE -> childPage = ChildPage.ORGANIZATION
+            ChildPage.ORGANIZATION -> childPage = null
+            else -> {
+                childPage = taskCenterReturnPage ?: taskDetailReturnPage
+                taskDetailReturnPage = null
+                initialTaskDetailId = null
+                taskDetailReadOnly = false
+                taskCenterInitialTarget = null
+                taskCenterReturnPage = null
+            }
+        }
+    }
+
+    BackHandler(enabled = childPage == null && selectedTab == RootTab.VIEW && viewTarget.name != demoPerson.name) {
+        childPage = ChildPage.MEMBER_PROFILE
+        organizationProfileTarget = viewTarget
     }
 
     Column(
@@ -661,13 +709,16 @@ private fun PandoraPrototype() {
                     onPersonChange = { demoPerson = it },
                     onTasksChange = { workflowTasks = it },
                     onBack = {
-                        childPage = taskDetailReturnPage
+                        childPage = taskCenterReturnPage ?: taskDetailReturnPage
                         taskDetailReturnPage = null
                         initialTaskDetailId = null
                         taskDetailReadOnly = false
+                        taskCenterInitialTarget = null
+                        taskCenterReturnPage = null
                     },
                     initialTaskId = initialTaskDetailId,
-                    readOnlyDetail = taskDetailReadOnly
+                    readOnlyDetail = taskDetailReadOnly,
+                    initialSubordinateTarget = taskCenterInitialTarget
                 )
                 ChildPage.LOG_EDITOR -> DailyLogEditorScreen(
                     logDate = demoDate(logEditorOffset),
@@ -709,6 +760,34 @@ private fun PandoraPrototype() {
                     onBack = { childPage = null },
                     onOpenTask = ::openNotifiedTask
                 )
+                ChildPage.ORGANIZATION -> OrganizationRelationshipsScreen(
+                    onBack = { childPage = null },
+                    onOpenMember = {
+                        organizationProfileTarget = it
+                        childPage = ChildPage.MEMBER_PROFILE
+                    }
+                )
+                ChildPage.MEMBER_PROFILE -> {
+                    val member = organizationProfileTarget ?: demoPerson
+                    val canInspectMember = member.name == demoPerson.name || isBelowInHierarchy(member, demoPerson)
+                    OrganizationMemberProfileScreen(
+                        member = member,
+                        canInspect = canInspectMember,
+                        onBack = { childPage = ChildPage.ORGANIZATION },
+                        onTasks = { openTaskCenter(member.takeIf { it.name != demoPerson.name }, returnPage = ChildPage.MEMBER_PROFILE) },
+                        onLogs = {
+                            logTarget = if (member.name == demoPerson.name) "本人" else "${member.unit} · ${member.name}（${member.role.label}）"
+                            selectedTab = RootTab.LOG
+                            childPage = null
+                        },
+                        onViews = {
+                            viewTarget = member
+                            workViewState = WorkViewUiState()
+                            selectedTab = RootTab.VIEW
+                            childPage = null
+                        }
+                    )
+                }
                 null -> when (selectedTab) {
                     RootTab.HOME -> HomeScreen(
                         personalFocus = orderedPersonalTasks,
@@ -733,17 +812,19 @@ private fun PandoraPrototype() {
                         target = viewTarget,
                         state = workViewState,
                         onStateChange = { workViewState = it },
-                        onTargetChange = { viewTarget = it },
                         onOpenTasks = { openTaskCenter() },
+                        onOpenOrganization = { childPage = ChildPage.ORGANIZATION },
+                        onBackToProfile = {
+                            organizationProfileTarget = viewTarget
+                            childPage = ChildPage.MEMBER_PROFILE
+                        },
                         onOpenTask = { task ->
-                            val taskOwner = if (viewTarget == "本人") demoPerson else {
-                                demoPeople.firstOrNull { viewTarget.contains(it.name) } ?: demoPerson
-                            }
+                            val taskOwner = task.assigneeName?.let { name -> demoPeople.firstOrNull { it.name == name } } ?: viewTarget
                             openHomeTask(
                                 task = task,
                                 returnPage = null,
                                 assignee = taskOwner,
-                                readOnly = viewTarget != "本人"
+                                readOnly = viewTarget.name != demoPerson.name
                             )
                         }
                     )
@@ -765,7 +846,11 @@ private fun PandoraPrototype() {
                     RootTab.AI -> AiMapScreen()
                     RootTab.MINE -> MyScreen(
                         person = demoPerson,
-                        onPersonChange = { demoPerson = it },
+                        onPersonChange = {
+                            demoPerson = it
+                            viewTarget = it
+                            organizationProfileTarget = null
+                        },
                         onTasks = { openTaskCenter() },
                         onManageTags = { if (demoPerson.role == DemoRole.FOUNDER) childPage = ChildPage.TAG_MANAGEMENT }
                     )
@@ -1245,19 +1330,196 @@ private fun TaskNotificationBell(hasUnread: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
+private fun OrganizationRelationshipsScreen(
+    onBack: () -> Unit,
+    onOpenMember: (DemoPerson) -> Unit
+) {
+    var keyword by remember { mutableStateOf("") }
+    val departments = demoPeople.filter { it.role == DemoRole.DEPARTMENT_MANAGER }
+    val matches = demoPeople.filter { person ->
+        keyword.isNotBlank() && listOf(person.name, person.role.label, person.unit, person.parentUnit.orEmpty())
+            .any { it.contains(keyword.trim(), ignoreCase = true) }
+    }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
+        ChildTopBar("组织关系", onBack)
+        Text("公司成员", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp, bottom = 9.dp))
+        OutlinedTextField(
+            value = keyword,
+            onValueChange = { keyword = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(15.dp),
+            placeholder = { Text("搜索姓名、职位或部门", color = Muted, fontSize = 12.sp) }
+        )
+        Spacer(Modifier.height(14.dp))
+
+        if (keyword.isNotBlank()) {
+            SectionHeading("搜索结果 · ${matches.size}")
+            Spacer(Modifier.height(7.dp))
+            if (matches.isEmpty()) {
+                EmptyTaskHint("没有匹配的成员")
+            } else {
+                matches.forEach { person ->
+                    OrganizationPersonRow(person, onClick = { onOpenMember(person) })
+                }
+            }
+        } else {
+            SectionHeading("公司")
+            Spacer(Modifier.height(7.dp))
+            OrganizationPersonRow(demoPeople.first { it.role == DemoRole.FOUNDER }, onClick = {
+                onOpenMember(demoPeople.first { it.role == DemoRole.FOUNDER })
+            })
+            departments.forEach { manager ->
+                var departmentExpanded by remember(manager.unit) { mutableStateOf(true) }
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 9.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Paper),
+                    border = BorderStroke(1.dp, Line)
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(11.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { departmentExpanded = !departmentExpanded }
+                                .padding(horizontal = 3.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconBadge("▤", BluePale, Blue, 34)
+                            Spacer(Modifier.width(9.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(manager.unit, color = Ink, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("部门 · ${manager.name}", color = Muted, fontSize = 10.sp)
+                            }
+                            Text(if (departmentExpanded) "⌄" else "›", color = Muted, fontSize = 18.sp)
+                        }
+                        if (departmentExpanded) {
+                            OrganizationPersonRow(manager, indented = true, onClick = { onOpenMember(manager) })
+                            demoPeople.filter { it.role == DemoRole.TEAM_LEADER && it.parentUnit == manager.unit }.forEach { leader ->
+                                var teamExpanded by remember(leader.unit) { mutableStateOf(false) }
+                                Row(
+                                    Modifier.fillMaxWidth().padding(start = 24.dp, top = 3.dp).clip(RoundedCornerShape(11.dp))
+                                        .clickable { teamExpanded = !teamExpanded }.padding(horizontal = 7.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(if (teamExpanded) "⌄" else "›", color = Blue, fontSize = 16.sp)
+                                    Spacer(Modifier.width(5.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(leader.unit, color = Ink, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
+                                        Text("团队 · ${leader.name}", color = Muted, fontSize = 9.sp)
+                                    }
+                                }
+                                if (teamExpanded) {
+                                    OrganizationPersonRow(leader, indented = true, onClick = { onOpenMember(leader) })
+                                    demoPeople.filter { it.role == DemoRole.EMPLOYEE && it.parentUnit == leader.unit }.forEach { employee ->
+                                        OrganizationPersonRow(employee, indented = true, onClick = { onOpenMember(employee) })
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(18.dp))
+    }
+}
+
+@Composable
+private fun OrganizationPersonRow(person: DemoPerson, indented: Boolean = false, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = if (indented) 20.dp else 0.dp, bottom = 7.dp)
+            .clip(RoundedCornerShape(14.dp)).background(Paper).clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(36.dp).clip(CircleShape).background(BluePale), contentAlignment = Alignment.Center) {
+            Text(person.name.take(1), color = Blue, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(person.name, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            val location = when (person.role) {
+                DemoRole.FOUNDER -> "公司"
+                DemoRole.DEPARTMENT_MANAGER -> person.unit
+                DemoRole.TEAM_LEADER -> "${person.parentUnit} · ${person.unit}"
+                DemoRole.EMPLOYEE -> "${person.parentUnit} · ${person.unit}"
+            }
+            Text(location, color = Muted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        SoftChip(person.role.label, BluePale, Blue)
+    }
+}
+
+@Composable
+private fun OrganizationMemberProfileScreen(
+    member: DemoPerson,
+    canInspect: Boolean,
+    onBack: () -> Unit,
+    onTasks: () -> Unit,
+    onLogs: () -> Unit,
+    onViews: () -> Unit
+) {
+    val teamLeader = demoPeople.firstOrNull { it.role == DemoRole.TEAM_LEADER && it.unit == member.parentUnit }
+    val organizationLine = when (member.role) {
+        DemoRole.FOUNDER -> "公司"
+        DemoRole.DEPARTMENT_MANAGER -> "部门 · ${member.unit}"
+        DemoRole.TEAM_LEADER -> "部门 · ${member.parentUnit}    团队 · ${member.unit}"
+        DemoRole.EMPLOYEE -> "部门 · ${teamLeader?.parentUnit ?: "—"}    团队 · ${member.parentUnit ?: "—"}"
+    }
+    val phoneSuffix = (1000 + demoPeople.indexOf(member) * 137).toString().takeLast(4)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
+        ChildTopBar("成员资料", onBack)
+        Spacer(Modifier.height(8.dp))
+        Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = Paper), border = BorderStroke(1.dp, Line)) {
+            Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(76.dp).clip(CircleShape).background(BluePale), contentAlignment = Alignment.Center) {
+                    Text(member.name.take(1), color = Blue, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(member.name, color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
+                Text(member.role.label, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                if (member.role != DemoRole.FOUNDER) Text(organizationLine, color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+                Text("手机号 · 138****$phoneSuffix", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 12.dp))
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        SectionHeading("工作信息")
+        Spacer(Modifier.height(8.dp))
+        if (canInspect) {
+            OutlinedButton(onClick = onTasks, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), shape = RoundedCornerShape(14.dp)) {
+                Text("查看任务", color = Ink)
+            }
+            OutlinedButton(onClick = onLogs, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), shape = RoundedCornerShape(14.dp)) {
+                Text("查看日志", color = Ink)
+            }
+            Button(
+                onClick = onViews,
+                modifier = Modifier.fillMaxWidth().height(49.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Ink, contentColor = Paper)
+            ) { Text("查看视图", fontWeight = FontWeight.Bold) }
+        } else {
+            Text("任务、日志和工作视图仅在组织权限范围内开放。", color = Muted, fontSize = 11.sp)
+        }
+        Spacer(Modifier.height(20.dp))
+    }
+}
+
+@Composable
 private fun WorkViewScreen(
     viewer: DemoPerson,
     tags: List<DemoTag>,
-    target: String,
+    target: DemoPerson,
     state: WorkViewUiState,
     onStateChange: (WorkViewUiState) -> Unit,
-    onTargetChange: (String) -> Unit,
     onOpenTasks: () -> Unit,
+    onOpenOrganization: () -> Unit,
+    onBackToProfile: () -> Unit,
     onOpenTask: (DemoTask) -> Unit
 ) {
     val mode = state.mode
-    val unfinishedTasks = demoUnfinishedViewTasks(target)
-    val taskEvents = demoWorkEvents(target)
+    val unfinishedTasks = demoUnfinishedViewTasks(target, tags)
+    val taskEvents = demoWorkEvents(target, tags)
+    val isOwnView = target.name == viewer.name
     var showMonthPicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var pickerYear by remember { mutableStateOf(DemoBaseYear) }
@@ -1325,20 +1587,33 @@ private fun WorkViewScreen(
     Column(screenModifier.padding(horizontal = 14.dp)) {
         Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.weight(1f)) {
-                ObjectPicker(
-                    label = "查看对象",
-                    selected = target,
-                    options = workViewTargetOptions(viewer),
-                    onSelected = onTargetChange
+            Column(
+                Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = !isOwnView, onClick = onBackToProfile)
+                    .padding(vertical = 3.dp)
+            ) {
+                Text(if (isOwnView) "我的视图" else "下属视图", color = Muted, fontSize = 9.sp)
+                Text(
+                    if (isOwnView) "${target.name} · ${target.role.label}" else "‹ ${target.name} · ${target.role.label}",
+                    color = Ink,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             OutlinedButton(
                 onClick = onOpenTasks,
                 modifier = Modifier.height(42.dp),
                 shape = RoundedCornerShape(13.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp)
-            ) { Text("任务中心", color = Ink, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) { Text("任务中心", color = Ink, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+            OutlinedButton(
+                onClick = onOpenOrganization,
+                modifier = Modifier.height(42.dp),
+                shape = RoundedCornerShape(13.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) { Text("组织关系", color = Ink, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
         }
         Spacer(Modifier.height(7.dp))
         SegmentedChoices(
@@ -1667,22 +1942,23 @@ private fun ScheduleEventBlock(
     Surface(
         modifier = modifier.clickable { onTaskClick(event.task) },
         shape = RoundedCornerShape(8.dp),
-        color = event.task.color.copy(alpha = 0.11f),
-        border = BorderStroke(1.dp, event.task.color.copy(alpha = 0.28f))
+        color = event.task.color.copy(alpha = 0.15f),
+        border = BorderStroke(1.dp, event.task.color.copy(alpha = 0.72f))
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = if (compact) 2.dp else 9.dp, vertical = if (compact) 3.dp else 5.dp)) {
-            if (compact) {
-                Text(event.time, color = event.kind.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                Text(event.task.title, color = Ink, fontSize = 7.5.sp, fontWeight = FontWeight.SemiBold)
-                Text(event.kind.label, color = event.kind.accent, fontSize = 7.sp, fontWeight = FontWeight.SemiBold)
-                Text(event.summary, color = Muted, fontSize = 7.sp)
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(event.time, color = event.kind.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    Text(event.kind.label, color = event.kind.accent, fontSize = 8.sp, fontWeight = FontWeight.SemiBold)
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+            Box(Modifier.width(if (compact) 3.dp else 4.dp).fillMaxHeight().background(event.task.color))
+            Column(Modifier.weight(1f).padding(horizontal = if (compact) 2.dp else 9.dp, vertical = if (compact) 3.dp else 5.dp)) {
+                if (compact) {
+                    Text(event.time, color = event.kind.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    Text(event.task.title, color = Ink, fontSize = 7.5.sp, fontWeight = FontWeight.SemiBold)
+                    Text(event.kind.label, color = event.kind.accent, fontSize = 7.sp, fontWeight = FontWeight.SemiBold)
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(event.time, color = event.kind.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Text(event.kind.label, color = event.kind.accent, fontSize = 8.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text(event.task.title, color = Ink, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Text(event.task.title, color = Ink, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                Text(event.summary, color = Muted, fontSize = 9.sp)
             }
         }
     }
@@ -3597,16 +3873,17 @@ private fun TaskCenterV2Screen(
     onTasksChange: (List<WorkflowTask>) -> Unit,
     onBack: () -> Unit,
     initialTaskId: Int? = null,
-    readOnlyDetail: Boolean = false
+    readOnlyDetail: Boolean = false,
+    initialSubordinateTarget: String? = null
 ) {
-    var section by remember { mutableStateOf("我的任务") }
+    var section by remember(initialSubordinateTarget) { mutableStateOf(if (initialSubordinateTarget == null) "我的任务" else "下属任务") }
     var showApprovalCenter by remember { mutableStateOf(false) }
     var approvalSection by remember { mutableStateOf("待你审批") }
     var taskScopeFilter by remember { mutableStateOf("我的任务") }
     var taskStatusFilter by remember { mutableStateOf("全部") }
     var deadlineStartFilter by remember { mutableStateOf<String?>(null) }
     var deadlineEndFilter by remember { mutableStateOf<String?>(null) }
-    var subordinateObjectFilter by remember { mutableStateOf("全部下属") }
+    var subordinateObjectFilter by remember(initialSubordinateTarget) { mutableStateOf(initialSubordinateTarget ?: "全部下属") }
     var subordinateTaskMode by remember { mutableStateOf("承担的任务") }
     var showTaskFilter by remember { mutableStateOf(false) }
     var detailId by remember(initialTaskId) { mutableStateOf(initialTaskId) }
