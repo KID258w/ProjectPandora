@@ -1,52 +1,336 @@
 package com.projectpandora.app.feature.views
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import android.app.DatePickerDialog
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.*
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.projectpandora.app.ui.Note
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.*
+import com.google.gson.JsonObject
+import com.projectpandora.app.R
+import com.projectpandora.app.core.network.*
+import com.projectpandora.app.ui.BackButton
 import com.projectpandora.app.ui.theme.PandoraColors as C
+import java.text.SimpleDateFormat
+import java.util.*
 
+private fun cal(time: Long = System.currentTimeMillis()) = Calendar.getInstance().apply { timeInMillis = time; firstDayOfWeek = Calendar.MONDAY }
+private fun date(c: Calendar) = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(c.time)
+private fun weekStart(c: Calendar) = cal(c.timeInMillis).apply { add(Calendar.DAY_OF_MONTH, -((get(Calendar.DAY_OF_WEEK) + 5) % 7)) }
+private val WEEKDAYS = listOf("一", "二", "三", "四", "五", "六", "日")
+
+/** Parses server timestamps (with offset and optional micro-seconds) into the device's local calendar. */
+internal fun eventLocalTime(value: String): Calendar? {
+    val normalized = value.replace(Regex("\\.(\\d{3})\\d+(?=Z|[+-]\\d{2}:\\d{2}$)"), ".$1")
+    val patterns = listOf("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", "yyyy-MM-dd'T'HH:mm:ssXXX")
+    for (pattern in patterns) {
+        val instant = runCatching { SimpleDateFormat(pattern, Locale.US).apply { isLenient = false }.parse(normalized) }.getOrNull()
+        if (instant != null) return cal(instant.time)
+    }
+    return null
+}
+
+/** True when [selected] lies in the same month / week / day period as [today]. */
+internal fun isCurrentPeriod(mode: String, selected: Calendar, today: Calendar = cal()): Boolean = when (mode) {
+    "月" -> selected.get(Calendar.YEAR) == today.get(Calendar.YEAR) && selected.get(Calendar.MONTH) == today.get(Calendar.MONTH)
+    "周" -> date(weekStart(selected)) == date(weekStart(today))
+    else -> date(selected) == date(today)
+}
+
+private fun color(value: String): Color = try { Color(android.graphics.Color.parseColor(value)) } catch (_: Exception) { Color(0xffD1D5DB) }
+internal fun eventLabel(type: String) = mapOf(
+    "created" to "创建任务", "created_and_submitted" to "创建并提交审批", "updated" to "修改任务",
+    "resubmitted" to "重新提交审批", "approval_approved" to "审批通过", "approval_returned" to "审批退回",
+    "cancelled" to "取消任务", "progress_updated" to "更新进展", "completion_submitted" to "提交完成",
+    "submitted_and_completed" to "提交并完成", "acceptance_approved" to "验收通过", "acceptance_returned" to "验收退回",
+)[type] ?: type
+
+/**
+ * Month / week / day work views. [memberId] = 0 shows the signed-in user; otherwise the
+ * authorized member opened from Organization Relationships (read-only).
+ */
 @Composable
 fun ViewsScreen(
+    api: BusinessApi,
     canViewOrganization: Boolean,
     onOpenTaskCenter: () -> Unit,
     onOpenOrganization: () -> Unit,
+    onTask: (Long, Boolean) -> Unit,
+    memberId: Long = 0L,
+    memberName: String = "",
+    onBackToMember: (() -> Unit)? = null,
 ) {
-    Column(Modifier.fillMaxSize().padding(20.dp)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text("工作视图", Modifier.weight(1f), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.Ink)
-            OutlinedButton(onClick = onOpenTaskCenter, modifier = Modifier.testTag("task-center-entry")) {
-                Text("任务中心")
+    val viewingMember = memberId != 0L
+    var mode by rememberSaveable { mutableStateOf("月") }
+    var selected by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
+    var showMonthPicker by remember { mutableStateOf(false) }
+    var reload by remember { mutableIntStateOf(0) }
+    var data by remember { mutableStateOf<JsonObject?>(null) }
+    var error by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    val current = cal(selected)
+    val context = LocalContext.current
+    if (viewingMember && onBackToMember != null) BackHandler { onBackToMember() }
+    LaunchedEffect(mode, selected, reload, memberId) {
+        data = null; error = ""; busy = true
+        try {
+            val query = if (mode == "月") mapOf("year" to current.get(Calendar.YEAR).toString(), "month" to (current.get(Calendar.MONTH) + 1).toString())
+                else mapOf("date" to date(current))
+            val path = "api/v1/app/work-views/" + when (mode) { "月" -> "month/"; "周" -> "week/"; else -> "day/" }
+            data = api.get(path, if (viewingMember) query + ("user_id" to memberId.toString()) else query).data()
+        } catch (e: Exception) { error = e.businessMessage() } finally { busy = false }
+    }
+    if (showMonthPicker) MonthPicker(current, { showMonthPicker = false }) { year, month ->
+        val c = cal(selected); c.set(Calendar.DAY_OF_MONTH, 1); c.set(Calendar.YEAR, year); c.set(Calendar.MONTH, month)
+        selected = c.timeInMillis; showMonthPicker = false
+    }
+    fun shift(step: Int) {
+        val c = cal(selected)
+        c.add(when (mode) { "月" -> Calendar.MONTH; "周" -> Calendar.WEEK_OF_YEAR; else -> Calendar.DAY_OF_MONTH }, step)
+        selected = c.timeInMillis
+    }
+    Column(Modifier.fillMaxSize().background(Color.White)) {
+        Row(Modifier.fillMaxWidth().padding(start = if (viewingMember) 4.dp else 20.dp, end = 12.dp, top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            if (viewingMember && onBackToMember != null) BackButton(onBackToMember)
+            Column(Modifier.weight(1f).padding(start = if (viewingMember) 8.dp else 0.dp)) {
+                Text(if (viewingMember) "${memberName.ifBlank { "成员" }}的视图" else "工作视图", fontSize = 21.sp,
+                    fontWeight = FontWeight.Bold, color = C.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (viewingMember) Text("下属工作视图 · 只读", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.Muted)
             }
-            if (canViewOrganization) {
-                OutlinedButton(onClick = onOpenOrganization, modifier = Modifier.testTag("organization-relationships-entry")) {
-                    Text("组织关系")
+            TextButton(onClick = onOpenTaskCenter, contentPadding = PaddingValues(horizontal = 5.dp), modifier = Modifier.testTag("task-center-entry")) {
+                Text("任务中心", color = C.Selected, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+            if (canViewOrganization) TextButton(onClick = onOpenOrganization, contentPadding = PaddingValues(horizontal = 5.dp), modifier = Modifier.testTag("organization-relationships-entry")) {
+                Text("组织关系", color = C.Selected, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp).background(Color(0xffF5F5F3), RoundedCornerShape(12.dp)).padding(3.dp)) {
+            listOf("月", "周", "日").forEach { item ->
+                Box(Modifier.weight(1f).height(34.dp).background(if (mode == item) Color.White else Color.Transparent, RoundedCornerShape(9.dp))
+                    .clickable { mode = item }.testTag("mode-$item"), contentAlignment = Alignment.Center) {
+                    Text(item, color = if (mode == item) C.Ink else C.Muted, fontWeight = if (mode == item) FontWeight.Bold else FontWeight.Medium, fontSize = 15.sp)
                 }
             }
         }
-        Spacer(Modifier.weight(1f))
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("工作视图", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = C.Ink)
-            Text("正式视图默认进入月视图。", color = C.Muted, fontSize = 13.sp)
-            Note("月、周、日工作视图正在完善中。")
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            PeriodArrow(previous = true, description = "上一周期") { shift(-1) }
+            TextButton(onClick = {
+                if (mode == "月") showMonthPicker = true
+                else DatePickerDialog(context, { _, y, m, d -> val c = cal(selected); c.set(y, m, d); selected = c.timeInMillis },
+                    current.get(Calendar.YEAR), current.get(Calendar.MONTH), current.get(Calendar.DAY_OF_MONTH)).show()
+            }, modifier = Modifier.weight(1f)) {
+                Text("${current.get(Calendar.YEAR)}年 ${current.get(Calendar.MONTH) + 1}月" + (if (mode == "日") " ${current.get(Calendar.DAY_OF_MONTH)}日" else "") + " ▾",
+                    fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.Ink)
+            }
+            if (!isCurrentPeriod(mode, current)) TextButton(onClick = { selected = System.currentTimeMillis() }, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                Text(when (mode) { "月" -> "本月"; "周" -> "本周"; else -> "今天" }, color = C.Selected, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+            PeriodArrow(previous = false, description = "下一周期") { shift(1) }
         }
-        Spacer(Modifier.weight(1f))
+        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = C.Amber)
+        if (error.isNotBlank()) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(error, Modifier.weight(1f), color = C.Error, fontSize = 12.sp); TextButton(onClick = { reload++ }) { Text("重试") }
+        }
+        val openTask: (Long) -> Unit = { onTask(it, viewingMember) }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            Image(painterResource(R.drawable.pandora_footer_art), contentDescription = null,
+                modifier = Modifier.fillMaxWidth().height(110.dp).align(Alignment.BottomCenter).alpha(0.14f),
+                alignment = Alignment.BottomCenter, contentScale = ContentScale.Crop)
+            if (mode == "月") MonthGrid(current, data, openTask)
+            else Timeline(current, mode, data, { selected = it; if (mode == "周") mode = "日" }, openTask)
+        }
+    }
+}
+
+@Composable
+private fun PeriodArrow(previous: Boolean, description: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp).semantics { contentDescription = description }) {
+        Canvas(Modifier.size(20.dp)) {
+            val left = size.width * 0.32f
+            val right = size.width * 0.68f
+            val startX = if (previous) right else left
+            val tipX = if (previous) left else right
+            val stroke = 3.dp.toPx()
+            drawLine(C.Ink, Offset(startX, size.height * 0.18f), Offset(tipX, size.height * 0.5f), strokeWidth = stroke, cap = StrokeCap.Round)
+            drawLine(C.Ink, Offset(tipX, size.height * 0.5f), Offset(startX, size.height * 0.82f), strokeWidth = stroke, cap = StrokeCap.Round)
+        }
+    }
+}
+
+@Composable
+private fun MonthPicker(current: Calendar, onDismiss: () -> Unit, onChoose: (Int, Int) -> Unit) {
+    var year by remember { mutableIntStateOf(current.get(Calendar.YEAR)) }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("选择年月") }, text = {
+        Column {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                PeriodArrow(previous = true, description = "上一年") { year-- }
+                Text("${year}年", fontWeight = FontWeight.Bold)
+                PeriodArrow(previous = false, description = "下一年") { year++ }
+            }
+            repeat(4) { row -> Row(Modifier.fillMaxWidth()) {
+                repeat(3) { col -> val month = row * 3 + col
+                    TextButton(onClick = { onChoose(year, month) }, modifier = Modifier.weight(1f)) { Text("${month + 1}月", color = if (year == current.get(Calendar.YEAR) && month == current.get(Calendar.MONTH)) C.Selected else C.Ink) }
+                }
+            } }
+        }
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+}
+
+internal data class MonthSegment(val bar: JsonObject, val start: Int, var end: Int, var lane: Int = 0)
+
+/** Merge only the bars the server chose to expose for each individual day. */
+internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
+    val segments = mutableListOf<MonthSegment>()
+    val active = mutableMapOf<Long, MonthSegment>()
+    cells.forEachIndexed { column, day ->
+        val bars = day?.array("bars")?.take(3).orEmpty()
+        val ids = bars.map { it.long("task_id") }.toSet()
+        active.keys.toList().filter { it !in ids }.forEach { active.remove(it) }
+        bars.forEach { bar ->
+            val id = bar.long("task_id")
+            val existing = active[id]
+            if (existing != null) existing.end = column
+            else MonthSegment(bar, column, column).also { segments.add(it); active[id] = it }
+        }
+    }
+    val laneEnds = IntArray(3) { -1 }
+    segments.sortedWith(compareBy<MonthSegment> { it.start }.thenBy { it.bar.long("task_id") }).forEach { segment ->
+        val lane = laneEnds.indexOfFirst { it < segment.start }
+        if (lane >= 0) { segment.lane = lane; laneEnds[lane] = segment.end }
+    }
+    return segments
+}
+
+@Composable private fun MonthGrid(current: Calendar, data: JsonObject?, onTask: (Long) -> Unit) {
+    val first = cal(current.timeInMillis).apply { set(Calendar.DAY_OF_MONTH, 1) }
+    val offset = (first.get(Calendar.DAY_OF_WEEK) + 5) % 7
+    val count = first.getActualMaximum(Calendar.DAY_OF_MONTH)
+    val rows = (offset + count + 6) / 7
+    val days = data?.array("days")?.associateBy { it.string("date") } ?: emptyMap()
+    val weekNumbers = (0 until rows).map { row -> (0..6).map { row * 7 + it - offset + 1 } }
+    val weekCells = weekNumbers.map { numbers -> numbers.map { number ->
+        if (number !in 1..count) null else days[date(cal(first.timeInMillis).apply { set(Calendar.DAY_OF_MONTH, number) })]
+    } }
+    val weekBars = weekCells.map(::weekSegments)
+    BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
+        val laneHeight = with(LocalDensity.current) { maxOf(30.dp, 18.sp.toDp() + 10.dp) }
+        val minHeights = weekCells.mapIndexed { row, cells ->
+            val lanes = (weekBars[row].maxOfOrNull { it.lane } ?: -1) + 1
+            val overflow = cells.any { (it?.long("overflow_count") ?: 0) > 0 }
+            maxOf(56.dp, 28.dp + laneHeight * lanes + if (overflow) 22.dp else 4.dp)
+        }
+        val extraHeight = ((maxHeight - 40.dp - minHeights.fold(0.dp) { sum, height -> sum + height }) / rows).coerceAtLeast(0.dp)
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 10.dp)) { listOf("一","二","三","四","五","六","日").forEach { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.Muted) } } }
+        repeat(rows) { row ->
+            val numbers = weekNumbers[row]
+            val cells = weekCells[row]
+            BoxWithConstraints(Modifier.fillMaxWidth().height(minHeights[row] + extraHeight)) {
+                val cellWidth = maxWidth / 7
+                Row(Modifier.fillMaxSize()) { numbers.forEach { number ->
+                    val valid = number in 1..count
+                    val day = cal(first.timeInMillis).apply { set(Calendar.DAY_OF_MONTH, number.coerceIn(1, count)) }
+                    Box(Modifier.weight(1f).fillMaxHeight().border(0.5.dp, Color(0xffF1F0ED)).padding(2.dp)) {
+                        if (valid) Box(Modifier.size(24.dp).background(if (date(day)==date(cal())) C.Amber else Color.Transparent, RoundedCornerShape(12.dp)), contentAlignment=Alignment.Center) { Text("$number", fontSize=14.sp, fontWeight=FontWeight.SemiBold, color=C.Ink) }
+                    }
+                } }
+                weekBars[row].forEach { segment ->
+                    Box(Modifier.offset(x=cellWidth * segment.start + 2.dp, y=28.dp + laneHeight * segment.lane)
+                        .width(cellWidth * (segment.end - segment.start + 1) - 4.dp).height(laneHeight - 2.dp)
+                        .background(color(segment.bar.string("bar_color")), RoundedCornerShape(3.dp))
+                        .clickable { onTask(segment.bar.long("task_id")) }.padding(horizontal=4.dp), contentAlignment=Alignment.Center) {
+                        Text(segment.bar.string("title"), modifier=Modifier.fillMaxWidth(), textAlign=TextAlign.Center, fontSize=13.sp, lineHeight=18.sp, fontWeight=FontWeight.SemiBold, maxLines=1, overflow=TextOverflow.Ellipsis, color=C.Ink)
+                    }
+                }
+                cells.forEachIndexed { column, day -> val more = day?.long("overflow_count") ?: 0
+                    if (more > 0) Text("+${more}项", Modifier.offset(x=cellWidth * column + 3.dp, y=30.dp + laneHeight * 3), fontSize=11.sp, fontWeight=FontWeight.SemiBold, color=C.Muted)
+                }
+            }
+        }
+        }
+    }
+}
+
+@Composable private fun Timeline(current: Calendar, mode: String, data: JsonObject?, onDate: (Long) -> Unit, onTask: (Long) -> Unit) {
+    val start = weekStart(current)
+    val dates = (0..6).map { cal(start.timeInMillis).apply { add(Calendar.DAY_OF_MONTH, it) } }
+    val today = date(cal())
+    val events = remember(data) {
+        data?.array("events").orEmpty().mapNotNull { event -> eventLocalTime(event.string("occurred_at"))?.let { event to it } }
+            .sortedBy { it.second.timeInMillis }
+    }
+    Column(Modifier.fillMaxSize()) {
+        // Pinned: date strip + all-day unfinished tasks. Only the 24-hour axis below scrolls.
+        Row(Modifier.fillMaxWidth().padding(start = 42.dp, end = 8.dp, top = 6.dp)) {
+            dates.forEach { day ->
+                val key = date(day)
+                val highlighted = if (mode == "日") key == date(current) else key == today
+                Column(Modifier.weight(1f).clickable { onDate(day.timeInMillis) }, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(WEEKDAYS[(day.get(Calendar.DAY_OF_WEEK) + 5) % 7], fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = C.Muted)
+                    Box(Modifier.padding(vertical = 5.dp).size(28.dp).background(if (highlighted) C.Amber else Color.Transparent, RoundedCornerShape(14.dp)),
+                        contentAlignment = Alignment.Center) { Text("${day.get(Calendar.DAY_OF_MONTH)}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = C.Ink) }
+                }
+            }
+        }
+        val bars = data?.array("all_day_tasks").orEmpty()
+        if (bars.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(end = 8.dp, top = 4.dp, bottom = 6.dp)) {
+            Text("全天", Modifier.width(42.dp).padding(top = 8.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = C.Muted, textAlign = TextAlign.Center)
+            BoxWithConstraints(Modifier.weight(1f)) {
+                val available = maxWidth
+                Column(Modifier.heightIn(max = 132.dp).verticalScroll(rememberScrollState())) {
+                    bars.forEach { bar ->
+                        val endColumn = dates.indexOfFirst { date(it) == bar.string("end_date") }.let { if (it < 0) 6 else it }
+                        val fraction = if (mode == "周") (endColumn + 1) / 7f else 1f
+                        Text(bar.string("title"), Modifier.width(available * fraction).padding(bottom = 3.dp)
+                            .background(color(bar.string("bar_color")), RoundedCornerShape(5.dp)).clickable { onTask(bar.long("task_id")) }
+                            .padding(horizontal = 8.dp, vertical = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.Ink,
+                            textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+        HorizontalDivider(color = Color(0xffEEEFEF))
+        val columns = if (mode == "周") dates else listOf(current)
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            repeat(24) { hour ->
+                // IntrinsicSize.Min keeps one shared height for the hour across all columns, grown by the tallest cell.
+                Row(Modifier.fillMaxWidth().padding(end = 8.dp).height(IntrinsicSize.Min)) {
+                    Text("%02d:00".format(hour), Modifier.width(42.dp).padding(top = 4.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = C.Muted, textAlign = TextAlign.Center)
+                    columns.forEach { day ->
+                        val key = date(day)
+                        Column(Modifier.weight(1f).defaultMinSize(minHeight = 56.dp).fillMaxHeight().border(0.5.dp, Color(0xffEEEFEF)).padding(2.dp)) {
+                            events.filter { (_, time) -> date(time) == key && time.get(Calendar.HOUR_OF_DAY) == hour }.forEach { (event, time) ->
+                                Column(Modifier.fillMaxWidth().padding(bottom = 3.dp).background(color(event.string("tag_color")), RoundedCornerShape(5.dp))
+                                    .clickable { onTask(event.long("task_id")) }.padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(SimpleDateFormat("HH:mm", Locale.US).format(time.time), textAlign = TextAlign.Center, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold, color = C.Ink)
+                                    Text(event.string("task_title"), textAlign = TextAlign.Center, fontSize = 13.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold, color = C.Ink)
+                                    Text(eventLabel(event.string("event_type")), textAlign = TextAlign.Center, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = C.Ink)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+        }
     }
 }

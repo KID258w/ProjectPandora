@@ -79,7 +79,7 @@ private fun assigneeOptionLabel(person: JsonObject, currentUserId: Long, current
 }
 
 @Composable
-fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? = null, initialApprovalContext: Boolean = false, initialApprovalCenter: Boolean = false, initialSubordinateId: Long? = null) {
+fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? = null, initialApprovalContext: Boolean = false, initialApprovalCenter: Boolean = false, initialSubordinateId: Long? = null, forceReadOnly: Boolean = false) {
     var page by remember { mutableStateOf(if (initialTaskId != null) "detail" else if (initialApprovalCenter) "approval" else "list") }
     var approvalCenterDestination by remember { mutableStateOf(initialApprovalCenter) }
     var section by remember { mutableStateOf(if (initialApprovalCenter) "inbox" else if (initialSubordinateId != null) "subordinates" else "mine") }
@@ -162,7 +162,7 @@ fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? 
         return
     }
     if (page == "detail") {
-        TaskDetail(api, task, history, me, approvalVerified, detailOrigin == "list" && section == "subordinates", busy, error, onBack = ::back,
+        TaskDetail(api, task, history, me, approvalVerified, forceReadOnly || (detailOrigin == "list" && section == "subordinates"), busy, error, onBack = ::back,
             onEdit = { page = "form" }, onRefresh = { reload++ }, onApprovalReturned = ::back)
         return
     }

@@ -15,12 +15,14 @@
 
 ## 2. Android work views
 
-- [ ] 2.1 Build the current-month default, month/week/day switches, Task Center entry, period navigation, return-to-current-period control, month quick-picker, and direct date picker for week/day headers.
-- [ ] 2.2 Build month spans from estimated-start date, falling back to original task creation date, through deadline; use title-only bars colored by the first associated tag, a three-bars-per-date cap, exact date-specific overflow, and task-detail navigation.
-- [ ] 2.3 Build a compact, responsive week date strip that fits all seven days without horizontal scrolling; pin it and cross-day all-day unfinished task bars above a vertically scrollable 00:00–23:00 timeline. Dynamically expand each hour row to fit complete, wrapped event cards sorted by timestamp while preserving equal row heights across all seven date columns.
-- [ ] 2.4 Build the matching compact fixed day date strip and today's pinned all-day unfinished task bars above a vertically scrollable full 00:00–23:00 timeline; dynamically expand hour rows to fit complete, wrapped event cards without crossing hour boundaries, and do not fabricate future events.
-- [ ] 2.5 Open task detail from every task bar; enforce read-only details while viewing a subordinate.
-- [ ] 2.6 Remove subordinate selection from the Views page; enter a member's view from that authorized member's Organization Relationships profile, display the selected member, provide a route back to the profile, and preserve the member across all view modes.
+- [x] 2.1 Build the current-month default, month/week/day switches, Task Center entry, period navigation, return-to-current-period control, month quick-picker, and direct date picker for week/day headers.
+- [x] 2.2 Build month spans from estimated-start date, falling back to original task creation date, through deadline; use title-only bars colored by the first associated tag, a three-bars-per-date cap, exact date-specific overflow, and task-detail navigation.
+- [x] 2.3 Build a compact, responsive week date strip that fits all seven days without horizontal scrolling; pin it and cross-day all-day unfinished task bars above a vertically scrollable 00:00–23:00 timeline. Dynamically expand each hour row to fit complete, wrapped event cards sorted by timestamp while preserving equal row heights across all seven date columns.
+- [x] 2.4 Build the matching compact fixed day date strip and today's pinned all-day unfinished task bars above a vertically scrollable full 00:00–23:00 timeline; dynamically expand hour rows to fit complete, wrapped event cards without crossing hour boundaries, and do not fabricate future events.
+- [x] 2.5 Open task detail from every task bar; enforce read-only details while viewing a subordinate.
+- [x] 2.6 Remove subordinate selection from the Views page; enter a member's view from that authorized member's Organization Relationships profile, display the selected member, provide a route back to the profile, and preserve the member across all view modes.
+
+> Android 2.1–2.6 证据：`./gradlew :app:testDebugUnitTest`（`WorkViewTimeTest`）与 `WorkViewsUiTest`，以及模拟器联调 PR #31 后端的人工验收；说明见 `docs/android/work-views-ui.md`。
 
 ## 3. Verification
 

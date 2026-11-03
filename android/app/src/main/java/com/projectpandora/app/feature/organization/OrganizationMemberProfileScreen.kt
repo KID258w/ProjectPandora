@@ -59,6 +59,7 @@ fun OrganizationMemberProfileScreen(
     onBack: () -> Unit,
     onOpenTasks: (Long) -> Unit,
     onOpenLogs: (Long) -> Unit,
+    onOpenWorkViews: (Long, String) -> Unit = { _, _ -> },
 ) {
     var profile by remember(memberId) { mutableStateOf<JsonObject?>(null) }
     var avatarBytes by remember(memberId) { mutableStateOf<ByteArray?>(null) }
@@ -129,6 +130,14 @@ fun OrganizationMemberProfileScreen(
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = C.Ink),
                 ) { Text("查看任务", fontSize = 15.sp) }
+            }
+            if (!data.bool("is_self") && data.bool("can_view_work_views")) {
+                OutlinedButton(
+                    onClick = { onOpenWorkViews(memberId, data.string("display_name")) },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = C.Ink),
+                ) { Text("查看视图", fontSize = 15.sp) }
             }
             if (!data.bool("is_self") && data.bool("can_view_logs")) {
                 OutlinedButton(

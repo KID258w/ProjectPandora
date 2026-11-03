@@ -137,7 +137,7 @@ class AccountUiTest {
         listOf("视图", "日志", "AI地图", "我的", "首页").forEach { compose.onNodeWithText(it).performClick() }
         compose.onNodeWithText("你好，陈宁").assertIsDisplayed()
         compose.onNodeWithText("视图").performClick()
-        compose.onNodeWithText("打开任务中心").performClick()
+        compose.onNodeWithTag("task-center-entry").performClick()
         compose.onNodeWithText("‹ 返回").performClick()
         compose.onNodeWithText("工作视图").assertIsDisplayed()
     }
