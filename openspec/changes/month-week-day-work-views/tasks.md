@@ -22,7 +22,7 @@
 - [x] 2.5 Open task detail from every task bar; enforce read-only details while viewing a subordinate.
 - [x] 2.6 Remove subordinate selection from the Views page; enter a member's view from that authorized member's Organization Relationships profile, display the selected member, provide a route back to the profile, and preserve the member across all view modes.
 
-> Android 2.1–2.6 证据：`./gradlew :app:testDebugUnitTest`（`WorkViewTimeTest`）与 `WorkViewsUiTest`，以及模拟器联调 PR #31 后端的人工验收；说明见 `docs/android/work-views-ui.md`。
+> Android 2.1–2.6 证据：`:app:testDebugUnitTest` 33 项通过（含 `WorkViewTimeTest`、基于 PR #31 真实响应的 `WorkViewContractTest`）；模拟器 API 37 上 `WorkViewsUiTest` 9/9、`AccountUiTest` 10/10 通过；说明见 `docs/android/work-views-ui.md`。
 
 ## 3. Verification
 

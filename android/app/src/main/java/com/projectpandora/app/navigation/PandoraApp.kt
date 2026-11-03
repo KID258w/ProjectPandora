@@ -132,6 +132,7 @@ fun PandoraApp(
                         onOpenTaskCenter = { nav.navigate(AppRoute.TASK_CENTER) },
                         onOpenOrganization = { nav.navigate("organization-relationships") },
                         onTask = { id, _ -> nav.navigate("task-center/$id") },
+                        memberName = user?.name.orEmpty(),
                     )
                 }
                 composable("member-work-views/{memberId}?name={name}") { entry ->

@@ -30,10 +30,10 @@ class WorkViewTimeTest {
         assertEquals(setOf(0, 1, 2), segments.map { it.lane }.toSet())
     }
 
-    @Test fun offsetsAndFractionalSecondsUseDeviceTimezone() {
+    @Test fun offsetsAndFractionalSecondsUseBusinessTimezoneEvenOnUtcDevices() {
         val old = TimeZone.getDefault()
         try {
-            TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"))
+            TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
             val time = eventLocalTime("2026-11-03T16:15:30.123456Z")!!
             assertEquals(4, time.get(Calendar.DAY_OF_MONTH))
             assertEquals(0, time.get(Calendar.HOUR_OF_DAY))
@@ -45,7 +45,7 @@ class WorkViewTimeTest {
     }
 
     @Test fun currentPeriodDetectionDrivesTheReturnToCurrentControl() {
-        fun at(y: Int, m: Int, d: Int) = Calendar.getInstance().apply { clear(); set(y, m - 1, d, 12, 0) }
+        fun at(y: Int, m: Int, d: Int) = Calendar.getInstance(BUSINESS_TIME_ZONE).apply { clear(); set(y, m - 1, d, 12, 0) }
         val today = at(2026, 11, 4) // Wednesday
         assertTrue(isCurrentPeriod("月", at(2026, 11, 30), today))
         assertFalse(isCurrentPeriod("月", at(2026, 10, 31), today))

@@ -139,7 +139,7 @@ class AccountUiTest {
         compose.onNodeWithText("视图").performClick()
         compose.onNodeWithTag("task-center-entry").performClick()
         compose.onNodeWithText("‹ 返回").performClick()
-        compose.onNodeWithText("工作视图").assertIsDisplayed()
+        compose.onNodeWithText("陈宁的视图").assertIsDisplayed()
     }
 
     @Test fun founderProfileHasCompanyOrganization() {

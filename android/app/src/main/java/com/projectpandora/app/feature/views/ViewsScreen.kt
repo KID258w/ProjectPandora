@@ -32,12 +32,16 @@ import com.projectpandora.app.ui.theme.PandoraColors as C
 import java.text.SimpleDateFormat
 import java.util.*
 
-private fun cal(time: Long = System.currentTimeMillis()) = Calendar.getInstance().apply { timeInMillis = time; firstDayOfWeek = Calendar.MONDAY }
-private fun date(c: Calendar) = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(c.time)
+/** Work-view dates, “today” and event hours follow the business time zone (backend TIME_ZONE), not the device zone. */
+internal val BUSINESS_TIME_ZONE: TimeZone = TimeZone.getTimeZone("Asia/Shanghai")
+private fun format(pattern: String) = SimpleDateFormat(pattern, Locale.US).apply { timeZone = BUSINESS_TIME_ZONE }
+private fun cal(time: Long = System.currentTimeMillis()) = Calendar.getInstance(BUSINESS_TIME_ZONE).apply { timeInMillis = time; firstDayOfWeek = Calendar.MONDAY }
+internal fun date(c: Calendar): String = format("yyyy-MM-dd").format(c.time)
+internal fun parseBusinessDate(value: String): Long? = runCatching { format("yyyy-MM-dd").apply { isLenient = false }.parse(value)!!.time + 12 * 3_600_000L }.getOrNull()
 private fun weekStart(c: Calendar) = cal(c.timeInMillis).apply { add(Calendar.DAY_OF_MONTH, -((get(Calendar.DAY_OF_WEEK) + 5) % 7)) }
 private val WEEKDAYS = listOf("一", "二", "三", "四", "五", "六", "日")
 
-/** Parses server timestamps (with offset and optional micro-seconds) into the device's local calendar. */
+/** Parses server timestamps (UTC `Z` or an offset, optional micro-seconds) into the business-time-zone calendar. */
 internal fun eventLocalTime(value: String): Calendar? {
     val normalized = value.replace(Regex("\\.(\\d{3})\\d+(?=Z|[+-]\\d{2}:\\d{2}$)"), ".$1")
     val patterns = listOf("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", "yyyy-MM-dd'T'HH:mm:ssXXX")
@@ -112,7 +116,7 @@ fun ViewsScreen(
             verticalAlignment = Alignment.CenterVertically) {
             if (viewingMember && onBackToMember != null) BackButton(onBackToMember)
             Column(Modifier.weight(1f).padding(start = if (viewingMember) 8.dp else 0.dp)) {
-                Text(if (viewingMember) "${memberName.ifBlank { "成员" }}的视图" else "工作视图", fontSize = 21.sp,
+                Text("${memberName.ifBlank { if (viewingMember) "成员" else "我" }}的视图", fontSize = 19.sp,
                     fontWeight = FontWeight.Bold, color = C.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (viewingMember) Text("下属工作视图 · 只读", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.Muted)
             }
@@ -155,7 +159,7 @@ fun ViewsScreen(
             Image(painterResource(R.drawable.pandora_footer_art), contentDescription = null,
                 modifier = Modifier.fillMaxWidth().height(110.dp).align(Alignment.BottomCenter).alpha(0.14f),
                 alignment = Alignment.BottomCenter, contentScale = ContentScale.Crop)
-            if (mode == "月") MonthGrid(current, data, openTask)
+            if (mode == "月") MonthGrid(current, data, openTask) { selected = it; mode = "日" }
             else Timeline(current, mode, data, { selected = it; if (mode == "周") mode = "日" }, openTask)
         }
     }
@@ -220,7 +224,7 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
     return segments
 }
 
-@Composable private fun MonthGrid(current: Calendar, data: JsonObject?, onTask: (Long) -> Unit) {
+@Composable private fun MonthGrid(current: Calendar, data: JsonObject?, onTask: (Long) -> Unit, onDate: (Long) -> Unit) {
     val first = cal(current.timeInMillis).apply { set(Calendar.DAY_OF_MONTH, 1) }
     val offset = (first.get(Calendar.DAY_OF_WEEK) + 5) % 7
     val count = first.getActualMaximum(Calendar.DAY_OF_MONTH)
@@ -249,7 +253,8 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
                 Row(Modifier.fillMaxSize()) { numbers.forEach { number ->
                     val valid = number in 1..count
                     val day = cal(first.timeInMillis).apply { set(Calendar.DAY_OF_MONTH, number.coerceIn(1, count)) }
-                    Box(Modifier.weight(1f).fillMaxHeight().border(0.5.dp, Color(0xffF1F0ED)).padding(2.dp)) {
+                    Box(Modifier.weight(1f).fillMaxHeight().border(0.5.dp, Color(0xffF1F0ED))
+                        .then(if (valid) Modifier.clickable { onDate(day.timeInMillis) }.testTag("month-day-$number") else Modifier).padding(2.dp)) {
                         if (valid) Box(Modifier.size(24.dp).background(if (date(day)==date(cal())) C.Amber else Color.Transparent, RoundedCornerShape(12.dp)), contentAlignment=Alignment.Center) { Text("$number", fontSize=14.sp, fontWeight=FontWeight.SemiBold, color=C.Ink) }
                     }
                 } }
@@ -262,7 +267,8 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
                     }
                 }
                 cells.forEachIndexed { column, day -> val more = day?.long("overflow_count") ?: 0
-                    if (more > 0) Text("+${more}项", Modifier.offset(x=cellWidth * column + 3.dp, y=30.dp + laneHeight * 3), fontSize=11.sp, fontWeight=FontWeight.SemiBold, color=C.Muted)
+                    if (more > 0) Text("+${more}项", Modifier.offset(x=cellWidth * column + 3.dp, y=30.dp + laneHeight * 3)
+                        .clickable { day?.string("date")?.let { value -> parseBusinessDate(value)?.let(onDate) } }.testTag("month-overflow-$column"), fontSize=11.sp, fontWeight=FontWeight.SemiBold, color=C.Muted)
                 }
             }
         }
@@ -283,10 +289,12 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
         Row(Modifier.fillMaxWidth().padding(start = 42.dp, end = 8.dp, top = 6.dp)) {
             dates.forEach { day ->
                 val key = date(day)
-                val highlighted = if (mode == "日") key == date(current) else key == today
+                val highlighted = key == date(current)
                 Column(Modifier.weight(1f).clickable { onDate(day.timeInMillis) }, horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(WEEKDAYS[(day.get(Calendar.DAY_OF_WEEK) + 5) % 7], fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = C.Muted)
-                    Box(Modifier.padding(vertical = 5.dp).size(28.dp).background(if (highlighted) C.Amber else Color.Transparent, RoundedCornerShape(14.dp)),
+                    Box(Modifier.padding(vertical = 5.dp).size(28.dp).background(if (highlighted) C.Amber else Color.Transparent, RoundedCornerShape(14.dp))
+                        .then(if (!highlighted && key == today) Modifier.border(1.5.dp, C.Amber, RoundedCornerShape(14.dp)) else Modifier)
+                        .semantics { contentDescription = if (highlighted) "已选 $key" else key },
                         contentAlignment = Alignment.Center) { Text("${day.get(Calendar.DAY_OF_MONTH)}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = C.Ink) }
                 }
             }
@@ -321,7 +329,7 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
                             events.filter { (_, time) -> date(time) == key && time.get(Calendar.HOUR_OF_DAY) == hour }.forEach { (event, time) ->
                                 Column(Modifier.fillMaxWidth().padding(bottom = 3.dp).background(color(event.string("tag_color")), RoundedCornerShape(5.dp))
                                     .clickable { onTask(event.long("task_id")) }.padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(SimpleDateFormat("HH:mm", Locale.US).format(time.time), textAlign = TextAlign.Center, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold, color = C.Ink)
+                                    Text(format("HH:mm").format(time.time), textAlign = TextAlign.Center, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold, color = C.Ink)
                                     Text(event.string("task_title"), textAlign = TextAlign.Center, fontSize = 13.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold, color = C.Ink)
                                     Text(eventLabel(event.string("event_type")), textAlign = TextAlign.Center, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = C.Ink)
                                 }
