@@ -3,7 +3,9 @@ package com.projectpandora.app.feature.account
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.runBlocking
+import okhttp3.MultipartBody
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.*
 import org.junit.Test
@@ -262,6 +264,9 @@ class AppAccountContractTest {
         var currentUserResponse: Response<ApiEnvelope<AppUserResponse>> = Response.success(envelope(user("employee")))
         var updateRequest: ProfileUpdateRequest? = null
         var updatedUserResponse: Response<ApiEnvelope<AppUserResponse>> = Response.success(envelope(user("employee")))
+        var currentAvatarResponse: Response<ResponseBody> = Response.success(ByteArray(0).toResponseBody("image/png".toMediaType()))
+        var uploadedAvatar: MultipartBody.Part? = null
+        var updateAvatarResponse: Response<ResponseBody> = Response.success(ByteArray(0).toResponseBody("image/png".toMediaType()))
         var passwordRequest: PasswordChangeRequest? = null
         var passwordResponse: Response<ApiEnvelope<PasswordChangeResponse>> = Response.success(envelope(PasswordChangeResponse(true)))
         var onUpdateCall: (() -> Unit)? = null
@@ -285,6 +290,13 @@ class AppAccountContractTest {
             updateRequest = request
             onUpdateCall?.invoke()
             return updatedUserResponse
+        }
+
+        override suspend fun currentAvatar(): Response<ResponseBody> = currentAvatarResponse
+
+        override suspend fun updateAvatar(avatar: MultipartBody.Part): Response<ResponseBody> {
+            uploadedAvatar = avatar
+            return updateAvatarResponse
         }
 
         override suspend fun changePassword(request: PasswordChangeRequest): Response<ApiEnvelope<PasswordChangeResponse>> {
