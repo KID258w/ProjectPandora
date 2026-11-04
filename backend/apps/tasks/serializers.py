@@ -195,7 +195,7 @@ class OrganizationTreeNodeSerializer(serializers.Serializer):
     team_name = serializers.CharField(required=False, allow_null=True)
     children = serializers.SerializerMethodField()
 
-    def get_children(self, obj):
+    def get_children(self, obj) -> list[dict]:
         return OrganizationTreeNodeSerializer(obj.get("children", []), many=True).data
 
 
@@ -208,6 +208,7 @@ class OrganizationMemberProfileSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     is_self = serializers.BooleanField()
     can_view_tasks = serializers.BooleanField()
+    can_view_work_views = serializers.BooleanField()
     can_view_logs = serializers.BooleanField()
     display_name = serializers.CharField()
     phone = serializers.CharField()
