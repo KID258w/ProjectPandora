@@ -13,6 +13,8 @@ urlpatterns = [
     path("admin/users/", views.UserListView.as_view()),
     path("admin/users/<int:pk>/", views.UserDetailView.as_view()),
     path("admin/audit-logs/", views.AuditLogListView.as_view()),
+    path("admin/app-operation-logs/", views.AppOperationLogListView.as_view()),
+    path("admin/app-operation-logs/<int:pk>/", views.AppOperationLogDetailView.as_view()),
     path("app/auth/token/", views.AppLoginView.as_view()),
     path("app/auth/token/refresh/", views.AppRefreshView.as_view()),
     path("app/me/", views.AppMeView.as_view()),

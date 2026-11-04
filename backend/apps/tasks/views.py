@@ -8,8 +8,9 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.app_audit import record_app_operation
 from apps.accounts.authentication import IsBusinessUser, ScopedJWTAuthentication, has_complete_supervisor_chain
-from apps.accounts.models import Department, Team, User
+from apps.accounts.models import AppOperationAuditLog, Department, Team, User
 from apps.core.api import BusinessAPIView, StandardPagination, paginated_response
 from apps.logs.views import descendants, parse_date
 
@@ -139,6 +140,12 @@ class TaskListView(BusinessAPIView):
                     create_approval_round(task)
                 else:
                     send_assignment(task)
+                record_app_operation(
+                    actor=request.user, module=AppOperationAuditLog.Module.TASKS, action="create",
+                    object_type="task", object_id=task.pk, object_label=task.title,
+                    before={},
+                    after={**values, "tag_ids": [tag.pk for tag in tags]},
+                )
         except IntegrityError as exc:
             raise ValidationError("创建任务时发生并发冲突，请重试。") from exc
         return Response(task_detail(task), status=201)
@@ -267,6 +274,13 @@ class TaskDetailView(BusinessAPIView):
                         create_approval_round(task)
                     elif "assignee_id" in changes:
                         send_assignment(task, history.pk)
+                record_app_operation(
+                    actor=request.user, module=AppOperationAuditLog.Module.TASKS, action="update",
+                    object_type="task", object_id=task.pk, object_label=task.title,
+                    changed_fields=list(changes),
+                    before={field: row["before"] for field, row in changes.items()},
+                    after={field: row["after"] for field, row in changes.items()},
+                )
         return Response(task_detail(task))
 
 
@@ -299,6 +313,12 @@ class TaskResubmitView(BusinessAPIView):
             task.approval_status = Task.Approval.PENDING
             task.save(update_fields=["approval_status", "updated_at"])
             approval = create_approval_round(task)
+            record_app_operation(
+                actor=request.user, module=AppOperationAuditLog.Module.TASKS, action="resubmit",
+                object_type="task", object_id=task.pk, object_label=task.title,
+                before={"approval_status": Task.Approval.RETURNED},
+                after={"approval_status": task.approval_status, "approval_round": approval.round},
+            )
         return Response({"task_id": task.pk, "approval_status": task.approval_status,
                          "approval_round": approval.round, "approver_id": approval.approver_id,
                          "submitted_at": approval.created_at})
@@ -338,6 +358,17 @@ class TaskApprovalView(BusinessAPIView):
             )
             if approval.decision == TaskApprovalRecord.Decision.APPROVED:
                 send_assignment(task, approval.pk)
+            record_app_operation(
+                actor=request.user, module=AppOperationAuditLog.Module.TASKS,
+                action=("approve" if approval.decision == TaskApprovalRecord.Decision.APPROVED else "return"),
+                object_type="task", object_id=task.pk, object_label=task.title,
+                before={"approval_status": Task.Approval.PENDING},
+                after={
+                    "approval_status": task.approval_status,
+                    "decision": approval.decision,
+                    "comment": approval.comment,
+                },
+            )
         return Response({"task_id": task.pk, "approval_status": task.approval_status,
                          "decision": approval.decision, "decided_at": approval.decided_at})
 
@@ -354,6 +385,11 @@ class TaskUpdateView(BusinessAPIView):
                 raise NotFound("任务不存在。")
             require_executable(task, request.user)
             row = TaskUpdate.objects.create(task=task, author=request.user, content=values["content"])
+            record_app_operation(
+                actor=request.user, module=AppOperationAuditLog.Module.TASKS, action="progress",
+                object_type="task_update", object_id=row.pk, object_label=task.title,
+                before={}, after={"content": row.content},
+            )
         return Response({"id": row.pk, "task_id": task.pk, "author_id": request.user.pk,
                          "content": row.content, "created_at": row.created_at}, status=201)
 
@@ -386,6 +422,16 @@ class TaskSubmissionView(BusinessAPIView):
                 resolve_task_notifications(task, [TaskNotification.Type.SUBMISSION_RETURNED])
                 create_task_notification(task, task.creator, TaskNotification.Type.SUBMISSION_RECEIVED,
                                          f"submission:{row.pk}:received", submission=row)
+            record_app_operation(
+                actor=request.user, module=AppOperationAuditLog.Module.TASKS, action="submit",
+                object_type="task_submission", object_id=row.pk, object_label=task.title,
+                before={},
+                after={
+                    "completion_note": row.completion_note,
+                    "materials_note": row.materials_note,
+                    "review_status": row.review_status,
+                },
+            )
         return Response({"id": row.pk, "task_id": task.pk, "review_status": row.review_status,
                          "completion_note": row.completion_note, "materials_note": row.materials_note,
                          "submitted_at": row.submitted_at}, status=201)
@@ -425,6 +471,17 @@ class TaskReviewView(BusinessAPIView):
                 task.completion_status = Task.Completion.COMPLETED
                 task.completed_at = row.reviewed_at
                 task.save(update_fields=["completion_status", "completed_at", "updated_at"])
+            record_app_operation(
+                actor=request.user, module=AppOperationAuditLog.Module.TASKS,
+                action=("accept" if row.review_status == TaskSubmission.Review.ACCEPTED else "return"),
+                object_type="task_submission", object_id=row.pk, object_label=task.title,
+                before={"review_status": TaskSubmission.Review.WAITING},
+                after={
+                    "review_status": row.review_status,
+                    "review_comment": row.review_comment,
+                    "completion_status": task.completion_status,
+                },
+            )
         return Response({"submission_id": row.pk, "review_status": row.review_status,
                          "reviewed_by_id": request.user.pk, "reviewed_at": row.reviewed_at,
                          "task_completion_status": task.completion_status, "completed_at": task.completed_at})
@@ -455,6 +512,15 @@ class TaskCancelView(BusinessAPIView):
             task.cancellation_reason = values["reason"]
             task.cancelled_at = timezone.now()
             task.save(update_fields=["lifecycle_status", "cancellation_reason", "cancelled_at", "updated_at"])
+            record_app_operation(
+                actor=request.user, module=AppOperationAuditLog.Module.TASKS, action="cancel",
+                object_type="task", object_id=task.pk, object_label=task.title,
+                before={"lifecycle_status": Task.Lifecycle.ACTIVE},
+                after={
+                    "lifecycle_status": task.lifecycle_status,
+                    "cancellation_reason": task.cancellation_reason,
+                },
+            )
             resolve_task_notifications(task, [
                 TaskNotification.Type.APPROVAL_REQUIRED,
                 TaskNotification.Type.ASSIGNMENT_RECEIVED,

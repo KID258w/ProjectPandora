@@ -10,7 +10,8 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.response import Response
 
 from apps.accounts.api_serializers import StrictInputMixin
-from apps.accounts.models import User
+from apps.accounts.app_audit import record_app_operation
+from apps.accounts.models import AppOperationAuditLog, User
 from apps.core.api import BusinessAPIView, StandardPagination, paginated_response
 from apps.tags.services import validate_tag_ids
 
@@ -196,11 +197,17 @@ class LogCommentListCreateView(BusinessAPIView):
         log = visible_log(request, pk)
         form = LogCommentInputSerializer(data=request.data)
         form.is_valid(raise_exception=True)
-        comment = DailyLogComment.objects.create(
-            daily_log=log,
-            author=request.user,
-            content=form.validated_data["content"],
-        )
+        with transaction.atomic():
+            comment = DailyLogComment.objects.create(
+                daily_log=log,
+                author=request.user,
+                content=form.validated_data["content"],
+            )
+            record_app_operation(
+                actor=request.user, module=AppOperationAuditLog.Module.LOGS, action="comment",
+                object_type="daily_log_comment", object_id=comment.pk, object_label=str(log.log_date),
+                before={}, after={"content": comment.content},
+            )
         comment = DailyLogComment.objects.select_related(
             "author", "author__department", "author__team",
         ).get(pk=comment.pk)
@@ -227,6 +234,12 @@ class LogMineView(BusinessAPIView):
             with transaction.atomic():
                 log = DailyLog.objects.select_for_update().filter(author=request.user, log_date=day).first()
                 existing_ids = set(log.tag_links.values_list("tag_id", flat=True)) if log else set()
+                created = log is None
+                before_snapshot = {
+                    "completed_work": log.completed_work if log else "",
+                    "next_day_plan": log.next_day_plan if log else "",
+                    "tag_ids": sorted(existing_ids),
+                }
                 tags = validate_tag_ids(values["tag_ids"], existing_ids) if "tag_ids" in values else None
                 completed_work = values.get("completed_work", log.completed_work if log else "")
                 next_day_plan = values.get("next_day_plan", log.next_day_plan if log else "")
@@ -250,6 +263,31 @@ class LogMineView(BusinessAPIView):
                     for tag in tags:
                         if tag.pk not in existing_ids:
                             DailyLogTag.objects.create(daily_log=log, tag=tag)
+                after_snapshot = {
+                    "completed_work": log.completed_work,
+                    "next_day_plan": log.next_day_plan,
+                    "tag_ids": sorted(log.tag_links.values_list("tag_id", flat=True)),
+                }
+                if created:
+                    # 日志正文按白名单保存前后值，供管理员人工找回；空变更不产生记录。
+                    record_app_operation(
+                        actor=request.user, module=AppOperationAuditLog.Module.LOGS, action="create",
+                        object_type="daily_log", object_id=log.pk, object_label=str(log.log_date),
+                        changed_fields=list(after_snapshot), before={}, after=after_snapshot,
+                    )
+                else:
+                    changed_fields = [
+                        field for field in after_snapshot
+                        if before_snapshot[field] != after_snapshot[field]
+                    ]
+                    if changed_fields:
+                        record_app_operation(
+                            actor=request.user, module=AppOperationAuditLog.Module.LOGS, action="update",
+                            object_type="daily_log", object_id=log.pk, object_label=str(log.log_date),
+                            changed_fields=changed_fields,
+                            before={field: before_snapshot[field] for field in changed_fields},
+                            after={field: after_snapshot[field] for field in changed_fields},
+                        )
         except IntegrityError as exc:
             raise ValidationError("日志或标签发生并发变更，请重试。") from exc
         return Response({**log_data(log, detail=True), "can_edit": True})
@@ -270,6 +308,11 @@ class LogSubmitView(BusinessAPIView):
                 log.status = DailyLog.Status.SUBMITTED
                 log.submitted_at = timezone.now()
                 log.save(update_fields=["status", "submitted_at", "updated_at"])
+                record_app_operation(
+                    actor=request.user, module=AppOperationAuditLog.Module.LOGS, action="submit",
+                    object_type="daily_log", object_id=log.pk, object_label=str(log.log_date),
+                    before={"status": DailyLog.Status.DRAFT}, after={"status": log.status},
+                )
         return Response({**log_data(log, detail=True), "can_edit": True})
 
 

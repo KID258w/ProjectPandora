@@ -17,20 +17,41 @@ from rest_framework.views import APIView
 
 from apps.core.api import EnvelopeMixin, EnvelopeSchema, StandardPagination
 from .api_serializers import (
-    AdminRefreshSerializer, AdminTokenSerializer, AppPasswordChangeSerializer, AppRefreshSerializer,
+    AdminRefreshSerializer, AdminTokenSerializer, AppOperationLogDetailSerializer,
+    AppOperationLogListSerializer, AppPasswordChangeSerializer, AppRefreshSerializer,
     AppTokenSerializer, AppMeSerializer, AppMeUpdateSerializer, AppAvatarUploadSerializer,
     AuditLogSerializer, BusinessUserCreateResponseSerializer,
     BusinessUserCreateSerializer, DepartmentDetailSerializer, DepartmentSerializer, DepartmentUpdateSerializer,
     TeamDetailSerializer, TeamSerializer, TeamUpdateSerializer, UserSerializer, UserUpdateSerializer,
 )
+from .app_audit import record_app_operation
 from .audit import record_audit
 from .authentication import IsAdministrator, IsBusinessUser, ScopedJWTAuthentication
-from .models import AdminAuditLog, Department, Team, User
+from .models import AdminAuditLog, AppOperationAuditLog, Department, Team, User
 
 
 class VersionedMixin(EnvelopeMixin):
     schema = EnvelopeSchema()
     authentication_classes = [ScopedJWTAuthentication]
+
+
+class NoStoreMixin:
+    """审计响应含历史业务内容，禁止浏览器和中间层缓存。"""
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        response["Cache-Control"] = "no-store"
+        return response
+
+
+def _parse_positive_id(value, field, label):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise serializers.ValidationError({field: f"{label}必须是正整数。"}) from exc
+    if parsed < 1 or parsed > 2**63 - 1:
+        raise serializers.ValidationError({field: f"{label}必须是正整数。"})
+    return parsed
 
 
 def _user_audit_summary(user):
@@ -62,6 +83,22 @@ class AdminLoginView(VersionedMixin, TokenObtainPairView):
 @extend_schema(tags=["App 认证"], summary="业务用户登录")
 class AppLoginView(AdminLoginView):
     serializer_class = AppTokenSerializer
+
+    def get_serializer(self, *args, **kwargs):
+        # 保留 TokenObtainPairView 内部实例，成功登录后取认证到的业务用户写审计。
+        serializer = super().get_serializer(*args, **kwargs)
+        self._login_serializer = serializer
+        return serializer
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        user = getattr(getattr(self, "_login_serializer", None), "user", None)
+        if response.status_code == 200 and user is not None:
+            # 仅成功登录写入；失败登录在认证阶段已抛错，不会走到这里。
+            record_app_operation(
+                actor=user, module=AppOperationAuditLog.Module.AUTH, action="login",
+            )
+        return response
 
 
 @extend_schema(tags=["管理端认证"], summary="刷新管理员令牌")
@@ -306,16 +343,39 @@ class AuditLogListView(VersionedMixin, generics.ListAPIView):
         if end_date:
             queryset = queryset.filter(created_at__date__lte=_parse_date_param(end_date, "end_date"))
         if actor_id:
-            try:
-                actor_id = int(actor_id)
-            except (TypeError, ValueError) as exc:
-                raise serializers.ValidationError({"actor_id": "管理员 ID 必须是正整数。"}) from exc
-            if actor_id < 1 or actor_id > 2**63 - 1:
-                raise serializers.ValidationError({"actor_id": "管理员 ID 必须是正整数。"})
-            queryset = queryset.filter(actor_id=actor_id)
+            queryset = queryset.filter(actor_id=_parse_positive_id(actor_id, "actor_id", "管理员 ID "))
         if module:
             queryset = queryset.filter(module=module)
         return queryset
+
+
+@extend_schema(
+    tags=["管理审计"], summary="员工 App 操作记录",
+    parameters=[OpenApiParameter("actor_id", int, required=False, description="员工用户 ID，必须为正整数；不传时查询全体员工。")],
+)
+class AppOperationLogListView(NoStoreMixin, VersionedMixin, generics.ListAPIView):
+    """员工 App 成功操作记录：仅管理员只读，列表不返回修改前后值。"""
+
+    permission_classes = [IsAdministrator]
+    serializer_class = AppOperationLogListSerializer
+    pagination_class = StandardPagination
+    queryset = AppOperationAuditLog.objects.select_related("actor").all()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        actor_id = self.request.query_params.get("actor_id")
+        if actor_id:
+            queryset = queryset.filter(actor_id=_parse_positive_id(actor_id, "actor_id", "员工 ID "))
+        return queryset
+
+
+@extend_schema(tags=["管理审计"], summary="员工 App 操作记录详情")
+class AppOperationLogDetailView(NoStoreMixin, VersionedMixin, generics.RetrieveAPIView):
+    """单条操作记录详情：额外返回允许展示的修改前后值；不提供恢复、修改或删除。"""
+
+    permission_classes = [IsAdministrator]
+    serializer_class = AppOperationLogDetailSerializer
+    queryset = AppOperationAuditLog.objects.select_related("actor").all()
 
 
 @extend_schema_view(
@@ -337,8 +397,28 @@ class AppMeView(VersionedMixin, generics.RetrieveUpdateAPIView):
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
+        before = {
+            "display_name": instance.display_name,
+            "username": instance.username,
+            "id_number": instance.id_number,
+        }
         with transaction.atomic():
             serializer.save()
+            after = {
+                "display_name": instance.display_name,
+                "username": instance.username,
+                "id_number": instance.id_number,
+            }
+            changed_fields = [field for field in before if before[field] != after[field]]
+            if changed_fields:
+                # 身份证号仅保留字段名，不写入明文；手机号与姓名按白名单保存前后值。
+                record_app_operation(
+                    actor=instance, module=AppOperationAuditLog.Module.PROFILE, action="update",
+                    object_type="user", object_id=instance.pk, object_label=after["display_name"],
+                    changed_fields=changed_fields,
+                    before={field: before[field] for field in changed_fields},
+                    after={field: after[field] for field in changed_fields},
+                )
         return Response(AppMeSerializer(instance).data)
 
 
@@ -383,10 +463,17 @@ class AppProfileAvatarView(APIView):
         avatar.seek(0)
         content_type = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}[image_format]
         user = request.user
-        user.avatar_data = avatar.read()
-        user.avatar_content_type = content_type
-        user.avatar_updated_at = timezone.now()
-        user.save(update_fields=["avatar_data", "avatar_content_type", "avatar_updated_at"])
+        with transaction.atomic():
+            user.avatar_data = avatar.read()
+            user.avatar_content_type = content_type
+            user.avatar_updated_at = timezone.now()
+            user.save(update_fields=["avatar_data", "avatar_content_type", "avatar_updated_at"])
+            # 头像二进制不进审计，只记录字段名。
+            record_app_operation(
+                actor=user, module=AppOperationAuditLog.Module.PROFILE, action="update",
+                object_type="user", object_id=user.pk,
+                object_label=user.display_name or user.username, changed_fields=["avatar"],
+            )
         return Response(status=204)
 
 
@@ -398,5 +485,13 @@ class AppPasswordChangeView(VersionedMixin, generics.GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        with transaction.atomic():
+            serializer.save()
+            # 密码只记录字段名，任何情况下不保存新旧值。
+            record_app_operation(
+                actor=request.user, module=AppOperationAuditLog.Module.PROFILE, action="update",
+                object_type="user", object_id=request.user.pk,
+                object_label=request.user.display_name or request.user.username,
+                changed_fields=["password"],
+            )
         return Response({"password_changed": True})

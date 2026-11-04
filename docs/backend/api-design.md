@@ -4,7 +4,7 @@
 
 > **Issue #15 实施更新**：部门/团队详情与启停、员工筛选与身份/组织调整、管理概况与 Web 管理员操作审计、App 个人资料/密码/头像已实现（见 2.1 节契约）。头像二进制保存在用户数据库记录中，可在同一账号的不同设备读取。以下未标注已实现的业务内容仍为规划。
 
-> **员工 App 操作审计（规划）**：独立记录 App 成功登录和成功写操作，保存任务、日志等允许恢复的变更前后值，并由 Web 管理员只读核查；与已实现的 Web 管理员操作审计分开，详见 2.2 节。
+> **员工 App 操作审计（Issue #30 已实现）**：独立记录 App 成功登录和成功写操作，保存任务、日志等允许恢复的变更前后值，并由 Web 管理员只读核查；与已实现的 Web 管理员操作审计分开，契约见 2.2 节。
 
 > **Issue #20 后端实施更新**：`/api/v1/app/logs/`、`logs/calendar/`、`logs/{id}/`、`logs/{id}/comments/`、`logs/mine/{log_date}/`、`logs/mine/{log_date}/submit/`、`log-viewers/` 与 `tags/` 已实现。日期窗口按服务端 `TIME_ZONE` 的自然日计算。日志列表对本人可返回草稿，对下属只返回已提交；日历标记仅包含已提交。可查看日志的 App 用户可读取和添加评论，评论与日志正文分开保存。创始人创建标签时提交预设颜色，启用标签可修改名称和颜色；改色同步影响已有任务、日志及任务条颜色。启用名称冲突返回 `409`，删除为不可逆停用。首页最近五篇已提交日志通过 `apps.logs.services.recent_submitted_logs` 提供数据源，首页聚合接口属于 Issue #22。
 
@@ -37,13 +37,13 @@
 | App 首页四面板与公司事项 | `GET /api/v1/app/home/`、`GET /api/v1/app/company-items/`、`GET /api/v1/app/company-items/{id}/`、`GET /api/v1/app/home/company-top-tasks/`、`GET, PUT /api/v1/app/home/personal-focus/`、`GET .../personal-focus/candidates/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
-下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、Web 管理员操作审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口、Issue #21 的任务、审批、通知接口，以及 Issue #22 的公司重要事项、首页四面板与个人重点接口均已实现。员工 App 操作审计仍为规划（见 2.2）。
+下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、Web 管理员操作审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口、Issue #21 的任务、审批、通知接口、Issue #22 的公司重要事项、首页四面板与个人重点接口，以及 Issue #30 的员工 App 操作审计（见 2.2）均已实现。
 
 事项附件后端实现约定（Issue #22）：管理端 `POST .../attachments/` 使用 `multipart/form-data`，字段名 `file`；开发环境文件写入 `MEDIA_ROOT`（默认 `backend/media/`）并由 Django 在 `DEBUG` 下提供 `/media/` 访问，正式部署须改为对象存储或由反向代理提供持久化目录。默认上限 10 MB，类型白名单为 PDF、PNG/JPEG、纯文本、Word、Excel，可用环境变量 `COMPANY_ITEM_ATTACHMENT_MAX_BYTES` 与 `COMPANY_ITEM_ATTACHMENT_MIME_TYPES` 覆盖。该能力及管理端上传/删除 API 保留在后端，但当前 Web 页面和 App 公司事项流程均不提供附件入口；App 正文接口不返回附件元数据或 URL。未来如需增加公司事项详情页及附件上传/下载，另行确认客户端需求和文件访问规则。当前任务模块的材料字段是文字说明，不包含文件附件；如需任务附件，应作为任务模块的独立需求设计上传/下载接口和存储规则。
 | App 组织关系 | `GET /api/v1/app/organization/tree/`、`GET /api/v1/app/organization/members/{id}/`、`GET /api/v1/app/organization/members/{id}/avatar/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
-下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、Web 管理员操作审计及 App 个人资料、头像和密码已实现（契约见 2.1）；Issue #20 的日志和标签接口及 Issue #21 的任务、审批、通知接口已实现。员工 App 操作审计仍为规划（见 2.2），其余未标注已实现的接口不代表已上线。
+下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、Web 管理员操作审计及 App 个人资料、头像和密码已实现（契约见 2.1）；Issue #20 的日志和标签接口及 Issue #21 的任务、审批、通知接口已实现；Issue #30 的员工 App 操作审计已实现（见 2.2）。其余未标注已实现的接口不代表已上线。
 
 ### 1.2 通用约定
 
@@ -95,8 +95,7 @@ Web 管理端管理账号、组织、公司重要事项和审计记录；不提�
 | 上传事项附件 | `POST /api/v1/admin/company-items/{id}/attachments/` | 后端已实现但当前 Web 页面不调用；附件存储和限制见本节上方 |
 | 删除事项附件 | `DELETE /api/v1/admin/company-items/{id}/attachments/{attachment_id}/` | 后端已实现但当前 Web 页面不调用；删除指定附件引用及对应文件，仅管理员可操作 |
 | 管理员操作记录 | `GET /api/v1/admin/audit-logs/` | 按时间、管理员、模块筛选 Web 管理操作；只读 |
-| 员工 App 操作记录列表（规划） | `GET /api/v1/admin/app-operation-logs/` | 全局最新成功 App 操作记录；可按员工筛选；列表仅返回摘要 |
-| 员工 App 操作记录详情（规划） | `GET /api/v1/admin/app-operation-logs/{id}/` | 查看单条记录变更前后字段值；只读，仅管理员可访问 |
+| 员工 App 操作记录 | `GET /api/v1/admin/app-operation-logs/`、`GET /api/v1/admin/app-operation-logs/{id}/` | 全局最新成功 App 操作记录，可按员工筛选；列表仅返回摘要，详情才返回允许展示的修改前后值；只读 |
 
 Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `username` 接收手机号，要求身份证号，自动启用账号并只在本次成功响应返回后端生成的初始密码。下文的员工筛选/更新、组织维护和 App 自助资料修改已在 Issue #15 实现：列表保留停用对象供管理员查询，但用于员工身份/组织调整的候选项只返回启用员工、部门和团队；用户筛选支持姓名或手机号关键词、`department_id`、`team_id`、`business_role`、`is_active`。组织负责人在员工管理界面通过员工业务身份和组织归属调整，不提供组织详情页直接换负责人或独立负责人写接口。停用部门/团队前后端都要校验没有仍启用的下级组织或成员。团队的所属部门仅在创建时指定。手机号继续使用现有唯一 `username` 字段存储；App 登录 JSON 的 `username` 字段不改名，业务账号的值为手机号。
 
@@ -115,11 +114,13 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 - App `GET /api/v1/app/me/` 不返回完整身份证号。`PATCH /api/v1/app/me/` 允许员工本人修改 `display_name`、手机号（请求字段仍为 `username`，成功后更新登录标识）和 `id_number`，不接受身份、组织、直属上级或启用状态。姓名和身份证号可在同一请求中一起提交，也可分别修改；两者作为一个事务保存，任一字段校验失败时均不更新。手机号更新成功后，App 清除本机登录会话并返回登录页，提示员工使用新手机号重新登录。员工本人通过 `POST /api/v1/app/me/password/` 修改密码，提交当前密码、新密码和新密码确认；MVP 不要求短信验证，密码找回流程未定。密码更新成功后，App 清除本机登录会话并要求员工使用新密码重新登录；服务端不主动撤销已签发令牌，它们仍按现有有效期处理。
 - App `GET /api/v1/app/me/` 和 `PATCH /api/v1/app/me/` 响应还包含当前账号的 `avatar_url`（未设置时为 `null`）。头像接口 `GET, PUT /api/v1/app/me/avatar/` 仅允许业务账号操作令牌所属账号；头像由 App 上传到用户数据库行，读取返回原始图片二进制，PUT 为 multipart 上传并替换头像。它不是 JSON envelope 响应；格式和大小限制见下方契约。Web 管理员不获得头像读写能力。
 
-### 2.2 员工 App 操作审计契约（规划）
+### 2.2 员工 App 操作审计契约（Issue #30 已实现）
 
 员工 App 操作审计独立于 `GET /api/v1/admin/audit-logs/`：后者只返回 Web 管理员的管理操作。新接口只向有效的 Web 管理员令牌开放，不向业务 App 用户开放，不提供新增、修改、删除或恢复审计记录的接口。
 
-系统在成功登录后及成功提交受支持的 App 状态变更后记录操作；写操作的业务变更与审计记录应在同一事务中提交。审计事件范围为个人资料/头像/密码变更、任务及审批/进度/验收操作、日志保存/提交/编辑/评论，以及创始人标签创建/修改/停用。失败操作、只读请求、个人重点排序和通知已读不记录。
+系统在成功登录后及成功提交受支持的 App 状态变更后记录操作；写操作的业务变更与审计记录在同一数据库事务中提交，审计写入失败时业务变更一起回滚。审计事件范围为个人资料/头像/密码变更、任务及审批/进度/验收操作、日志创建/保存/提交/编辑/评论，以及创始人标签创建/修改/停用。失败操作、只读请求、无实际变更的重复保存、个人重点排序和通知已读不记录。
+
+`module` 取值：`auth`、`profile`、`tasks`、`logs`、`tags`。`action` 取值：`login`、`create`、`update`、`resubmit`、`approve`、`return`、`progress`、`submit`、`accept`、`cancel`、`comment`、`deactivate`。
 
 #### GET /api/v1/admin/app-operation-logs/
 
@@ -156,7 +157,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 }
 ```
 
-姓名、业务职位、部门和团队名称，以及目标对象显示名，均取操作发生时的快照。对象显示名为任务标题、日志日期或标签名称等，不包含正文。
+姓名、业务职位、部门和团队名称，以及目标对象显示名，均取操作发生时的快照。对象显示名为任务标题、日志日期或标签名称等，不包含正文。`object_id` 为字符串形式；登录等无业务对象的记录中 `object_type`、`object_id` 和 `object_label` 为空字符串。
 
 #### GET /api/v1/admin/app-operation-logs/{id}/
 
