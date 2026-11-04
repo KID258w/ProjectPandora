@@ -1,0 +1,82 @@
+name: CI Backend
+
+# 在目标分支为 dev 的 PR 中自动运行；只在 backend/ 有改动时触发。
+# 不在 push 时重复运行：PR 阶段已经验证过，合并后不必再跑一遍。
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci-backend.yml'
+
+concurrency:
+  group: ci-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  django:
+    name: Django 检查与测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      # 仅用于 CI 的临时值；真实密钥一律走 Actions Secrets
+      DJANGO_SECRET_KEY: ci-only-not-a-real-secret
+      DJANGO_DEBUG: 'True'
+      DJANGO_ALLOWED_HOSTS: 127.0.0.1,localhost
+      SQLITE_PATH: ${{ github.workspace }}/backend/db.sqlite3
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          # backend/README.md 约定 Python 3.11 基线
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Django 自检
+        run: python manage.py check
+
+      - name: 检查是否有漏写的 migration
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: 应用迁移（保证迁移文件可执行）
+        run: python manage.py migrate --noinput
+
+      - name: 自动化测试
+        run: python manage.py test --verbosity 2
+
+      # 结果与本地复现命令一起显示在 PR 页面的 Checks → Summary 里
+      - name: 本地复现命令
+        if: always()
+        run: |
+          {
+            echo "## 本地复现命令"
+            echo ""
+            echo '```bash'
+            echo "cd backend"
+            echo "python -m venv .venv && source .venv/bin/activate   # Windows: .venv\\Scripts\\Activate.ps1"
+            echo "pip install -r requirements.txt"
+            echo "python manage.py check"
+            echo "python manage.py makemigrations --check --dry-run"
+            echo "python manage.py migrate"
+            echo "python manage.py test --verbosity 2"
+            echo '```'
+            echo ""
+            echo "排查说明见 docs/cicd/pr-check-workflow.md"
+          } >> "$GITHUB_STEP_SUMMARY"

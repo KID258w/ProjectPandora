@@ -1,0 +1,182 @@
+import hashlib
+import hmac
+
+from django.conf import settings
+from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import UserManager
+from django.db import models
+from django.db.models import F, Q
+
+from .fields import EncryptedTextField
+
+
+class Department(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["id"]
+
+
+class Team(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    department = models.ForeignKey(Department, on_delete=models.PROTECT, related_name="teams")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [models.UniqueConstraint(fields=["department", "name"], name="unique_team_name_in_department")]
+
+
+class PandoraUserManager(UserManager):
+    def create_superuser(self, username, email=None, password=None, **extra_fields):
+        extra_fields.setdefault("account_type", "admin")
+        return super().create_superuser(username, email, password, **extra_fields)
+
+
+class User(AbstractUser):
+    class AccountType(models.TextChoices):
+        ADMIN = "admin", "Web 管理员"
+        BUSINESS = "business", "App 业务用户"
+
+    class Role(models.TextChoices):
+        FOUNDER = "founder", "创始人"
+        DEPARTMENT_MANAGER = "department_manager", "部门经理"
+        TEAM_LEADER = "team_leader", "团队长"
+        EMPLOYEE = "employee", "员工"
+
+    display_name = models.CharField(max_length=100, blank=True)
+    id_number = EncryptedTextField(null=True, blank=True)
+    id_number_hash = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    avatar_data = models.BinaryField(null=True, blank=True, editable=False)
+    avatar_content_type = models.CharField(max_length=32, blank=True, editable=False)
+    avatar_updated_at = models.DateTimeField(null=True, blank=True, editable=False)
+    account_type = models.CharField(max_length=16, choices=AccountType.choices, default=AccountType.BUSINESS)
+    business_role = models.CharField(max_length=24, choices=Role.choices, blank=True, default="")
+    department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.PROTECT, related_name="users")
+    team = models.ForeignKey(Team, null=True, blank=True, on_delete=models.PROTECT, related_name="users")
+    manager = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT, related_name="direct_reports")
+
+    objects = PandoraUserManager()
+
+    def save(self, *args, **kwargs):
+        # 加密字段无法直接按明文做数据库唯一约束，用确定性哈希保证身份证号唯一。
+        if self.id_number:
+            self.id_number = self.normalize_id_number(self.id_number)
+        self.id_number_hash = self._hash_id_number(self.id_number) if self.id_number else None
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "id_number" in update_fields:
+            kwargs["update_fields"] = set(update_fields) | {"id_number_hash"}
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def normalize_id_number(value):
+        """Canonicalize whitespace and letter case before storing or hashing an ID."""
+        return value.strip().upper() if value is not None else None
+
+    @staticmethod
+    def _hash_id_number(value):
+        # 使用带密钥的 HMAC，避免无密钥哈希可被离线暴力猜测。
+        key = settings.IDENTITY_NUMBER_ENCRYPTION_KEY.encode("ascii")
+        normalized = User.normalize_id_number(value)
+        return hmac.new(key, normalized.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=Q(account_type__in=["admin", "business"]), name="valid_account_type"),
+            models.CheckConstraint(
+                condition=(
+                    Q(account_type="admin", business_role="", department__isnull=True, team__isnull=True, manager__isnull=True)
+                    | Q(account_type="business", business_role="founder", department__isnull=True, team__isnull=True, manager__isnull=True)
+                    | Q(account_type="business", business_role="department_manager", department__isnull=False, team__isnull=True)
+                    | Q(account_type="business", business_role__in=["team_leader", "employee"], department__isnull=False, team__isnull=False)
+                ),
+                name="valid_account_placement",
+            ),
+            models.CheckConstraint(
+                condition=~Q(manager_id=F("id")),
+                name="user_cannot_manage_self",
+            ),
+            models.UniqueConstraint(fields=["business_role"], condition=Q(business_role="founder", is_active=True), name="one_founder"),
+            models.UniqueConstraint(fields=["department"], condition=Q(business_role="department_manager", is_active=True), name="one_manager_per_department"),
+            models.UniqueConstraint(fields=["team"], condition=Q(business_role="team_leader", is_active=True), name="one_leader_per_team"),
+        ]
+
+
+class AdminAuditLog(models.Model):
+    class Module(models.TextChoices):
+        USERS = "users", "用户"
+        DEPARTMENTS = "departments", "部门"
+        TEAMS = "teams", "团队"
+        COMPANY_ITEMS = "company_items", "公司重要事项"
+
+    class Result(models.TextChoices):
+        SUCCESS = "success", "成功"
+        FAILURE = "failure", "失败"
+
+    actor = models.ForeignKey(User, on_delete=models.PROTECT, related_name="audit_logs")
+    module = models.CharField(max_length=24, choices=Module.choices)
+    action = models.CharField(max_length=24)
+    object_type = models.CharField(max_length=32)
+    object_id = models.CharField(max_length=64, blank=True)
+    result = models.CharField(max_length=16, choices=Result.choices, default=Result.SUCCESS)
+    before_data = models.JSONField(null=True, blank=True)
+    after_data = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class AppOperationAuditLog(models.Model):
+    """员工 App 成功操作审计，与 Web 管理员审计分开保存。
+
+    操作者姓名、职位、部门和团队使用操作发生时的快照，避免后续资料或组织调整改写历史；
+    目标对象只保存可识别的名称/日期快照，不复制业务实体本身。
+    """
+
+    class Module(models.TextChoices):
+        AUTH = "auth", "登录"
+        PROFILE = "profile", "个人资料"
+        TASKS = "tasks", "任务"
+        LOGS = "logs", "日志"
+        TAGS = "tags", "标签"
+
+    class Result(models.TextChoices):
+        SUCCESS = "success", "成功"
+
+    actor = models.ForeignKey(User, on_delete=models.PROTECT, related_name="app_operation_audit_logs")
+    actor_name_snapshot = models.CharField(max_length=100)
+    actor_business_role_snapshot = models.CharField(max_length=24, blank=True)
+    actor_department_id_snapshot = models.PositiveBigIntegerField(null=True, blank=True)
+    actor_department_name_snapshot = models.CharField(max_length=100, blank=True)
+    actor_team_id_snapshot = models.PositiveBigIntegerField(null=True, blank=True)
+    actor_team_name_snapshot = models.CharField(max_length=100, blank=True)
+    module = models.CharField(max_length=16, choices=Module.choices)
+    action = models.CharField(max_length=24)
+    object_type = models.CharField(max_length=32, blank=True)
+    object_id = models.CharField(max_length=64, blank=True)
+    object_label_snapshot = models.CharField(max_length=200, blank=True)
+    result = models.CharField(max_length=16, choices=Result.choices, default=Result.SUCCESS)
+    changed_fields = models.JSONField(default=list, blank=True)
+    before_data = models.JSONField(null=True, blank=True)
+    after_data = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["-created_at", "-id"], name="appaudit_created_idx"),
+            models.Index(fields=["actor", "-created_at"], name="appaudit_actor_created_idx"),
+            models.Index(fields=["module", "-created_at"], name="appaudit_module_created_idx"),
+            models.Index(
+                fields=["object_type", "object_id", "-created_at"],
+                name="appaudit_object_created_idx",
+            ),
+        ]
