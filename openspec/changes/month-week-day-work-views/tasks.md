@@ -9,9 +9,9 @@
 
 ## 1. Query and view scope
 
-- [ ] 1.1 Implement read-only view queries over estimated-start/original-creation and deadline data, task bars scoped to the assignee, and timestamped create/edit/resubmit, approval, cancellation, progress, completion, and acceptance events scoped to their actual actors.
-- [ ] 1.2 Enforce task-person scope and manager access to authorized subordinate trees at the server.
-- [ ] 1.3 Exclude all DailyLog tables, summaries, drafts, and task-log association data from Work View responses.
+- [x] 1.1 Implement read-only view queries over estimated-start/original-creation and deadline data, task bars scoped to the assignee, and timestamped create/edit/resubmit, approval, cancellation, progress, completion, and acceptance events scoped to their actual actors.
+- [x] 1.2 Enforce task-person scope and manager access to authorized subordinate trees at the server.
+- [x] 1.3 Exclude all DailyLog tables, summaries, drafts, and task-log association data from Work View responses.
 
 ## 2. Android work views
 

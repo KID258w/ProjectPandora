@@ -181,7 +181,9 @@ class TaskApiTests(APITestCase):
         self.assertFalse(TaskNotification.objects.get(pk=extra.pk).is_read)
         self.auth(self.manager)
         self.assertEqual(self.client.post("/api/v1/app/notifications/mark-read/", {"notification_ids": [extra.pk]}, format="json").data["data"]["marked_read_count"], 0)
-        self.assertEqual(self.client.get("/api/v1/app/notifications/unread-count/").data["data"]["unread_count"], 0)
+        # The creator still has the unread approval-result notification; marking
+        # someone else's notification must not affect that count.
+        self.assertEqual(self.client.get("/api/v1/app/notifications/unread-count/").data["data"]["unread_count"], 1)
 
     def test_end_to_end_hierarchy_and_cross_department_isolation(self):
         chain = [

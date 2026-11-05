@@ -606,6 +606,7 @@ class OrganizationMemberProfileView(BusinessAPIView):
         task_subordinate_ids = subordinate_ids(request.user)
         log_subordinate_ids = {member.pk for member in descendants(request.user)}
         data["can_view_tasks"] = person.pk != request.user.pk and person.pk in task_subordinate_ids
+        data["can_view_work_views"] = person.pk == request.user.pk or person.pk in task_subordinate_ids
         data["can_view_logs"] = person.pk != request.user.pk and person.pk in log_subordinate_ids
         return Response(data)
 

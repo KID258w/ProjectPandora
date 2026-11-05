@@ -1,8 +1,12 @@
 from django.urls import path
 
 from . import views
+from . import work_views
 
 urlpatterns = [
+    path("work-views/month/", work_views.MonthWorkView.as_view()),
+    path("work-views/week/", work_views.WeekWorkView.as_view()),
+    path("work-views/day/", work_views.DayWorkView.as_view()),
     path("tasks/subordinates/", views.SubordinateTaskListView.as_view()),
     path("task-approvals/inbox/", views.ApprovalInboxView.as_view()),
     path("task-approvals/outbox/", views.ApprovalOutboxView.as_view()),
