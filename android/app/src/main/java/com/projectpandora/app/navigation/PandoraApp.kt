@@ -1,5 +1,6 @@
 package com.projectpandora.app.navigation
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Scaffold
@@ -126,10 +127,28 @@ fun PandoraApp(
                 }
                 composable(MainTab.VIEWS.route) {
                     ViewsScreen(
+                        api = businessApi,
                         canViewOrganization = canViewOrganizationRelationships,
                         onOpenTaskCenter = { nav.navigate(AppRoute.TASK_CENTER) },
                         onOpenOrganization = { nav.navigate("organization-relationships") },
+                        onTask = { id, _ -> nav.navigate("task-center/$id") },
+                        memberName = user?.name.orEmpty(),
                     )
+                }
+                composable("member-work-views/{memberId}?name={name}") { entry ->
+                    val memberId = entry.arguments?.getString("memberId")?.toLongOrNull()
+                    if (memberId != null) {
+                        ViewsScreen(
+                            api = businessApi,
+                            canViewOrganization = canViewOrganizationRelationships,
+                            onOpenTaskCenter = { nav.navigate(AppRoute.TASK_CENTER) },
+                            onOpenOrganization = { nav.navigate("organization-relationships") },
+                            onTask = { id, _ -> nav.navigate("work-view-task/$id") },
+                            memberId = memberId,
+                            memberName = entry.arguments?.getString("name").orEmpty(),
+                            onBackToMember = { nav.popBackStack() },
+                        )
+                    }
                 }
                 composable(MainTab.LOGS.route) {
                     LogsScreen(businessApi, onFullscreenChange = { hideBottomBar = it })
@@ -160,6 +179,7 @@ fun PandoraApp(
                             onBack = { nav.popBackStack() },
                             onOpenTasks = { nav.navigate("subordinate-tasks/$it") },
                             onOpenLogs = { nav.navigate("subordinate-logs/$it") },
+                            onOpenWorkViews = { id, name -> nav.navigate("member-work-views/$id?name=${Uri.encode(name)}") },
                         )
                     }
                 }
@@ -242,6 +262,10 @@ fun PandoraApp(
                 composable("approval-task/{id}") { entry ->
                     val id = entry.arguments?.getString("id")?.toLongOrNull()
                     if (id != null) TaskCenterScreen(businessApi, ::leaveTaskScreen, id, initialApprovalContext = true)
+                }
+                composable("work-view-task/{id}") { entry ->
+                    val id = entry.arguments?.getString("id")?.toLongOrNull()
+                    if (id != null) TaskCenterScreen(businessApi, ::leaveTaskScreen, id, forceReadOnly = true)
                 }
                 composable("task-approvals") { TaskCenterScreen(businessApi, ::leaveTaskScreen, initialApprovalCenter = true) }
             }
