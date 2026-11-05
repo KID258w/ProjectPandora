@@ -13,9 +13,9 @@
 
 ## 3. Web operation history page
 
-- [ ] 3.1 Add a separate Employee App Operation History page with global latest records and employee filtering.
-- [ ] 3.2 Add record detail showing actor/object snapshots and changed field values without restore, edit, or export actions.
-- [ ] 3.3 Verify ordinary task and employee-log browsing remains unavailable in Web.
+- [x] 3.1 Add a separate Employee App Operation History page with global latest records and employee filtering.
+- [x] 3.2 Add record detail showing actor/object snapshots and changed field values without restore, edit, or export actions.
+- [x] 3.3 Verify ordinary task and employee-log browsing remains unavailable in Web.
 
 ## 4. Contracts and verification
 
@@ -29,4 +29,12 @@
 - `python manage.py makemigrations --check --dry-run`：无漏写迁移；新增迁移 `accounts.0013_appoperationauditlog`。
 - `python manage.py spectacular --file <tmp>`：Schema 生成成功，0 error（仅保留既有 `OrganizationTreeNodeSerializer.get_children` 类型提示告警）。
 - `python manage.py test apps.accounts.test_app_operation_audit`：9 项通过，覆盖成功/失败登录、员工与组织快照、字段白名单与脱敏、任务/日志/标签事件、写入事务回滚、管理员访问控制、分页与员工筛选、`Cache-Control: no-store`。
-- `python manage.py test`：85 项中 84 项通过；剩余 1 项 `apps.tasks.tests.TaskApiTests.test_subordinate_scope_cross_department_and_notification_read_range` 为 `dev` 基线既有失败（未改动任务通知逻辑前复现），不在本 change 范围内。
+- `python manage.py test`：与 `dev` 合并后 89 项全部通过。
+
+## 验证记录（PR 2 Web，2026-11-04）
+
+- `cd web && npm run build`：通过（Vite 提示主 bundle 超过 500 kB）。
+- `git diff --check`：通过。
+- 路由审查：仅增加受管理员路由保护的员工 App 操作记录页面；未增加任务/日志浏览、写入、导出或恢复入口。
+- OpenSpec 严格校验：未完成，npm registry 域名解析失败（`ENOTFOUND`）。
+- 真实 API 联调：随后端 PR #35 合入 `dev` 后完成；后端实现已包含该 PR。

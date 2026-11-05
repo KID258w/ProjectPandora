@@ -33,7 +33,7 @@ onMounted(loadAdmin)
       </div>
 
       <div class="menu-caption">管理</div>
-      <el-menu :default-active="route.path" router class="side-menu">
+      <el-menu :default-active="route.path" :default-openeds="route.path.startsWith('/system/') ? ['system'] : []" router class="side-menu">
         <el-menu-item index="/dashboard">
           <span class="menu-symbol">总</span>
           <span>工作台</span>
@@ -58,6 +58,7 @@ onMounted(loadAdmin)
             <span>系统管理</span>
           </template>
           <el-menu-item index="/system/audit-logs">管理员操作记录</el-menu-item>
+          <el-menu-item index="/system/app-operation-logs">员工 App 操作记录</el-menu-item>
         </el-sub-menu>
       </el-menu>
 

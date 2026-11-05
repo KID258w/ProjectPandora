@@ -17,7 +17,7 @@
 
 ### 1.1 当前实现与目标接口
 
-当前已实现健康检查、文档、版本化账号/组织接口及 Issue #20、#21 的业务端接口。版本化 API 已采用统一外层响应；健康检查保持原响应。
+当前已实现健康检查、文档、版本化账号/组织接口、Issue #20、#21、#22 的业务端接口及 Issue #29 的工作视图接口。版本化 API 已采用统一外层响应；健康检查保持原响应。
 
 | 当前已存在 | 路径 |
 |---|---|
@@ -33,6 +33,7 @@
 | App 标签 | `GET, POST /api/v1/app/tags/`、`PATCH, DELETE /api/v1/app/tags/{id}/` |
 | App 任务、审批及历史 | `GET, POST /api/v1/app/tasks/`、`GET /api/v1/app/tasks/subordinates/`、`GET, PATCH /api/v1/app/tasks/{id}/`、`GET /api/v1/app/tasks/{id}/history/`、`GET /api/v1/app/task-approvals/inbox/`、`GET /api/v1/app/task-approvals/outbox/`，以及第 3.2 节所列操作路径 |
 | App 任务通知和人员选择 | `GET /api/v1/app/notifications/`、`GET /api/v1/app/notifications/unread-count/`、`POST /api/v1/app/notifications/mark-read/`、`GET /api/v1/app/organization/assignable-users/`、`GET /api/v1/app/organization/visible-subordinates/` |
+| App 工作视图 | `GET /api/v1/app/work-views/month/`、`GET /api/v1/app/work-views/week/`、`GET /api/v1/app/work-views/day/` |
 | 公司重要事项管理（管理端） | `GET, POST /api/v1/admin/company-items/`、`GET, PATCH /api/v1/admin/company-items/{id}/`、`POST .../publish/`、`POST .../offline/`、`PUT .../order/`、`POST .../attachments/`、`DELETE .../attachments/{attachment_id}/` |
 | App 首页四面板与公司事项 | `GET /api/v1/app/home/`、`GET /api/v1/app/company-items/`、`GET /api/v1/app/company-items/{id}/`、`GET /api/v1/app/home/company-top-tasks/`、`GET, PUT /api/v1/app/home/personal-focus/`、`GET .../personal-focus/candidates/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
@@ -261,6 +262,8 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 
 ### 3.4 月、周、日工作视图
 
+> **Issue #29 后端已实现**：三个只读接口的 `year`/`month` 与 `date` 可省略，分别默认业务时区当前月、今天；`user_id` 省略时为本人。非法日期返回 `400`，越权目标返回 `403`。成员资料响应增加 `can_view_work_views`，用于显示“查看视图”入口；接口仍逐次独立校验权限。所有响应沿用 `code/message/data/requestId` 外层格式。
+
 | 方法与路径 | 用途 |
 |---|---|
 | `GET /api/v1/app/work-views/month/?user_id=&year=&month=` | 月视图：返回任务条颜色 `bar_color`（首个添加的当前关联标签颜色；无标签为中性灰色）及日期信息。`start_date` 是 `estimated_start_at` 的本地日期；未设置时回退到原始 `created_at` 的本地日期 |
@@ -272,6 +275,14 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 任务条与动态采用不同归属口径：月视图任务条、周/日未完成任务条按 `assignee_id` 查询；周/日动态按具体操作记录中的操作人查询。动态包括任务创建/提交审批、任务定义修改、重新提交审批、审批通过/退回、任务取消、负责人进展更新、完成提交、验收通过/退回；自我负责任务提交即完成只产生一条“提交并完成”动态。创建/修改/审批/取消等操作显示在实际操作人的视图，不复制给负责人；验收事件归验收人，不归负责人。待审批任务可有创建人或审批人的动态，但不显示任务条。每条动态还须通过当前请求人的任务可见权限校验，不能因操作人视图扩大任务详情访问权。
 
 周/日动态响应至少包含 `occurred_at`、`task_id`、`task_title`、`event_type`、`tag_color`。`tag_color` 根据任务当前最早建立的关联标签计算；无标签时为中性灰色，不返回供动态卡片展示的标签名称。周、日动态卡片采用相同展示信息：时间点、任务标题和动态类型；响应不提供动态摘要字段。周视图全天未完成任务可横跨多天；固定日期条和全天区域不随时间轴滚动，动态按实际发生日期/小时归列。
+
+工作视图实际响应结构（以下均指外层 `data`）：
+
+- 月：`{user_id, year, month, start_date, end_date, days}`。`days` 包含自然月内每日 `{date, bars, overflow_count}`；每个 `bars` 最多 3 条，`overflow_count` 是其余任务的准确数量。任务条为 `{task_id, title, bar_color, start_date, end_date}`，起止日保留原跨度，客户端按当前日裁剪绘制。月任务条只包含当前已审批、未取消任务；已完成任务仍可显示历史跨度。
+- 周：`{user_id, start_date, end_date, dates, all_day_tasks, events}`。`dates` 为周一至周日 7 个日期；`all_day_tasks` 仅在当前周返回活动、已审批且未完成的负责人任务，条的 `start_date` 是本周周一，`end_date` 为截止日裁剪到本周范围的结果，过期任务止于周一。历史周和未来周返回空数组。
+- 日：`{user_id, date, start_date, end_date, dates, all_day_tasks, events}`。`dates` 是所选日期所在周；`all_day_tasks` 仅在所选日期为今天时返回，起止日均为今天。
+- `events` 只包含 `{task_id, task_title, event_type, occurred_at, tag_color}`，按真实时间升序，时间戳带时区，客户端按业务时区分组到 24 小时时间轴。事件类型：`created`（免审批创建）、`created_and_submitted`（创建并送审）、`updated`、`resubmitted`、`approval_approved`、`approval_returned`、`cancelled`、`progress_updated`、`completion_submitted`、`submitted_and_completed`、`acceptance_approved`、`acceptance_returned`。首次送审与创建合并；重提使用新审批轮次的创建时间；自行完成只返回一条事件。因任务详情权限变化而当前无法查看的历史事件不返回。
+- 任务条无标签时 `bar_color`、事件无标签时 `tag_color` 均为 `#D1D5DB`。响应无任务正文、进展摘要、标签名称或日志数据。
 
 ### 3.5 标签系统
 

@@ -63,6 +63,9 @@ export function getApiErrorMessage(error) {
     file: '附件',
     reason: '下线原因',
     status: '事项状态',
+    actor_id: '员工',
+    page: '页码',
+    page_size: '每页数量',
   }
   const fieldMessages = details && typeof details === 'object'
     ? Object.entries(details).flatMap(([field, messages]) => {
@@ -93,6 +96,8 @@ export const adminApi = {
   createUser: (data) => http.post('/admin/users/', data),
   dashboard: () => http.get('/admin/dashboard/'),
   auditLogs: (params = {}) => http.get('/admin/audit-logs/', { params: { page_size: 100, ...params } }),
+  appOperationLogs: (params = {}) => http.get('/admin/app-operation-logs/', { params }),
+  appOperationLog: (id) => http.get(`/admin/app-operation-logs/${id}/`),
   companyItems: (params = {}) => http.get('/admin/company-items/', { params: { page_size: 100, ...params } }),
   companyItem: (id) => http.get(`/admin/company-items/${id}/`),
   createCompanyItem: (data) => http.post('/admin/company-items/', data),
