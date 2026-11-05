@@ -155,5 +155,12 @@ SPECTACULAR_SETTINGS = {
         {"name": "基础服务", "description": "服务运行状态与基础信息。"},
         {"name": "身份认证", "description": "账号登录及 JWT 令牌管理。"},
     ],
+    # 两组审计枚举同名不同值，显式命名避免 OpenAPI 组件名冲突。
+    "ENUM_NAME_OVERRIDES": {
+        "AdminAuditModuleEnum": "apps.accounts.models.AdminAuditLog.Module",
+        "AdminAuditResultEnum": "apps.accounts.models.AdminAuditLog.Result",
+        "AppOperationAuditModuleEnum": "apps.accounts.models.AppOperationAuditLog.Module",
+        "AppOperationAuditResultEnum": "apps.accounts.models.AppOperationAuditLog.Result",
+    },
 }
 

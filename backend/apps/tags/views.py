@@ -5,7 +5,8 @@ from rest_framework.exceptions import APIException, PermissionDenied, Validation
 from rest_framework.response import Response
 
 from apps.accounts.api_serializers import StrictInputMixin
-from apps.accounts.models import User
+from apps.accounts.app_audit import record_app_operation
+from apps.accounts.models import AppOperationAuditLog, User
 from apps.core.api import BusinessAPIView, StandardPagination, paginated_response
 
 from .models import PALETTE, Tag
@@ -80,6 +81,11 @@ class TagListView(BusinessAPIView):
                 if Tag.objects.filter(name=name, is_active=True).exists():
                     raise Conflict()
                 tag = Tag.objects.create(name=name, color=form.validated_data["color"])
+                record_app_operation(
+                    actor=request.user, module=AppOperationAuditLog.Module.TAGS, action="create",
+                    object_type="tag", object_id=tag.pk, object_label=tag.name,
+                    before={}, after={"name": tag.name, "color": tag.color, "is_active": tag.is_active},
+                )
         except IntegrityError as exc:
             raise Conflict() from exc
         return Response(tag_data(tag), status=status.HTTP_201_CREATED)
@@ -98,6 +104,7 @@ class TagDetailView(BusinessAPIView):
                 if tag is None:
                     raise ValidationError("标签不存在或已停用。")
                 changes = form.validated_data
+                before_snapshot = {"name": tag.name, "color": tag.color}
                 if "name" in changes:
                     name = changes["name"]
                     if Tag.objects.filter(name=name, is_active=True).exclude(pk=pk).exists():
@@ -106,6 +113,14 @@ class TagDetailView(BusinessAPIView):
                 if "color" in changes:
                     tag.color = changes["color"]
                 tag.save(update_fields=[*changes.keys(), "updated_at"])
+                after_snapshot = {"name": tag.name, "color": tag.color}
+                record_app_operation(
+                    actor=request.user, module=AppOperationAuditLog.Module.TAGS, action="update",
+                    object_type="tag", object_id=tag.pk, object_label=tag.name,
+                    changed_fields=list(changes),
+                    before={field: before_snapshot[field] for field in changes},
+                    after={field: after_snapshot[field] for field in changes},
+                )
         except IntegrityError as exc:
             raise Conflict() from exc
         return Response(tag_data(tag))
@@ -120,4 +135,9 @@ class TagDetailView(BusinessAPIView):
             if tag.is_active:
                 tag.is_active = False
                 tag.save(update_fields=["is_active", "updated_at"])
+                record_app_operation(
+                    actor=request.user, module=AppOperationAuditLog.Module.TAGS, action="deactivate",
+                    object_type="tag", object_id=tag.pk, object_label=tag.name,
+                    before={"is_active": True}, after={"is_active": False},
+                )
         return Response({"id": tag.pk, "is_active": False})

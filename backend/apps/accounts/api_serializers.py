@@ -12,7 +12,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .authentication import has_complete_supervisor_chain
-from .models import AdminAuditLog, Department, Team, User
+from .models import AdminAuditLog, AppOperationAuditLog, Department, Team, User
 
 
 class StrictInputMixin:
@@ -450,6 +450,31 @@ class AuditLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = AdminAuditLog
         fields = ["id", "actor_id", "actor_name", "module", "action", "object_type", "object_id", "result", "before_data", "after_data", "created_at"]
+
+
+class AppOperationLogListSerializer(serializers.ModelSerializer):
+    """员工 App 操作摘要：列表不返回 before_data/after_data。"""
+
+    actor_id = serializers.IntegerField(read_only=True)
+    actor_name = serializers.CharField(source="actor_name_snapshot", read_only=True)
+    actor_business_role = serializers.CharField(source="actor_business_role_snapshot", read_only=True)
+    actor_department_name = serializers.CharField(source="actor_department_name_snapshot", read_only=True)
+    actor_team_name = serializers.CharField(source="actor_team_name_snapshot", read_only=True)
+    occurred_at = serializers.DateTimeField(source="created_at", read_only=True)
+    object_label = serializers.CharField(source="object_label_snapshot", read_only=True)
+
+    class Meta:
+        model = AppOperationAuditLog
+        fields = [
+            "id", "actor_id", "actor_name", "actor_business_role", "actor_department_name",
+            "actor_team_name", "occurred_at", "module", "action", "object_type",
+            "object_id", "object_label", "changed_fields", "result",
+        ]
+
+
+class AppOperationLogDetailSerializer(AppOperationLogListSerializer):
+    class Meta(AppOperationLogListSerializer.Meta):
+        fields = AppOperationLogListSerializer.Meta.fields + ["before_data", "after_data"]
 
 
 class BusinessUserCreateResponseSerializer(UserSerializer):

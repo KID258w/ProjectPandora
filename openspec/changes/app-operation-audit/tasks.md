@@ -1,15 +1,15 @@
 ## 1. Backend audit records
 
-- [ ] 1.1 Add the App operation audit entity, migration, indexes, actor snapshots and target label snapshots.
-- [ ] 1.2 Record successful login and supported App write events with allowlisted changed fields and before/after values in the business transaction.
-- [ ] 1.3 Exclude failed/read-only/exempt operations and redact passwords, full identity numbers, tokens and avatar binary data.
-- [ ] 1.4 Add backend tests for event coverage, snapshot accuracy, atomicity, redaction and failure paths.
+- [x] 1.1 Add the App operation audit entity, migration, indexes, actor snapshots and target label snapshots.
+- [x] 1.2 Record successful login and supported App write events with allowlisted changed fields and before/after values in the business transaction.
+- [x] 1.3 Exclude failed/read-only/exempt operations and redact passwords, full identity numbers, tokens and avatar binary data.
+- [x] 1.4 Add backend tests for event coverage, snapshot accuracy, atomicity, redaction and failure paths.
 
 ## 2. Administrator API
 
-- [ ] 2.1 Add a paginated newest-first list endpoint with employee filtering and summary-only fields.
-- [ ] 2.2 Add a read-only detail endpoint that returns the selected record's before/after values; require Web administrator access and disable caching.
-- [ ] 2.3 Document the endpoints in OpenAPI/Swagger and verify non-administrator access is denied.
+- [x] 2.1 Add a paginated newest-first list endpoint with employee filtering and summary-only fields.
+- [x] 2.2 Add a read-only detail endpoint that returns the selected record's before/after values; require Web administrator access and disable caching.
+- [x] 2.3 Document the endpoints in OpenAPI/Swagger and verify non-administrator access is denied.
 
 ## 3. Web operation history page
 
@@ -23,10 +23,18 @@
 - [x] 4.2 Create the proposal, capability specification and technical design for this change.
 - [ ] 4.3 Run relevant backend/Web checks and review access-control and data-retention behavior before release.
 
+## 验证记录（PR 1 后端，2026-11-04）
+
+- `python manage.py check`：通过。
+- `python manage.py makemigrations --check --dry-run`：无漏写迁移；新增迁移 `accounts.0013_appoperationauditlog`。
+- `python manage.py spectacular --file <tmp>`：Schema 生成成功，0 error（仅保留既有 `OrganizationTreeNodeSerializer.get_children` 类型提示告警）。
+- `python manage.py test apps.accounts.test_app_operation_audit`：9 项通过，覆盖成功/失败登录、员工与组织快照、字段白名单与脱敏、任务/日志/标签事件、写入事务回滚、管理员访问控制、分页与员工筛选、`Cache-Control: no-store`。
+- `python manage.py test`：与 `dev` 合并后 89 项全部通过。
+
 ## 验证记录（PR 2 Web，2026-11-04）
 
 - `cd web && npm run build`：通过（Vite 提示主 bundle 超过 500 kB）。
 - `git diff --check`：通过。
 - 路由审查：仅增加受管理员路由保护的员工 App 操作记录页面；未增加任务/日志浏览、写入、导出或恢复入口。
 - OpenSpec 严格校验：未完成，npm registry 域名解析失败（`ENOTFOUND`）。
-- 真实 API 联调：待后端 PR #32 合入并启动后端后完成；当前 PR #32 尚未合入 `dev`。
+- 真实 API 联调：随后端 PR #35 合入 `dev` 后完成；后端实现已包含该 PR。
