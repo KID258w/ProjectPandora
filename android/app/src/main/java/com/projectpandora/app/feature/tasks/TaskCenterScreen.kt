@@ -32,6 +32,7 @@ import com.projectpandora.app.feature.tags.TagSelectionDialog
 import com.projectpandora.app.ui.*
 import com.projectpandora.app.ui.theme.PandoraColors as C
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -44,6 +45,22 @@ private val taskDateTimeDisplayFormat get() = SimpleDateFormat("yyyy-MM-dd HH:mm
 private fun parseTaskDateTime(value: String?): Calendar = Calendar.getInstance().apply {
     if (!value.isNullOrBlank()) runCatching { taskDateTimeFormat.parse(value) }.getOrNull()?.let { time = it }
 }
+
+private fun parseTaskTimestamp(value: String): Long? {
+    val normalized = value.replace(Regex("\\.(\\d{3})\\d+(?=Z|[+-]\\d{2}:\\d{2}$)"), ".$1")
+    return listOf("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", "yyyy-MM-dd'T'HH:mm:ssXXX")
+        .firstNotNullOfOrNull { pattern ->
+            runCatching {
+                SimpleDateFormat(pattern, Locale.US).apply { isLenient = false }.parse(normalized)?.time
+            }.getOrNull()
+        }
+}
+
+private fun isOverdueTask(row: JsonObject, nowMillis: Long): Boolean =
+    row.string("approval_status") == "approved" &&
+        row.string("lifecycle_status") == "active" &&
+        row.string("completion_status") == "unfinished" &&
+        (parseTaskTimestamp(row.string("due_at"))?.let { it < nowMillis } == true)
 
 private fun parseTaskDate(value: String?): Calendar = Calendar.getInstance().apply {
     if (!value.isNullOrBlank()) runCatching { taskDateFormat.parse(value) }.getOrNull()?.let { time = it }
@@ -94,6 +111,7 @@ fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? 
     var me by remember { mutableLongStateOf(0L) }
     var error by remember { mutableStateOf("") }; var busy by remember { mutableStateOf(false) }
     var reload by remember { mutableIntStateOf(0) }
+    var currentTimeMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var status by remember { mutableStateOf("all") }; var lifecycle by remember { mutableStateOf("active") }
     var startDate by remember { mutableStateOf("") }; var endDate by remember { mutableStateOf("") }
     var estimatedStartFromDate by remember { mutableStateOf("") }; var estimatedStartToDate by remember { mutableStateOf("") }
@@ -102,6 +120,14 @@ fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? 
     var targetLoading by remember(initialSubordinateId) { mutableStateOf(initialSubordinateId != null) }
     var targetReload by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { try { val current = api.get(ROOT + "me/").data(); me = current.long("id"); role = current.string("business_role") } catch (e: Exception) { error = e.businessMessage() } }
+    LaunchedEffect(page) {
+        if (page == "list") {
+            while (true) {
+                currentTimeMillis = System.currentTimeMillis()
+                delay(30_000L)
+            }
+        }
+    }
     LaunchedEffect(initialSubordinateId, targetReload) {
         if (initialSubordinateId != null) {
             targetLoading = true
@@ -214,7 +240,7 @@ fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? 
                 }
             } else if (rows.isNotEmpty()) {
                 Text("左右滑动查看完整信息", color = C.Muted, fontSize = 12.sp)
-                TaskTable(rows) { row -> open(row.long("task_id", row.long("id"))) }
+                TaskTable(rows, currentTimeMillis) { row -> open(row.long("task_id", row.long("id"))) }
             }
             Spacer(Modifier.height(80.dp))
         }
@@ -502,7 +528,7 @@ private fun ApprovalQueueCard(row: JsonObject, inbox: Boolean, onClick: () -> Un
 }
 
 @Composable
-private fun TaskTable(rows: List<JsonObject>, onOpen: (JsonObject) -> Unit) {
+private fun TaskTable(rows: List<JsonObject>, nowMillis: Long, onOpen: (JsonObject) -> Unit) {
     val columns = listOf(
         "任务标题" to 220.dp,
         "创建人" to 128.dp,
@@ -555,6 +581,11 @@ private fun TaskTable(rows: List<JsonObject>, onOpen: (JsonObject) -> Unit) {
                         Column(Modifier.width(columns[5].second).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             TaskStatusBadge(if (row.string("completion_status") == "completed") "已完成" else "未完成")
                             if (cancelled) Text("已取消", color = C.Error, fontSize = 10.sp, maxLines = 1)
+                            if (isOverdueTask(row, nowMillis)) {
+                                Surface(modifier = Modifier.align(Alignment.End), color = C.ErrorPale, shape = RoundedCornerShape(50)) {
+                                    Text("逾期", Modifier.padding(horizontal = 7.dp, vertical = 3.dp), color = C.Error, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                }
+                            }
                         }
                     }
                     if (index < rows.lastIndex) HorizontalDivider(color = C.Line.copy(alpha = 0.72f))

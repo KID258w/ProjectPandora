@@ -105,22 +105,28 @@ class TagDetailView(BusinessAPIView):
                     raise ValidationError("标签不存在或已停用。")
                 changes = form.validated_data
                 before_snapshot = {"name": tag.name, "color": tag.color}
-                if "name" in changes:
-                    name = changes["name"]
+                actual_changes = {
+                    field: value
+                    for field, value in changes.items()
+                    if getattr(tag, field) != value
+                }
+                if "name" in actual_changes:
+                    name = actual_changes["name"]
                     if Tag.objects.filter(name=name, is_active=True).exclude(pk=pk).exists():
                         raise Conflict()
                     tag.name = name
-                if "color" in changes:
-                    tag.color = changes["color"]
-                tag.save(update_fields=[*changes.keys(), "updated_at"])
-                after_snapshot = {"name": tag.name, "color": tag.color}
-                record_app_operation(
-                    actor=request.user, module=AppOperationAuditLog.Module.TAGS, action="update",
-                    object_type="tag", object_id=tag.pk, object_label=tag.name,
-                    changed_fields=list(changes),
-                    before={field: before_snapshot[field] for field in changes},
-                    after={field: after_snapshot[field] for field in changes},
-                )
+                if "color" in actual_changes:
+                    tag.color = actual_changes["color"]
+                if actual_changes:
+                    tag.save(update_fields=[*actual_changes.keys(), "updated_at"])
+                    after_snapshot = {"name": tag.name, "color": tag.color}
+                    record_app_operation(
+                        actor=request.user, module=AppOperationAuditLog.Module.TAGS, action="update",
+                        object_type="tag", object_id=tag.pk, object_label=tag.name,
+                        changed_fields=list(actual_changes),
+                        before={field: before_snapshot[field] for field in actual_changes},
+                        after={field: after_snapshot[field] for field in actual_changes},
+                    )
         except IntegrityError as exc:
             raise Conflict() from exc
         return Response(tag_data(tag))

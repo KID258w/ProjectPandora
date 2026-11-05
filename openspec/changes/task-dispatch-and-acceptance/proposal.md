@@ -9,6 +9,7 @@ The task workflow has been simplified after product-owner review. Work decomposi
 - Define task notifications for direct-subordinate approvals, approval results sent to creators, and newly approved work assigned to another user; keep notification read state separate from task workflow state.
 - Add a dedicated Approval Center for creator/approver queues; keep only approved tasks in `Created by Me` and `My Tasks`.
 - Use one filter form for ordinary task scope, estimated-start and deadline ranges, and completion state; subordinate inspection adds a task scope toggle (`承担的任务` / `创建的任务`, default assigned) and employee-name selection restricted to authorized descendants. Keep approval queues outside ordinary task filters.
+- Mark approved, active, unfinished tasks past their deadline with a small red “逾期” tag in ordinary and authorized subordinate task lists; compute the tag in the App without adding a persisted task status.
 - Add an optional estimated start date/time to task definitions. Use date and time wheels with minute precision for estimated start and deadline; use day-only date wheels for task-list estimated-start and deadline filters.
 - Place Approval Center and subordinate-inspection shortcuts in the task-center top-right area, with a fixed bottom-right plus button for task creation on ordinary lists.
 - Replace task percentage progress with timestamped text updates; keep completion status binary.

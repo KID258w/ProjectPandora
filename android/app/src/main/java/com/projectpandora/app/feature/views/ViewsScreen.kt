@@ -1,6 +1,5 @@
 package com.projectpandora.app.feature.views
 
-import android.app.DatePickerDialog
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -14,7 +13,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -40,6 +38,19 @@ internal fun date(c: Calendar): String = format("yyyy-MM-dd").format(c.time)
 internal fun parseBusinessDate(value: String): Long? = runCatching { format("yyyy-MM-dd").apply { isLenient = false }.parse(value)!!.time + 12 * 3_600_000L }.getOrNull()
 private fun weekStart(c: Calendar) = cal(c.timeInMillis).apply { add(Calendar.DAY_OF_MONTH, -((get(Calendar.DAY_OF_WEEK) + 5) % 7)) }
 private val WEEKDAYS = listOf("一", "二", "三", "四", "五", "六", "日")
+
+internal fun calendarPickerMillis(current: Calendar): Long = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+    clear()
+    set(current.get(Calendar.YEAR), current.get(Calendar.MONTH), current.get(Calendar.DAY_OF_MONTH))
+}.timeInMillis
+
+internal fun businessDateFromCalendarPicker(value: Long): Long {
+    val chosen = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = value }
+    return cal().apply {
+        clear()
+        set(chosen.get(Calendar.YEAR), chosen.get(Calendar.MONTH), chosen.get(Calendar.DAY_OF_MONTH), 12, 0, 0)
+    }.timeInMillis
+}
 
 /** Parses server timestamps (UTC `Z` or an offset, optional micro-seconds) into the business-time-zone calendar. */
 internal fun eventLocalTime(value: String): Calendar? {
@@ -86,12 +97,12 @@ fun ViewsScreen(
     var mode by rememberSaveable { mutableStateOf("月") }
     var selected by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
     var showMonthPicker by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
     var reload by remember { mutableIntStateOf(0) }
     var data by remember { mutableStateOf<JsonObject?>(null) }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     val current = cal(selected)
-    val context = LocalContext.current
     if (viewingMember && onBackToMember != null) BackHandler { onBackToMember() }
     LaunchedEffect(mode, selected, reload, memberId) {
         data = null; error = ""; busy = true
@@ -105,6 +116,10 @@ fun ViewsScreen(
     if (showMonthPicker) MonthPicker(current, { showMonthPicker = false }) { year, month ->
         val c = cal(selected); c.set(Calendar.DAY_OF_MONTH, 1); c.set(Calendar.YEAR, year); c.set(Calendar.MONTH, month)
         selected = c.timeInMillis; showMonthPicker = false
+    }
+    if (showDatePicker) WorkViewDateCalendarDialog(current, mode, { showDatePicker = false }) {
+        selected = it
+        showDatePicker = false
     }
     fun shift(step: Int) {
         val c = cal(selected)
@@ -139,9 +154,8 @@ fun ViewsScreen(
             PeriodArrow(previous = true, description = "上一周期") { shift(-1) }
             TextButton(onClick = {
                 if (mode == "月") showMonthPicker = true
-                else DatePickerDialog(context, { _, y, m, d -> val c = cal(selected); c.set(y, m, d); selected = c.timeInMillis },
-                    current.get(Calendar.YEAR), current.get(Calendar.MONTH), current.get(Calendar.DAY_OF_MONTH)).show()
-            }, modifier = Modifier.weight(1f)) {
+                else showDatePicker = true
+            }, modifier = Modifier.weight(1f).testTag("work-view-period-picker")) {
                 Text("${current.get(Calendar.YEAR)}年 ${current.get(Calendar.MONTH) + 1}月" + (if (mode == "日") " ${current.get(Calendar.DAY_OF_MONTH)}日" else "") + " ▾",
                     fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.Ink)
             }
@@ -197,6 +211,41 @@ private fun MonthPicker(current: Calendar, onDismiss: () -> Unit, onChoose: (Int
             } }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WorkViewDateCalendarDialog(current: Calendar, mode: String, onDismiss: () -> Unit, onChoose: (Long) -> Unit) {
+    val picker = rememberDatePickerState(initialSelectedDateMillis = calendarPickerMillis(current))
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("work-view-date-dialog"),
+        confirmButton = {
+            TextButton(
+                enabled = picker.selectedDateMillis != null,
+                onClick = { picker.selectedDateMillis?.let { onChoose(businessDateFromCalendarPicker(it)) } },
+            ) { Text("确定") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    ) {
+        DatePicker(
+            state = picker,
+            modifier = Modifier.testTag("work-view-calendar"),
+            showModeToggle = false,
+            title = {
+                Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(if (mode == "周") "选择所在周" else "选择日期", color = C.Ink)
+                    Text(if (mode == "周") "点选日期，查看它所在的一周" else "点选日期，查看当天视图", color = C.Muted, fontSize = 12.sp)
+                }
+            },
+            colors = DatePickerDefaults.colors(
+                selectedDayContainerColor = C.Amber,
+                selectedDayContentColor = C.Ink,
+                todayDateBorderColor = C.Amber,
+                todayContentColor = C.Ink,
+            ),
+        )
+    }
 }
 
 internal data class MonthSegment(val bar: JsonObject, val start: Int, var end: Int, var lane: Int = 0)
@@ -302,16 +351,22 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
         val bars = data?.array("all_day_tasks").orEmpty()
         if (bars.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(end = 8.dp, top = 4.dp, bottom = 6.dp)) {
             Text("全天", Modifier.width(42.dp).padding(top = 8.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = C.Muted, textAlign = TextAlign.Center)
-            BoxWithConstraints(Modifier.weight(1f)) {
+            BoxWithConstraints(Modifier.weight(1f).testTag("all-day-task-grid")) {
                 val available = maxWidth
                 Column(Modifier.heightIn(max = 132.dp).verticalScroll(rememberScrollState())) {
                     bars.forEach { bar ->
-                        val endColumn = dates.indexOfFirst { date(it) == bar.string("end_date") }.let { if (it < 0) 6 else it }
-                        val fraction = if (mode == "周") (endColumn + 1) / 7f else 1f
-                        Text(bar.string("title"), Modifier.width(available * fraction).padding(bottom = 3.dp)
-                            .background(color(bar.string("bar_color")), RoundedCornerShape(5.dp)).clickable { onTask(bar.long("task_id")) }
-                            .padding(horizontal = 8.dp, vertical = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.Ink,
-                            textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        val startColumn = if (mode == "周") dates.indexOfFirst { date(it) == bar.string("start_date") } else 0
+                        val endColumn = if (mode == "周") dates.indexOfFirst { date(it) == bar.string("end_date") } else 0
+                        if (startColumn < 0 || endColumn < startColumn) return@forEach
+                        val columnCount = if (mode == "周") 7 else 1
+                        Box(Modifier.fillMaxWidth().padding(bottom = 3.dp)) {
+                            Text(bar.string("title"), Modifier.offset(x = available * (startColumn.toFloat() / columnCount))
+                                .width(available * ((endColumn - startColumn + 1).toFloat() / columnCount))
+                                .testTag("all-day-task-${bar.long("task_id")}")
+                                .background(color(bar.string("bar_color")), RoundedCornerShape(5.dp)).clickable { onTask(bar.long("task_id")) }
+                                .padding(horizontal = 8.dp, vertical = 8.dp), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.Ink,
+                                textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }

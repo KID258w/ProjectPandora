@@ -126,13 +126,21 @@ def month_data(user, year, month):
             "start_date": first, "end_date": last, "days": days}
 
 
-def all_day_tasks(user, week_start, week_end):
+def all_day_tasks(user, selected_start, selected_end):
     tasks = task_rows(Task.objects.filter(
         assignee=user, approval_status=Task.Approval.APPROVED,
-        completion_status=Task.Completion.UNFINISHED,
         lifecycle_status=Task.Lifecycle.ACTIVE,
+        due_at__date__gte=selected_start,
     ).order_by("due_at", "pk"))
-    return [bar(task, week_start, min(max(local_date(task.due_at), week_start), week_end)) for task in tasks]
+    result = []
+    for task in tasks:
+        task_bar = bar(task)
+        start = max(task_bar["start_date"], selected_start)
+        end = min(task_bar["end_date"], selected_end)
+        if start <= end:
+            task_bar.update(start_date=start, end_date=end)
+            result.append(task_bar)
+    return result
 
 
 def events(request, user, start, end):
@@ -211,10 +219,9 @@ class WeekWorkView(BusinessAPIView):
         selected = selected_date(request)
         start = selected - timedelta(days=selected.weekday())
         end = start + timedelta(days=6)
-        today = timezone.localdate()
         return Response({"user_id": user.pk, "start_date": start, "end_date": end,
                          "dates": [start + timedelta(days=i) for i in range(7)],
-                         "all_day_tasks": all_day_tasks(user, start, end) if start <= today <= end else [],
+                         "all_day_tasks": all_day_tasks(user, start, end),
                          "events": events(request, user, start, end)})
 
 
@@ -229,5 +236,5 @@ class DayWorkView(BusinessAPIView):
         end = start + timedelta(days=6)
         return Response({"user_id": user.pk, "date": selected, "start_date": start, "end_date": end,
                          "dates": [start + timedelta(days=i) for i in range(7)],
-                         "all_day_tasks": all_day_tasks(user, selected, selected) if selected == timezone.localdate() else [],
+                         "all_day_tasks": all_day_tasks(user, selected, selected),
                          "events": events(request, user, selected, selected)})

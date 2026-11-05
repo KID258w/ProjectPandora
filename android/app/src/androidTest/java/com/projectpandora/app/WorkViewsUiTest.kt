@@ -1,6 +1,8 @@
 package com.projectpandora.app
 
 import androidx.activity.ComponentActivity
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.test.*
@@ -76,6 +78,71 @@ class WorkViewsUiTest {
         compose.onNodeWithContentDescription("已选 $selected").performClick()
         compose.waitUntil(5000) { api.requests.last().let { it.first.endsWith("day/") && it.second["date"] == selected } }
         compose.onNodeWithText("今天").assertIsDisplayed()
+    }
+
+    @Test fun weekAndDayCalendarsConfirmTheChosenDateAndCancelWithoutNavigation() {
+        val api = FixtureApi(true)
+        compose.setContent { PandoraAppTheme { ViewsScreen(api, true, {}, {}, { _, _ -> }) } }
+        for ((mode, endpoint) in listOf("周" to "week/", "日" to "day/")) {
+            compose.onNodeWithTag("mode-$mode").performClick()
+            compose.waitUntil(5000) { api.requests.lastOrNull()?.first?.endsWith(endpoint) == true }
+            val previousDate = api.requests.last().second.getValue("date")
+            val chosenDay = if (previousDate.takeLast(2).toInt() == 15) 16 else 15
+            val chosen = previousDate.take(8) + "%02d".format(Locale.US, chosenDay)
+            compose.onNodeWithTag("work-view-period-picker").performClick()
+            compose.onNodeWithTag("work-view-date-dialog").assertIsDisplayed()
+            selectCalendarDate(chosen)
+            compose.onNodeWithText("确定").performClick()
+            compose.waitUntil(5000) { api.requests.last().let { it.first.endsWith(endpoint) && it.second["date"] == chosen } }
+            compose.onNodeWithContentDescription("已选 $chosen").assertExists()
+
+            val requestsBeforeCancel = api.requests.size
+            compose.onNodeWithTag("work-view-period-picker").performClick()
+            compose.onNodeWithTag("work-view-date-dialog").assertIsDisplayed()
+            selectCalendarDate(chosen.take(8) + "17")
+            compose.onNodeWithText("取消").performClick()
+            compose.onNodeWithTag("work-view-date-dialog").assertDoesNotExist()
+            compose.runOnIdle { assertEquals(requestsBeforeCancel, api.requests.size) }
+            compose.onNodeWithContentDescription("已选 $chosen").assertExists()
+        }
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    private fun selectCalendarDate(value: String) {
+        val utcDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.parse(value)!!.time
+        val label = DatePickerDefaults.dateFormatter().formatDate(utcDate, compose.activity.resources.configuration.locales[0], forContentDescription = true)!!
+        compose.onNode(hasText(label) and hasAnyAncestor(hasTestTag("work-view-calendar"))).performClick()
+    }
+
+    @Test fun weekAllDayBarStartsAndEndsUnderItsActualDates() {
+        val api = object : FixtureApi(true) {
+            override suspend fun get(path: String, query: Map<String, String>): JsonObject {
+                val response = super.get(path, query)
+                if (path.endsWith("week/")) {
+                    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("Asia/Shanghai") }
+                    val start = Calendar.getInstance(formatter.timeZone).apply {
+                        time = formatter.parse(query.getValue("date"))!!
+                        add(Calendar.DAY_OF_MONTH, -((get(Calendar.DAY_OF_WEEK) + 5) % 7))
+                    }
+                    val thursday = (start.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, 3) }
+                    val friday = (start.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, 4) }
+                    response.getAsJsonObject("data").add("all_day_tasks", JsonArray().apply {
+                        add(JsonObject().apply {
+                            addProperty("task_id", 42); addProperty("title", "周四至周五任务"); addProperty("bar_color", "#CFE9DE")
+                            addProperty("start_date", formatter.format(thursday.time)); addProperty("end_date", formatter.format(friday.time))
+                        })
+                    })
+                }
+                return response
+            }
+        }
+        compose.setContent { PandoraAppTheme { ViewsScreen(api, true, {}, {}, { _, _ -> }) } }
+        compose.onNodeWithTag("mode-周").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("all-day-task-42").fetchSemanticsNodes().isNotEmpty() }
+        val grid = compose.onNodeWithTag("all-day-task-grid").fetchSemanticsNode().boundsInRoot
+        val bar = compose.onNodeWithTag("all-day-task-42").fetchSemanticsNode().boundsInRoot
+        assertEquals(grid.left + grid.width * 3 / 7f, bar.left, 3f)
+        assertEquals(grid.width * 2 / 7f, bar.width, 3f)
     }
 
     @Test fun memberViewQueriesTheMemberAndOpensTasksReadOnly() {

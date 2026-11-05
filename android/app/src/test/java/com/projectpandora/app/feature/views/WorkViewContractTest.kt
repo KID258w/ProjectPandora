@@ -50,8 +50,9 @@ class WorkViewContractTest {
         assertEquals(7, dates.size)
         assertEquals(week.string("start_date"), dates.first())
         week.array("all_day_tasks").forEach { bar ->
-            assertEquals(dates.first(), bar.string("start_date"))
+            assertTrue(bar.string("start_date") in dates)
             assertTrue(bar.string("end_date") in dates)
+            assertTrue(bar.string("start_date") <= bar.string("end_date"))
         }
         week.array("events").forEach { event -> assertTrue(date(eventLocalTime(event.string("occurred_at"))!!) in dates) }
     }

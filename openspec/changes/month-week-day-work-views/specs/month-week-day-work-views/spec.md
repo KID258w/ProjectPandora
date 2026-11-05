@@ -31,7 +31,7 @@ For each approved task, month view SHALL start the bar on the business-local dat
 - **THEN** its bar starts on the task's original creation date and ends on its deadline, regardless of the later approval date
 
 ### Requirement: Month task bars show title and tag color
-Month task bars SHALL show only the task title and use the first associated tag's color, or neutral gray when no tag is associated. Each date SHALL show at most three bars plus an exact “+N项” overflow. Bars SHALL open task detail; dates and overflow SHALL open day view.
+Month task bars SHALL show only the task title and use the first associated tag's color, or neutral gray when no tag is associated. Approved, non-cancelled tasks SHALL be included when their inclusive date spans overlap the selected month, regardless of completion or overdue status. Each date SHALL show at most three bars plus an exact “+N项” overflow. Bars SHALL open task detail; dates and overflow SHALL open day view.
 
 #### Scenario: Month bars show title and tag color only
 - **WHEN** a user views tasks in the month calendar
@@ -44,9 +44,9 @@ Month task bars SHALL show only the task title and use the first associated tag'
 ### Requirement: Week and day views use a date strip and full-day time axis
 Week view SHALL show a Monday–Sunday date strip, all-day task area, and full 24-hour timeline in that order; seven columns fit without horizontal scrolling. Date strip and all-day area stay fixed while the aligned timeline scrolls vertically. Day view reuses the fixed week strip with the selected date highlighted and its full-day timeline; dates remain selectable.
 
-#### Scenario: User views the current week calendar
-- **WHEN** a user opens the current week
-- **THEN** the view shows the Monday–Sunday date strip, the current-week all-day unfinished-task bars, and the 00:00–23:00 timeline with date columns
+#### Scenario: User views any week calendar
+- **WHEN** a user opens a past, current, or future week
+- **THEN** the view shows the Monday–Sunday date strip, the selected person's approved, non-cancelled task bars whose date spans overlap that week regardless of completion or overdue status, and the 00:00–23:00 timeline with date columns
 
 #### Scenario: User changes the viewed day from a date strip
 - **WHEN** a user selects a date in a week or day date strip
@@ -58,18 +58,25 @@ Week view SHALL show a Monday–Sunday date strip, all-day task area, and full 2
 
 #### Scenario: Day keeps its date strip and all-day task area fixed
 - **WHEN** a user vertically scrolls the selected day's timeline
-- **THEN** the compact seven-day strip and today's all-day task area remain fixed and the selected date's events scroll only vertically
+- **THEN** the compact seven-day strip and the selected date's all-day task area remain fixed and the selected date's events scroll only vertically
 
 ### Requirement: Work-view periods support direct date selection
-The month period header SHALL open a quick year/month selector. The week and day period headers SHALL open a calendar that allows directly selecting a specific date. Selecting a date in week mode SHALL show the week containing that date and highlight the selected date; selecting a date in day mode SHALL show that exact date. The week and day date strips SHALL remain directly selectable as already specified above.
+The month header SHALL open a year/month selector. Week/day headers SHALL open a calendar with year/month navigation and selectable dates. Confirmation SHALL select that date's week or exact day and highlight the chosen date. Cancellation SHALL leave the date unchanged. Date strips SHALL remain selectable.
 
 #### Scenario: User jumps to a month in month mode
 - **WHEN** a user opens the quick year/month selector from month mode and chooses a year and month
 - **THEN** the month view navigates to the selected month
 
 #### Scenario: User directly selects a date in week or day mode
-- **WHEN** a user opens the calendar from week/day mode and taps a specific date
+- **WHEN** a user opens the calendar from week/day mode, selects a date, and confirms
 - **THEN** week mode jumps to the containing week and highlights that date, while day mode opens the exact selected date
+
+### Requirement: Calendar selection preserves the business date
+The calendar SHALL offer valid dates for each displayed month. Its selected year, month, and day SHALL be converted to the business-time-zone date without using the device's local date interpretation of the picker's UTC timestamp.
+
+#### Scenario: Calendar selection is independent of the device time zone
+- **WHEN** a user selects a date such as February 29 in a leap year while the device is in another time zone
+- **THEN** the work-view request uses that exact calendar date in the business time zone
 
 ### Requirement: Work view has compact controls without a subordinate selector
 The work-view page SHALL omit its redundant brand masthead and large page title. It SHALL show the selected member and provide compact Task Center and Organization Relationships buttons at the top right. It SHALL NOT provide a subordinate selector; another member can be selected only through the authorized member profile in Organization Relationships.
@@ -87,7 +94,7 @@ Week/day views SHALL place task creation/submission, edits/resubmission, approva
 
 #### Scenario: Pending task actions appear without creating task bars
 - **WHEN** a task is awaiting approval
-- **THEN** its creation/submission event may appear in the creator's view and the approval event may appear in the approver's view, while the task itself remains absent from all unfinished task-bar areas until approved
+- **THEN** its creation/submission event may appear in the creator's view and the approval event may appear in the approver's view, while the task itself remains absent from all task-bar areas until approved
 
 ### Requirement: Week and day event cards use the same compact information
 Week and day event cards SHALL use the task's first associated tag color, or neutral gray when no tag exists. Both SHALL show only time, task title, and event type, without a summary.
@@ -112,17 +119,36 @@ Week and day event cards SHALL use the task's first associated tag color, or neu
 - **WHEN** multiple events occur within one hour of the selected day
 - **THEN** the day hour row expands to show every compact event card without clipping or crossing the neighboring hour boundary
 
-### Requirement: Current unfinished tasks appear in the all-day area
-The current week SHALL show the selected person's active unfinished tasks as clickable “全天” bars from Monday through the deadline column, or through Sunday when due outside the week. Bar length only cues whether the deadline is in this week; it does not show duration. Today shows full-width bars. Past/future periods omit this area, and future events are not fabricated.
+### Requirement: Task bars are selected by date span regardless of completion or overdue status
+Month, week, and day views SHALL include the selected person's approved, non-cancelled tasks whose inclusive business-local date spans overlap the selected period. Completion and overdue status SHALL NOT independently filter task bars. Pending and cancelled tasks SHALL remain absent. Events SHALL remain limited to the selected period; future events SHALL NOT be fabricated.
 
-#### Scenario: Current week shows cross-day all-day task bars
-- **WHEN** the selected responsible person has active unfinished tasks and views the current week
-- **THEN** the “全天” area shows clickable task bars that can extend across multiple date columns; their length cues whether the deadline is in this week but does not represent task duration
+#### Scenario: Completed and unfinished tasks appear when dates overlap
+- **WHEN** approved, non-cancelled tasks with completed and unfinished statuses have date spans overlapping the selected month, week, or day
+- **THEN** both tasks appear in that view, while tasks whose date spans do not overlap remain absent
 
-#### Scenario: Today shows all-day task bars
-- **WHEN** the selected responsible person has active unfinished tasks and views today
+#### Scenario: Overdue status does not hide an overlapping task
+- **WHEN** an approved, non-cancelled unfinished task is overdue but its date span overlaps the selected month, week, or day
+- **THEN** its task bar remains visible for the overlapping dates
+
+#### Scenario: Historical or future period uses its own task spans
+- **WHEN** the selected period is a past or future week or date
+- **THEN** approved, non-cancelled tasks whose date spans overlap that selected period appear regardless of completion or overdue status, actual events are limited to the selected period, and future events are not fabricated
+
+#### Scenario: Day task bars appear only inside their inclusive task span
+- **WHEN** a task starts on November 10 and has a November 12 deadline
+- **THEN** its all-day bar appears on November 10, 11, and 12 and does not appear on November 9 or 13, provided it is approved and not cancelled
+
+### Requirement: All-day task bars use the selected period for their span
+Week bars SHALL use the intersection of the task's date span and the selected Monday–Sunday week. Their left position SHALL match the clipped start date and their width SHALL end at the clipped deadline date. Non-overlapping tasks SHALL be omitted. Eligible day bars SHALL span the selected day's full width. The date span SHALL NOT imply actual execution time or work hours.
+
+#### Scenario: Any selected week shows cross-day all-day task bars
+- **WHEN** an eligible task starts on Thursday and ends on Friday in the selected week
+- **THEN** its clickable all-day bar starts in Thursday's column and ends in Friday's column, leaving Monday through Wednesday unoccupied by that task
+
+#### Scenario: Cross-week task bars are clipped at week boundaries
+- **WHEN** an eligible task's date span overlaps more than one week
+- **THEN** each selected week shows only the intersecting portion, and weeks before the start or after the deadline omit that task
+
+#### Scenario: Any selected day shows all-day task bars
+- **WHEN** the selected responsible person views a date covered by an approved, non-cancelled task's date span
 - **THEN** the “全天” area shows clickable task bars without extra status, deadline, or summary text above the complete 24-hour timeline
-
-#### Scenario: Historical or future period omits the unfinished area
-- **WHEN** the selected period is not the current week or today
-- **THEN** the relevant unfinished-task area is omitted; only actual events are displayed and future events are not fabricated

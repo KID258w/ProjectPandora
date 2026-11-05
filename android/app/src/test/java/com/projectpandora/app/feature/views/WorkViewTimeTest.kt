@@ -61,4 +61,22 @@ class WorkViewTimeTest {
             "progress_updated", "completion_submitted", "submitted_and_completed", "acceptance_approved", "acceptance_returned")
             .forEach { assertNotEquals(it, eventLabel(it)) }
     }
+
+    @Test fun calendarPickerPreservesBusinessDatesAcrossDeviceTimezones() {
+        val old = TimeZone.getDefault()
+        try {
+            for (deviceZone in listOf("UTC", "America/Los_Angeles", "Pacific/Kiritimati")) {
+                TimeZone.setDefault(TimeZone.getTimeZone(deviceZone))
+                for ((year, month, day) in listOf(Triple(2028, 2, 29), Triple(2026, 12, 31), Triple(2027, 1, 1))) {
+                    val selected = Calendar.getInstance(BUSINESS_TIME_ZONE).apply { clear(); set(year, month - 1, day, 23, 45) }
+                    val pickerValue = calendarPickerMillis(selected)
+                    val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = pickerValue }
+                    assertEquals(0, utc.get(Calendar.HOUR_OF_DAY))
+                    val restored = Calendar.getInstance(BUSINESS_TIME_ZONE).apply { timeInMillis = businessDateFromCalendarPicker(pickerValue) }
+                    assertEquals(date(selected), date(restored))
+                    assertEquals(12, restored.get(Calendar.HOUR_OF_DAY))
+                }
+            }
+        } finally { TimeZone.setDefault(old) }
+    }
 }

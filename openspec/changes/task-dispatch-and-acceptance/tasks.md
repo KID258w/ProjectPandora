@@ -28,6 +28,7 @@
 - [x] 3.8 Make task detail sections role-aware; remove the standalone start button, `/start/` API, and `started_at` field because the MVP has no separate start state.
 - [x] 3.9 Add estimated-start and deadline date/time wheels with minute precision to the task form, and year/month/day wheels with day precision to ordinary and subordinate estimated-start/deadline filters.
 - [x] 3.10 Render ordinary and subordinate task lists as one horizontally scrollable aligned table with title, creator, assignee, estimated start, deadline, and completion status; preserve task-detail navigation and the separate Approval Center layout.
+- [ ] 3.11 Display a computed red overdue tag in task-list rows for approved, active, unfinished tasks past their deadline, without changing completion filters or adding a database status.
 
 ## 4. Verification
 

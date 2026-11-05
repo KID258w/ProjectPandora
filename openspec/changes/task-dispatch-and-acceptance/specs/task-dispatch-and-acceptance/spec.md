@@ -243,6 +243,13 @@ The ordinary task-center list and read-only subordinate task list SHALL render t
 - **WHEN** the user selects a task row
 - **THEN** the app opens the existing task detail and preserves the detail's current role-based content and actions
 
+### Requirement: Task lists compute overdue tags from existing state
+An approved, active, unfinished task past its deadline SHALL display a small red “逾期” tag at the lower-right of its completion-status cell. The App SHALL compute this from existing fields without persisting another task state or changing completion filters. Completed, cancelled, and pending tasks SHALL NOT display this tag.
+
+#### Scenario: Task list computes overdue state from existing fields
+- **WHEN** a listed task is approved, active, unfinished, and its deadline has passed according to the App's current time
+- **THEN** its ordinary or authorized subordinate task-list row shows a red “逾期” tag while completion-status filters behave as before
+
 #### Scenario: User opens Approval Center
 - **WHEN** the user opens an approval queue
 - **THEN** the app retains the dedicated approval-list presentation instead of rendering the ordinary task table

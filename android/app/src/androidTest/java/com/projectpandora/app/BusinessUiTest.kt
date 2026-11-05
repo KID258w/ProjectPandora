@@ -18,7 +18,6 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.Response
 import org.junit.Assert.*
 import org.junit.Rule
-import org.junit.Ignore
 import org.junit.Test
 
 class BusinessUiTest {
@@ -39,21 +38,16 @@ class BusinessUiTest {
         assertFalse(api.calls.any { it.contains("/submit/") })
     }
 
-    @Ignore("dev 上首页已改为读取 home/ 接口且移除了 onViews 参数（Issue #22），该用例待首页负责人按新实现重写")
-    @Test fun homeShowsOriginalSamplePanelsAndOpensViews() {
-        val api = FakeBusinessApi(); var viewsOpened = false
+    @Test fun homeLoadsAndDisplaysDashboardDataFromApi() {
+        val api = FakeBusinessApi()
         compose.setContent {
             PandoraAppTheme {
-                HomeScreen(BusinessUser("a", "小王", "员工"), api, {}, { viewsOpened = true })
+                HomeScreen(BusinessUser("a", "小王", "员工"), api, {}, {})
             }
         }
-        compose.onNodeWithText("公司重要事项").assertExists()
-        compose.onNodeWithText("公司十大重要任务").assertExists()
-        compose.onNodeWithText("个人重点工作").assertExists()
-        compose.onNodeWithText("最近日志").assertExists()
-        compose.onAllNodesWithText("产品阶段评审")[0].performScrollTo().performClick()
-        assertTrue(viewsOpened)
-        assertFalse(api.calls.any { it.contains("home/") })
+        compose.waitUntil(10000) { api.calls.any { it.startsWith("GET ") && it.contains("home/") } }
+        compose.waitUntil(10000) { compose.onAllNodesWithText("Home item alpha").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Home item alpha").assertExists()
     }
 
     @Test fun approvalReturnRequiresReasonAndSendsIt() {
@@ -230,7 +224,7 @@ private class FakeBusinessApi(private val failFocus: Boolean = false, private va
     override suspend fun get(path: String, query: Map<String, String>): JsonObject {
         calls += "GET $path"
         return when {
-            path.endsWith("home/") -> parse("""{"company_items":[],"company_top_tasks":[{"id":1,"title":"任务 1"},{"id":2,"title":"任务 2"},{"id":3,"title":"任务 3"},{"id":4,"title":"任务 4"},{"id":5,"title":"任务 5"},{"id":6,"title":"任务 6"}],"personal_focus_tasks":[],"recent_logs":[],"unread_notification_count":0}""")
+            path.endsWith("home/") -> parse("""{"company_items":[{"id":1,"title":"Home item alpha"}],"company_top_tasks":[{"id":1,"title":"任务 1"},{"id":2,"title":"任务 2"},{"id":3,"title":"任务 3"},{"id":4,"title":"任务 4"},{"id":5,"title":"任务 5"},{"id":6,"title":"任务 6"}],"personal_focus_tasks":[],"recent_logs":[],"unread_notification_count":0}""")
             path.endsWith("notifications/") -> parse("{\"results\":[" + (1..20).joinToString(",") { """{"id":$it,"task_id":$it,"task_title":"${if (it == 1) "审批通知示例" else "通知 $it"}","notification_type":"${if (it == 1) "approval_required" else "assignment_received"}","is_read":false}""" } + "],\"next\":null}")
             path.endsWith("personal-focus/") -> if (failFocus) throw java.io.IOException("offline") else parse("""{"tasks":[{"task_id":1,"title":"重点 A"},{"task_id":2,"title":"重点 B"}],"initialized":true}""")
             path.endsWith("me/") -> parse("""{"id":7,"business_role":"$role"}""")

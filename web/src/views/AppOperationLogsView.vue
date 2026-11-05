@@ -28,9 +28,13 @@ const fieldLabels = {
   title: '标题', description: '说明', assignee_id: '负责人', due_at: '截止时间',
   estimated_start_at: '预计开始时间', required_materials: '预期材料', association_note: '关联说明',
   tag_ids: '标签', completion_status: '完成状态', lifecycle_status: '任务状态',
-  approval_status: '审批状态', completed_work: '今日完成', tomorrow_plan: '明日计划',
+  approval_status: '审批状态', approval_round: '审批轮次', completed_work: '今日完成',
+  next_day_plan: '明日计划', tomorrow_plan: '明日计划', status: '日志状态',
   log_date: '日志日期', content: '内容', body: '正文', text: '内容', reason: '原因',
-  decision: '处理结果', display_name: '姓名', username: '手机号', id_number: '身份证号（值未记录）',
+  decision: '处理结果', comment: '审批意见', cancellation_reason: '取消原因',
+  completion_note: '完成说明', materials_note: '材料说明', review_status: '验收状态',
+  review_comment: '验收意见', name: '标签名称', color: '标签颜色', is_active: '启用状态',
+  display_name: '姓名', username: '手机号', id_number: '身份证号（值未记录）',
   password: '密码（值未记录）', avatar: '头像（图片未记录）', avatar_url: '头像（图片未记录）',
 }
 const safeFields = computed(() => selectedLog.value?.changed_fields || [])
