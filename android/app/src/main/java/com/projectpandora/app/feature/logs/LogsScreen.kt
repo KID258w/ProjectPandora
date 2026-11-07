@@ -29,13 +29,16 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.google.gson.JsonObject
 import com.projectpandora.app.core.network.*
+import com.projectpandora.app.feature.profile.ReadOnlyProfileAvatar
 import com.projectpandora.app.feature.tags.TagChipList
 import com.projectpandora.app.feature.tags.TagSelectionDialog
 import com.projectpandora.app.ui.*
 import com.projectpandora.app.ui.theme.PandoraColors as C
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Locale
 
@@ -505,15 +508,7 @@ private fun LogCommentsSection(
             val role = businessRoleLabel(author?.string("business_role").orEmpty())
             val isLogAuthor = comment.bool("is_log_author") || (logAuthorId > 0 && author?.long("id") == logAuthorId)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Surface(
-                    modifier = Modifier.size(38.dp),
-                    color = C.BluePale,
-                    shape = CircleShape,
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(name.take(1), color = C.Blue, fontWeight = FontWeight.SemiBold)
-                    }
-                }
+                LogCommentAuthorAvatar(api, author?.long("id") ?: 0L, name)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         Text(name, fontWeight = FontWeight.SemiBold, color = C.Ink, fontSize = 14.sp)
@@ -533,6 +528,28 @@ private fun LogCommentsSection(
             HorizontalDivider(color = C.Line.copy(alpha = 0.7f))
         }
     }
+}
+
+@Composable
+private fun LogCommentAuthorAvatar(api: BusinessApi, authorId: Long, name: String) {
+    var avatarBytes by remember(authorId) { mutableStateOf<ByteArray?>(null) }
+    LaunchedEffect(api, authorId) {
+        avatarBytes = if (authorId > 0L) {
+            try {
+                val response = api.getBody(ROOT + "organization/members/$authorId/avatar/")
+                if (response.isSuccessful) {
+                    withContext(Dispatchers.IO) { response.body()?.use { it.bytes() } }
+                } else {
+                    null
+                }
+            } catch (_: Exception) {
+                null
+            }
+        } else {
+            null
+        }
+    }
+    ReadOnlyProfileAvatar(name, avatarBytes, size = 38.dp)
 }
 
 @Composable

@@ -64,6 +64,7 @@ data class AppUserResponse(
     @SerializedName("manager_name") val managerName: String?,
     @SerializedName("is_active") val isActive: Boolean,
     @SerializedName("id_number_masked") val idNumberMasked: String? = null,
+    @SerializedName("account_created_date") val accountCreatedDate: String? = null,
 ) {
     fun toBusinessUser(): BusinessUser {
         val roleLabel = when (businessRole) {
@@ -82,6 +83,7 @@ data class AppUserResponse(
             supervisor = managerName,
             idNumberMasked = idNumberMasked,
             isActive = isActive,
+            accountCreatedDate = accountCreatedDate,
         )
     }
 }

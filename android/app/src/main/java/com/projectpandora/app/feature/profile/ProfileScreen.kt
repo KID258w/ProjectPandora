@@ -30,7 +30,7 @@ fun ProfileScreen(user: BusinessUser, onPersonalInfo: () -> Unit, onNotification
     PageColumn {
         BrandHeader()
         PageTitle("我的")
-        IdentityCard(user, avatarRepository, allowAvatarChange = true)
+        IdentityCard(user, avatarRepository, allowAvatarChange = true, showTenure = true)
         PageTitle("个人设置", small = true)
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (user.role == "创始人") SettingsRow("标签管理", R.drawable.setting_tags, C.Teal, C.TealPale, onClick = onTags)

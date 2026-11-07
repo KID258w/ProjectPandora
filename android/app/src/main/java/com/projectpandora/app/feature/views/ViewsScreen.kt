@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -99,6 +100,7 @@ fun ViewsScreen(
     var showMonthPicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var reload by remember { mutableIntStateOf(0) }
+    var expandAllDayOnEntry by remember { mutableStateOf(false) }
     var data by remember { mutableStateOf<JsonObject?>(null) }
     var error by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -118,10 +120,12 @@ fun ViewsScreen(
         selected = c.timeInMillis; showMonthPicker = false
     }
     if (showDatePicker) WorkViewDateCalendarDialog(current, mode, { showDatePicker = false }) {
+        expandAllDayOnEntry = false
         selected = it
         showDatePicker = false
     }
     fun shift(step: Int) {
+        expandAllDayOnEntry = false
         val c = cal(selected)
         c.add(when (mode) { "月" -> Calendar.MONTH; "周" -> Calendar.WEEK_OF_YEAR; else -> Calendar.DAY_OF_MONTH }, step)
         selected = c.timeInMillis
@@ -135,17 +139,16 @@ fun ViewsScreen(
                     fontWeight = FontWeight.Bold, color = C.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (viewingMember) Text("下属工作视图 · 只读", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.Muted)
             }
-            TextButton(onClick = onOpenTaskCenter, contentPadding = PaddingValues(horizontal = 5.dp), modifier = Modifier.testTag("task-center-entry")) {
-                Text("任务中心", color = C.Selected, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            }
-            if (canViewOrganization) TextButton(onClick = onOpenOrganization, contentPadding = PaddingValues(horizontal = 5.dp), modifier = Modifier.testTag("organization-relationships-entry")) {
-                Text("组织关系", color = C.Selected, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            ViewHeaderAction("任务中心", "task-center-entry", onOpenTaskCenter)
+            if (canViewOrganization) {
+                Spacer(Modifier.width(6.dp))
+                ViewHeaderAction("组织关系", "organization-relationships-entry", onOpenOrganization)
             }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp).background(Color(0xffF5F5F3), RoundedCornerShape(12.dp)).padding(3.dp)) {
             listOf("月", "周", "日").forEach { item ->
                 Box(Modifier.weight(1f).height(34.dp).background(if (mode == item) Color.White else Color.Transparent, RoundedCornerShape(9.dp))
-                    .clickable { mode = item }.testTag("mode-$item"), contentAlignment = Alignment.Center) {
+                    .clickable { expandAllDayOnEntry = false; mode = item }.testTag("mode-$item"), contentAlignment = Alignment.Center) {
                     Text(item, color = if (mode == item) C.Ink else C.Muted, fontWeight = if (mode == item) FontWeight.Bold else FontWeight.Medium, fontSize = 15.sp)
                 }
             }
@@ -159,7 +162,7 @@ fun ViewsScreen(
                 Text("${current.get(Calendar.YEAR)}年 ${current.get(Calendar.MONTH) + 1}月" + (if (mode == "日") " ${current.get(Calendar.DAY_OF_MONTH)}日" else "") + " ▾",
                     fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.Ink)
             }
-            if (!isCurrentPeriod(mode, current)) TextButton(onClick = { selected = System.currentTimeMillis() }, contentPadding = PaddingValues(horizontal = 8.dp)) {
+            if (!isCurrentPeriod(mode, current)) TextButton(onClick = { expandAllDayOnEntry = false; selected = System.currentTimeMillis() }, contentPadding = PaddingValues(horizontal = 8.dp)) {
                 Text(when (mode) { "月" -> "本月"; "周" -> "本周"; else -> "今天" }, color = C.Selected, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
             PeriodArrow(previous = false, description = "下一周期") { shift(1) }
@@ -173,10 +176,40 @@ fun ViewsScreen(
             Image(painterResource(R.drawable.pandora_footer_art), contentDescription = null,
                 modifier = Modifier.fillMaxWidth().height(110.dp).align(Alignment.BottomCenter).alpha(0.14f),
                 alignment = Alignment.BottomCenter, contentScale = ContentScale.Crop)
-            if (mode == "月") MonthGrid(current, data, openTask) { selected = it; mode = "日" }
-            else Timeline(current, mode, data, { selected = it; if (mode == "周") mode = "日" }, openTask)
+            if (mode == "月") MonthGrid(
+                current = current,
+                data = data,
+                onTask = openTask,
+                onDate = { selected = it; expandAllDayOnEntry = false; mode = "日" },
+                onOverflow = { selected = it; expandAllDayOnEntry = true; mode = "日" },
+            ) else Timeline(
+                current = current,
+                mode = mode,
+                data = data,
+                onDate = { selected = it; expandAllDayOnEntry = false; if (mode == "周") mode = "日" },
+                onTask = openTask,
+                expandAllDayInitially = expandAllDayOnEntry,
+            )
         }
     }
+}
+
+@Composable
+private fun ViewHeaderAction(label: String, tag: String, onClick: () -> Unit) {
+    Text(
+        text = label,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xffF7F8FA))
+            .border(1.dp, Color(0xffE6E9EF), RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 11.dp, vertical = 7.dp)
+            .testTag(tag),
+        color = C.Selected,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+    )
 }
 
 @Composable
@@ -273,16 +306,26 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
     return segments
 }
 
-@Composable private fun MonthGrid(current: Calendar, data: JsonObject?, onTask: (Long) -> Unit, onDate: (Long) -> Unit) {
+@Composable private fun MonthGrid(
+    current: Calendar,
+    data: JsonObject?,
+    onTask: (Long) -> Unit,
+    onDate: (Long) -> Unit,
+    onOverflow: (Long) -> Unit,
+) {
     val first = cal(current.timeInMillis).apply { set(Calendar.DAY_OF_MONTH, 1) }
     val offset = (first.get(Calendar.DAY_OF_WEEK) + 5) % 7
     val count = first.getActualMaximum(Calendar.DAY_OF_MONTH)
-    val rows = (offset + count + 6) / 7
-    val days = data?.array("days")?.associateBy { it.string("date") } ?: emptyMap()
-    val weekNumbers = (0 until rows).map { row -> (0..6).map { row * 7 + it - offset + 1 } }
-    val weekCells = weekNumbers.map { numbers -> numbers.map { number ->
-        if (number !in 1..count) null else days[date(cal(first.timeInMillis).apply { set(Calendar.DAY_OF_MONTH, number) })]
+    val apiDays = data?.array("days").orEmpty()
+    val days = apiDays.associateBy { it.string("date") }
+    val calendarDays = data?.array("calendar_days")?.associateBy { it.string("date") } ?: emptyMap()
+    val defaultGridStart = cal(first.timeInMillis).apply { add(Calendar.DAY_OF_MONTH, -offset) }
+    val gridStart = data?.string("calendar_start_date")?.let(::parseBusinessDate)?.let(::cal) ?: defaultGridStart
+    val rows = if (apiDays.isNotEmpty()) (apiDays.size + 6) / 7 else (offset + count + 6) / 7
+    val weekDates = (0 until rows).map { row -> (0..6).map { column ->
+        cal(gridStart.timeInMillis).apply { add(Calendar.DAY_OF_MONTH, row * 7 + column) }
     } }
+    val weekCells = weekDates.map { dates -> dates.map { day -> days[date(day)] } }
     val weekBars = weekCells.map(::weekSegments)
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         val laneHeight = with(LocalDensity.current) { maxOf(30.dp, 18.sp.toDp() + 10.dp) }
@@ -295,18 +338,35 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth().padding(vertical = 10.dp)) { listOf("一","二","三","四","五","六","日").forEach { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.Muted) } } }
         repeat(rows) { row ->
-            val numbers = weekNumbers[row]
+            val dates = weekDates[row]
             val cells = weekCells[row]
             BoxWithConstraints(Modifier.fillMaxWidth().height(minHeights[row] + extraHeight)) {
                 val cellWidth = maxWidth / 7
-                Row(Modifier.fillMaxSize()) { numbers.forEach { number ->
-                    val valid = number in 1..count
-                    val day = cal(first.timeInMillis).apply { set(Calendar.DAY_OF_MONTH, number.coerceIn(1, count)) }
+                Row(Modifier.fillMaxSize()) { dates.forEach { day ->
+                    val dayKey = date(day)
+                    val inSelectedMonth = day.get(Calendar.YEAR) == first.get(Calendar.YEAR) && day.get(Calendar.MONTH) == first.get(Calendar.MONTH)
+                    val isToday = dayKey == date(cal())
                     Box(Modifier.weight(1f).fillMaxHeight().border(0.5.dp, Color(0xffF1F0ED))
-                        .then(if (valid) Modifier.clickable { onDate(day.timeInMillis) }.testTag("month-day-$number") else Modifier).padding(2.dp)) {
-                        if (valid) Box(Modifier.size(24.dp).background(if (date(day)==date(cal())) C.Amber else Color.Transparent, RoundedCornerShape(12.dp)), contentAlignment=Alignment.Center) { Text("$number", fontSize=14.sp, fontWeight=FontWeight.SemiBold, color=C.Ink) }
+                        .clickable { onDate(day.timeInMillis) }
+                        .testTag(if (inSelectedMonth) "month-day-${day.get(Calendar.DAY_OF_MONTH)}" else "month-adjacent-day-$dayKey")
+                        .padding(2.dp)) {
+                        Box(Modifier.size(24.dp).background(if (isToday) C.Amber else Color.Transparent, RoundedCornerShape(12.dp)), contentAlignment=Alignment.Center) {
+                            Text("${day.get(Calendar.DAY_OF_MONTH)}", fontSize=14.sp, fontWeight=FontWeight.SemiBold,
+                                color = if (inSelectedMonth || isToday) C.Ink else Color(0xffB6BBC4))
+                        }
                     }
                 } }
+                cells.forEachIndexed { column, cell ->
+                    val marker = cell?.string("date")?.let(calendarDays::get)
+                    if (marker != null) {
+                        Box(
+                            Modifier.offset(x = cellWidth * column + 2.dp, y = 3.dp).width(cellWidth - 6.dp),
+                            contentAlignment = Alignment.CenterEnd,
+                        ) {
+                            HolidayMarker(marker)
+                        }
+                    }
+                }
                 weekBars[row].forEach { segment ->
                     Box(Modifier.offset(x=cellWidth * segment.start + 2.dp, y=28.dp + laneHeight * segment.lane)
                         .width(cellWidth * (segment.end - segment.start + 1) - 4.dp).height(laneHeight - 2.dp)
@@ -317,7 +377,7 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
                 }
                 cells.forEachIndexed { column, day -> val more = day?.long("overflow_count") ?: 0
                     if (more > 0) Text("+${more}项", Modifier.offset(x=cellWidth * column + 3.dp, y=30.dp + laneHeight * 3)
-                        .clickable { day?.string("date")?.let { value -> parseBusinessDate(value)?.let(onDate) } }.testTag("month-overflow-$column"), fontSize=11.sp, fontWeight=FontWeight.SemiBold, color=C.Muted)
+                        .clickable { day?.string("date")?.let { value -> parseBusinessDate(value)?.let(onOverflow) } }.testTag("month-overflow-$column"), fontSize=11.sp, fontWeight=FontWeight.SemiBold, color=C.Muted)
                 }
             }
         }
@@ -325,16 +385,49 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
     }
 }
 
-@Composable private fun Timeline(current: Calendar, mode: String, data: JsonObject?, onDate: (Long) -> Unit, onTask: (Long) -> Unit) {
+@Composable
+private fun HolidayMarker(marker: JsonObject) {
+    val type = marker.string("day_type")
+    val (backgroundColor, textColor, description) = when (type) {
+        "holiday" -> Triple(Color(0xffFDECE8), Color(0xffA95E50), "法定节假日")
+        "rest_day" -> Triple(Color(0xffF7F3EB), Color(0xff907A5D), "节假日休息")
+        else -> Triple(Color(0xffEAF2F0), Color(0xff52796F), "调休上班")
+    }
+    Text(
+        text = marker.string("label"),
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(backgroundColor)
+            .padding(horizontal = 3.dp, vertical = 1.dp)
+            .semantics { contentDescription = "$description：${marker.string("holiday_name")}" }
+            .testTag("holiday-${marker.string("date")}"),
+        color = textColor,
+        fontSize = 8.sp,
+        lineHeight = 10.sp,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+    )
+}
+
+@Composable private fun Timeline(
+    current: Calendar,
+    mode: String,
+    data: JsonObject?,
+    onDate: (Long) -> Unit,
+    onTask: (Long) -> Unit,
+    expandAllDayInitially: Boolean,
+) {
     val start = weekStart(current)
     val dates = (0..6).map { cal(start.timeInMillis).apply { add(Calendar.DAY_OF_MONTH, it) } }
     val today = date(cal())
+    val calendarDays = data?.array("calendar_days")?.associateBy { it.string("date") } ?: emptyMap()
+    var allDayExpanded by remember(mode, date(current)) { mutableStateOf(expandAllDayInitially) }
     val events = remember(data) {
         data?.array("events").orEmpty().mapNotNull { event -> eventLocalTime(event.string("occurred_at"))?.let { event to it } }
             .sortedBy { it.second.timeInMillis }
     }
     Column(Modifier.fillMaxSize()) {
-        // Pinned: date strip + all-day unfinished tasks. Only the 24-hour axis below scrolls.
+        // Keep the date strip and all-day task area pinned; the time axis uses the remaining viewport.
         Row(Modifier.fillMaxWidth().padding(start = 42.dp, end = 8.dp, top = 6.dp)) {
             dates.forEach { day ->
                 val key = date(day)
@@ -345,16 +438,45 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
                         .then(if (!highlighted && key == today) Modifier.border(1.5.dp, C.Amber, RoundedCornerShape(14.dp)) else Modifier)
                         .semantics { contentDescription = if (highlighted) "已选 $key" else key },
                         contentAlignment = Alignment.Center) { Text("${day.get(Calendar.DAY_OF_MONTH)}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = C.Ink) }
+                    calendarDays[key]?.let { HolidayMarker(it) }
                 }
             }
         }
         val bars = data?.array("all_day_tasks").orEmpty()
         if (bars.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(end = 8.dp, top = 4.dp, bottom = 6.dp)) {
-            Text("全天", Modifier.width(42.dp).padding(top = 8.dp), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = C.Muted, textAlign = TextAlign.Center)
+            Column(
+                Modifier.width(42.dp)
+                    .then(if (bars.size > 3) Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { allDayExpanded = !allDayExpanded }
+                        .semantics {
+                            contentDescription = if (allDayExpanded) "收起全天任务" else "展开全天任务，共${bars.size}项"
+                        } else Modifier)
+                    .padding(top = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("全天", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = C.Muted, textAlign = TextAlign.Center)
+                if (bars.size > 3) {
+                    Text(
+                        if (allDayExpanded) "收起⌃" else "展开⌄",
+                        modifier = Modifier.testTag("all-day-task-toggle"),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = C.Selected,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
             BoxWithConstraints(Modifier.weight(1f).testTag("all-day-task-grid")) {
                 val available = maxWidth
-                Column(Modifier.heightIn(max = 132.dp).verticalScroll(rememberScrollState())) {
-                    bars.forEach { bar ->
+                val taskRows = if (allDayExpanded) bars else bars.take(3)
+                val taskListModifier = if (allDayExpanded) {
+                    Modifier.heightIn(max = maxHeight * 0.45f).verticalScroll(rememberScrollState())
+                } else {
+                    Modifier.heightIn(max = 132.dp)
+                }
+                Column(taskListModifier) {
+                    taskRows.forEach { bar ->
                         val startColumn = if (mode == "周") dates.indexOfFirst { date(it) == bar.string("start_date") } else 0
                         val endColumn = if (mode == "周") dates.indexOfFirst { date(it) == bar.string("end_date") } else 0
                         if (startColumn < 0 || endColumn < startColumn) return@forEach
@@ -373,7 +495,7 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
         }
         HorizontalDivider(color = Color(0xffEEEFEF))
         val columns = if (mode == "周") dates else listOf(current)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
             repeat(24) { hour ->
                 // IntrinsicSize.Min keeps one shared height for the hour across all columns, grown by the tallest cell.
                 Row(Modifier.fillMaxWidth().padding(end = 8.dp).height(IntrinsicSize.Min)) {

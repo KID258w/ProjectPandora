@@ -31,7 +31,7 @@
 | App 个人资料、头像与密码 | `GET, PATCH /api/v1/app/me/`、`GET, PUT /api/v1/app/me/avatar/`、`POST /api/v1/app/me/password/` |
 | App 日志与授权查看对象 | `GET /api/v1/app/logs/`、`GET /api/v1/app/logs/calendar/`、`GET /api/v1/app/logs/{id}/`、`GET, POST /api/v1/app/logs/{id}/comments/`、`GET, PUT /api/v1/app/logs/mine/{log_date}/`、`POST /api/v1/app/logs/mine/{log_date}/submit/`、`GET /api/v1/app/log-viewers/` |
 | App 标签 | `GET, POST /api/v1/app/tags/`、`PATCH, DELETE /api/v1/app/tags/{id}/` |
-| App 任务、审批及历史 | `GET, POST /api/v1/app/tasks/`、`GET /api/v1/app/tasks/subordinates/`、`GET, PATCH /api/v1/app/tasks/{id}/`、`GET /api/v1/app/tasks/{id}/history/`、`GET /api/v1/app/task-approvals/inbox/`、`GET /api/v1/app/task-approvals/outbox/`，以及第 3.2 节所列操作路径 |
+| App 任务、审批及历史 | `GET, POST /api/v1/app/tasks/`、`GET /api/v1/app/tasks/pinned/`、`POST, DELETE /api/v1/app/tasks/{id}/pin/`、`GET /api/v1/app/tasks/subordinates/`、`GET, PATCH /api/v1/app/tasks/{id}/`、`GET /api/v1/app/tasks/{id}/history/`、`GET /api/v1/app/task-approvals/inbox/`、`GET /api/v1/app/task-approvals/outbox/`，以及第 3.2 节所列操作路径 |
 | App 任务通知和人员选择 | `GET /api/v1/app/notifications/`、`GET /api/v1/app/notifications/unread-count/`、`POST /api/v1/app/notifications/mark-read/`、`GET /api/v1/app/organization/assignable-users/`、`GET /api/v1/app/organization/visible-subordinates/` |
 | App 工作视图 | `GET /api/v1/app/work-views/month/`、`GET /api/v1/app/work-views/week/`、`GET /api/v1/app/work-views/day/` |
 | 公司重要事项管理（管理端） | `GET, POST /api/v1/admin/company-items/`、`GET, PATCH /api/v1/admin/company-items/{id}/`、`POST .../publish/`、`POST .../offline/`、`PUT .../order/`、`POST .../attachments/`、`DELETE .../attachments/{attachment_id}/` |
@@ -112,7 +112,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 - 新建、启用或转入一个岗位时，其必需的直属负责人必须已启用；任命负责人填补本级空缺时，也必须满足该候选人自身的直属负责人要求。停用组织前仍有启用下级对象时拒绝停用，并在校验错误中返回阻塞对象类型、数量及最多五个对象名称；Web 应将该错误完整显示给管理员。已停用员工、部门和团队不得作为身份/归属选择器的候选项；管理列表仍可筛选、查看及重新启用。
 - 团队重新启用时所属部门必须启用；团队改名不能与同部门其他团队重名，冲突返回名称字段校验错误。
 - 身份证号在所有业务账号中全局唯一，停用账号仍占用身份证号。创建和 App 修改时，后端去除首尾空格并将字母统一为大写后再保存和计算唯一哈希，因此末位 `x` 与 `X` 视为同一号码。迁移 0008 回填前检查原始历史重复值；迁移 0010 在规范化前检查大小写/空格规范化后重复的历史值，均只报告冲突账号 ID、不输出身份证号明文，解决冲突后方可重跑迁移。回退数据迁移保留哈希数据，避免暂时失去唯一性校验。
-- App `GET /api/v1/app/me/` 不返回完整身份证号。`PATCH /api/v1/app/me/` 允许员工本人修改 `display_name`、手机号（请求字段仍为 `username`，成功后更新登录标识）和 `id_number`，不接受身份、组织、直属上级或启用状态。姓名和身份证号可在同一请求中一起提交，也可分别修改；两者作为一个事务保存，任一字段校验失败时均不更新。手机号更新成功后，App 清除本机登录会话并返回登录页，提示员工使用新手机号重新登录。员工本人通过 `POST /api/v1/app/me/password/` 修改密码，提交当前密码、新密码和新密码确认；MVP 不要求短信验证，密码找回流程未定。密码更新成功后，App 清除本机登录会话并要求员工使用新密码重新登录；服务端不主动撤销已签发令牌，它们仍按现有有效期处理。
+- App `GET /api/v1/app/me/` 不返回完整身份证号，并返回 `account_created_date`（账号创建日期，按 `Asia/Shanghai` 时区序列化），供 App 个人页计算任职天数。`PATCH /api/v1/app/me/` 允许员工本人修改 `display_name`、手机号（请求字段仍为 `username`，成功后更新登录标识）和 `id_number`，不接受身份、组织、直属上级或启用状态。姓名和身份证号可在同一请求中一起提交，也可分别修改；两者作为一个事务保存，任一字段校验失败时均不更新。手机号更新成功后，App 清除本机登录会话并返回登录页，提示员工使用新手机号重新登录。员工本人通过 `POST /api/v1/app/me/password/` 修改密码，提交当前密码、新密码和新密码确认；MVP 不要求短信验证，密码找回流程未定。密码更新成功后，App 清除本机登录会话并要求员工使用新密码重新登录；服务端不主动撤销已签发令牌，它们仍按现有有效期处理。
 - App `GET /api/v1/app/me/` 和 `PATCH /api/v1/app/me/` 响应还包含当前账号的 `avatar_url`（未设置时为 `null`）。头像接口 `GET, PUT /api/v1/app/me/avatar/` 仅允许业务账号操作令牌所属账号；头像由 App 上传到用户数据库行，读取返回原始图片二进制，PUT 为 multipart 上传并替换头像。它不是 JSON envelope 响应；格式和大小限制见下方契约。Web 管理员不获得头像读写能力。
 
 ### 2.2 员工 App 操作审计契约（Issue #30 已实现）
@@ -162,7 +162,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 
 #### GET /api/v1/admin/app-operation-logs/{id}/
 
-返回列表摘要字段，并额外返回 `before_data` 与 `after_data` 中允许展示的变更字段值。任务、日志及其进度/验收/评论等用于人工找回的业务内容可在详情中显示；密码、完整身份证号、令牌和头像二进制永不返回。创建操作的 `before_data` 为空。该接口不提供一键恢复，管理员需按正常业务流程人工处理。
+返回列表摘要字段，并额外返回 `before_data` 与 `after_data` 中允许展示的变更字段值。任务、日志及其进度/验收/评论等用于人工找回的业务内容可在详情中显示；密码、完整身份证号、令牌和头像二进制永不返回。标签关联的 `tag_ids` 快照使用 `[{"id": 标签ID, "name": "操作时标签名称"}]`；任务负责人的 `assignee_id` 快照使用 `{"id": 员工ID, "display_name": "操作时姓名"}`。名称均在操作时固化；旧记录若只有数字 ID，服务端读取时尽可能依据保留的标签或员工记录补出名称。创建操作的 `before_data` 为空。该接口不提供一键恢复，管理员需按正常业务流程人工处理。
 
 列表与详情响应均设置 `Cache-Control: no-store`。未登录返回 `401`，非管理员返回 `403`，记录不存在返回 `404`。审计读取不改变记录状态，也不产生新的员工 App 操作记录。
 
@@ -179,14 +179,14 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `GET, PUT /api/v1/app/me/avatar/` | 读取、上传或替换当前业务用户自己的头像；图片二进制存入账号数据库记录 |
 | `POST /api/v1/app/me/password/` | 员工本人验证当前密码后修改密码；不提供 Web 重置入口 |
 | `GET /api/v1/app/home/` | 返回首页四大面板摘要（每卡最多 5 条）及任务通知未读数；个人数据按当前登录用户隔离 |
-| `GET /api/v1/app/company-items/` | 已发布的公司重要事项列表，最多 10 条 |
+| `GET /api/v1/app/company-items/` | 为“事件纪”提供已发布公司事项列表，最多 10 条 |
 | `GET /api/v1/app/company-items/{id}/` | 返回单条已发布事项正文数据，供列表项在当前页展开；不返回附件元数据或 URL，也不要求跳转到独立详情页 |
 
-首页“公司十大重要任务”是根据当前用户承担的未完成任务计算出的最多 10 条，不是管理员维护的全公司排行榜；按当前需求文档规定的来源和截止时间排序。个人十大重点工作由用户选择并拖拽排序，服务端持久化顺序；最多 10 条，任务完成、取消或不再由本人承担时应从可选范围中移除。首页聚合和个人重点列表首次读取时共用同一初始化逻辑：按当时的公司十大任务预填一次，之后不随公司榜单变化自动重置。
+首页“任务看版”是根据当前用户承担的未完成任务计算出的最多 10 条，不是管理员维护的全公司排行榜；按当前需求文档规定的来源和截止时间排序。个人十大重点工作由用户选择并拖拽排序，服务端持久化顺序；最多 10 条，任务完成、取消或不再由本人承担时应从可选范围中移除。首页聚合和个人重点列表首次读取时共用同一初始化逻辑：按当时的任务看版预填一次，之后不随榜单变化自动重置。
 
 | 方法与路径 | 用途 |
 |---|---|
-| `GET /api/v1/app/home/company-top-tasks/` | 返回当前用户公司十大重要任务完整列表，最多 10 条 |
+| `GET /api/v1/app/home/company-top-tasks/` | 返回当前用户“任务看版”完整列表，最多 10 条；保留现有接口路径 |
 | `GET /api/v1/app/home/personal-focus/` | 返回个人重点任务及顺序；首次使用时初始化 |
 | `GET /api/v1/app/home/personal-focus/candidates/` | 返回可加入个人重点的本人未完成任务 |
 | `PUT /api/v1/app/home/personal-focus/` | 一次性保存任务 ID 有序数组；校验均为本人未完成任务且不超过 10 条 |
@@ -196,11 +196,14 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | 方法与路径 | 用途 / 规则 |
 |---|---|
 | `GET /api/v1/app/tasks/` | 普通任务中心列表；`scope=all|mine|created`，支持预计开始日期、截止日期、完成状态及归档状态筛选；`all` 合并去重 |
+| `GET /api/v1/app/tasks/pinned/` | 返回当前账号置顶的全部已审批且本人创建或承担的任务，按最近置顶时间倒序；不受普通列表筛选条件影响 |
+| `POST /api/v1/app/tasks/{id}/pin/` | 将本人普通任务中心可见的已审批任务置顶；请求体为空，重复调用保持幂等 |
+| `DELETE /api/v1/app/tasks/{id}/pin/` | 取消当前账号对该任务的置顶；请求体为空，重复调用保持幂等 |
 | `GET /api/v1/app/tasks/subordinates/` | 当前用户有权查看的下属已审批任务；支持 `task_scope=assigned|created`、预计开始日期、截止日期、完成状态和授权下属筛选 |
 | `GET /api/v1/app/task-approvals/inbox/` | 待当前上级审批任务；不提供已完成/未完成筛选 |
 | `GET /api/v1/app/task-approvals/outbox/` | 当前用户创建、等待上级审批或已退回待修改的任务；不提供完成状态筛选 |
 | `GET /api/v1/app/tasks/{id}/` | 任务详情；返回审批/验收历史、进展和全部标签；服务端校验原任务可见性，App 按创建人、直属审批人、负责人或只读查看者关系展示相应内容 |
-| `GET /api/v1/app/tasks/{id}/history/` | 返回当前用户有权查看的任务创建及定义变更记录，含操作人、时间和变更字段 |
+| `GET /api/v1/app/tasks/{id}/history/` | 返回当前用户有权查看的任务创建及定义变更记录，含操作人、时间和变更字段；标签及负责人前后值包含 ID 与名称 |
 | `POST /api/v1/app/tasks/` | 普通入口创建任务；可选提交 `tag_ids`；创始人可指派给本公司任一成员，其他角色按各自组织范围选择负责人；创建人有直属上级则进入待审批 |
 | `PATCH /api/v1/app/tasks/{id}/` | 按原任务编辑权限修改任务；可选提交 `estimated_start_at`（ISO 8601 或 `null`）；计划开始或截止时间变更按关键定义重新审批；单独改标签不触发重新审批 |
 | `POST /api/v1/app/tasks/{id}/resubmit/` | 创建人完成退回任务编辑后重新送直属上级审批 |
@@ -219,6 +222,38 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `GET /api/v1/app/organization/members/{id}/avatar/` | 返回启用业务成员已上传的头像二进制；所有 App 业务用户均可读取 |
 
 逾期标签不新增任务列表 API 字段或数据库状态。App 根据任务列表已返回的 `approval_status`、`completion_status`、`lifecycle_status` 和 `due_at`，判断任务是否已审批、未完成、未取消且截止时间早于当前时间，并在列表中显示“逾期”标签；原完成状态筛选保持不变。
+
+任务置顶为当前账号的个人偏好，不改变任务状态，不创建通知或操作审计记录。置顶列表只返回已审批且由当前用户创建或承担的任务，包含任务摘要；完成或取消状态不自动清除置顶。置顶区独立于普通列表筛选显示；App 将置顶任务从当前普通列表结果中去重。审批中心及下属只读任务列表不提供置顶接口权限。
+
+`GET /api/v1/app/tasks/pinned/` 使用标准分页响应，结果按 `pinned_at` 倒序。置顶与取消置顶均使用空请求体；首次创建置顶关系返回 `201`，对已置顶任务重复调用返回 `200`；删除不存在的置顶关系也成功返回，不产生重复记录。尝试置顶待审批任务、或本人既非创建人也非负责人的任务，返回权限错误；不存在的任务返回未找到。
+
+```http
+POST /api/v1/app/tasks/101/pin/
+Authorization: Bearer <access-token>
+Content-Type: application/json
+{}
+```
+
+```json
+{
+  "code": 201,
+  "message": "success",
+  "data": {
+    "id": 101,
+    "title": "完成客户需求梳理",
+    "creator_name": "王世鑫",
+    "assignee_name": "闵世宇",
+    "approval_status": "approved",
+    "completion_status": "unfinished",
+    "lifecycle_status": "active"
+  },
+  "requestId": "<uuid>"
+}
+```
+
+上例中的 `data` 展示任务摘要的主要字段。
+
+取消置顶使用 `DELETE /api/v1/app/tasks/101/pin/`，成功时返回 `200`，`data` 为 `{"pinned": false}`。
 
 任务详情的 Android 展示按当前用户关系区分：创建人和本轮直属审批人可查看审批状态及审批记录；非创建人/审批人的负责人和层级只读查看者不显示审批状态或审批记录。负责人及授权只读查看者可查看已审批任务的执行信息；具体操作仍由服务端逐项校验。用户同时具备多种关系时，客户端合并展示其有权查看的信息。创始人免审批任务不展示空审批记录区块。
 
@@ -268,9 +303,9 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 
 | 方法与路径 | 用途 |
 |---|---|
-| `GET /api/v1/app/work-views/month/?user_id=&year=&month=` | 月视图：返回日期跨度与所选月份相交的已审批、未取消负责人任务（不按完成或逾期状态过滤）；任务条颜色 `bar_color` 为首个添加的当前关联标签颜色，无标签时为中性灰色。`start_date` 是 `estimated_start_at` 的本地日期；未设置时回退到原始 `created_at` 的本地日期 |
-| `GET /api/v1/app/work-views/week/?user_id=&date=` | 周视图：返回与所选周相交的负责人任务全天条（已完成、未完成或逾期均可），带 `bar_color`；另含日期条和按实际操作人归属的 24 小时时间轴动态事件，事件返回任务标签颜色 |
-| `GET /api/v1/app/work-views/day/?user_id=&date=` | 日视图：返回日期跨度覆盖所选日的负责人任务条（已完成、未完成或逾期均可），带 `bar_color`；另含按实际操作人归属的 24 小时时间轴动态事件，事件返回任务标签颜色 |
+| `GET /api/v1/app/work-views/month/?user_id=&year=&month=` | 月视图：返回完整周网格内日期跨度相交的已审批、未取消负责人任务（不按完成或逾期状态过滤）；相邻月份日期也参与任务条绘制。任务条颜色 `bar_color` 为首个添加的当前关联标签颜色，无标签时为中性灰色。`start_date/end_date` 是自然月边界，`calendar_start_date/calendar_end_date` 是可见网格边界；`calendar_days` 覆盖可见网格 |
+| `GET /api/v1/app/work-views/week/?user_id=&date=` | 周视图：返回与所选周相交的负责人任务全天条（已完成、未完成或逾期均可），带 `bar_color`；另含日期条、按实际操作人归属的 24 小时时间轴动态事件，以及所选周的 `calendar_days` |
+| `GET /api/v1/app/work-views/day/?user_id=&date=` | 日视图：返回日期跨度覆盖所选日的负责人任务条（已完成、未完成或逾期均可），带 `bar_color`；另含按实际操作人归属的 24 小时时间轴动态事件，以及顶部整周日期条范围的 `calendar_days` |
 
 视图为只读聚合，不单独保存日历副本。普通 App 用户默认查询本人视图；查看下属视图统一从“组织关系”成员资料页的“查看视图”入口进入。`user_id` 可指定本人或当前用户有权限查看的下属，服务端每次请求均校验目标成员是否在该用户的工作视图授权范围内；组织树和成员资料可见不代表视图数据可见。任务条只返回已审批且未取消的负责人任务；任务是否完成或逾期均不作为独立过滤条件，是否显示只由任务日期跨度与所选月、周或日是否相交决定。日期跨度起点优先取 `estimated_start_at` 的业务时区日期；该字段为空时取任务原始 `created_at` 的业务时区日期，终点为截止日期。回退值仅用于展示，不是实际开始时间；待审批任务不进入任务条，审批通过或重新审批不会改写原始创建时间。月视图任务及周/日全天任务响应均提供 `bar_color`，服务端按当前仍关联标签中最早建立的关系确定颜色；停用标签仍提供原颜色，无关联标签时提供中性灰色。任务条仅显示标题，工作视图响应不提供供任务条展示的标签名称。
 
@@ -1217,7 +1252,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "manager_id": 31,
     "manager_name": "李经理",
     "is_active": true,
-    "avatar_url": "/api/v1/app/me/avatar/"
+    "avatar_url": "/api/v1/app/me/avatar/",
+    "account_created_date": "2026-11-06"
   },
   "requestId": "<uuid>"
 }
@@ -1251,7 +1287,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "business_role": "employee",
     "department_name": "产品部",
     "team_name": "客户端组",
-    "avatar_url": "/api/v1/app/me/avatar/"
+    "avatar_url": "/api/v1/app/me/avatar/",
+    "account_created_date": "2026-11-06"
   },
   "requestId": "<uuid>"
 }
@@ -1348,7 +1385,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 该聚合响应中，四个面板分别最多返回 5 条摘要；`recent_logs` 只含当前用户已提交日志，按日期倒序，不含草稿。公司重要事项对所有 App 用户相同；任务和日志字段按当前用户权限返回。`unread_notification_count` 供任务铃铛显示红点，通知列表仍通过独立通知接口读取。
 
-该接口属于“首次使用”入口：当前用户尚无个人重点初始化记录时，本次请求会在同一事务内按当时的公司十大预填最多 10 项并返回，因此新用户的 `personal_focus_tasks` 在首次打开首页时即有内容。初始化只发生一次，之后仅清理失效项。
+该接口属于“首次使用”入口：当前用户尚无个人重点初始化记录时，本次请求会在同一事务内按当时的任务看版预填最多 10 项并返回，因此新用户的 `personal_focus_tasks` 在首次打开首页时即有内容。初始化只发生一次，之后仅清理失效项。
 
 #### GET /api/v1/app/company-items/?page=1&page_size=10
 
@@ -1424,7 +1461,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 }
 ```
 
-首次调用时，如果尚无个人重点初始化记录，服务端在事务中按当时的公司十大任务预填最多 10 项并设置 `initialized=true`；之后不因公司十大列表变化而自动重置。若用户在首次打开首页前就已直接调用本接口，初始化在本接口完成；两个入口共用同一初始化逻辑，不会重复预填。`PUT` 首次保存同样会写入初始化状态。
+首次调用时，如果尚无个人重点初始化记录，服务端在事务中按当时的任务看版预填最多 10 项并设置 `initialized=true`；之后不因任务看版变化而自动重置。若用户在首次打开首页前就已直接调用本接口，初始化在本接口完成；两个入口共用同一初始化逻辑，不会重复预填。`PUT` 首次保存同样会写入初始化状态。
 
 #### GET /api/v1/app/home/company-top-tasks/?page=1&page_size=10
 
@@ -1754,6 +1791,17 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
           "due_at": {
             "before": "2026-10-20T18:00:00+08:00",
             "after": "2026-10-21T18:00:00+08:00"
+          },
+          "assignee_id": {
+            "before": {"id": 42, "display_name": "王小明"},
+            "after": {"id": 63, "display_name": "陈小丽"}
+          },
+          "tag_ids": {
+            "before": [{"id": 21, "name": "客户跟进"}],
+            "after": [
+              {"id": 21, "name": "客户跟进"},
+              {"id": 24, "name": "需求分析"}
+            ]
           }
         },
         "created_at": "2026-10-11T10:15:00+08:00"
@@ -1763,6 +1811,10 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "requestId": "<uuid>"
 }
 ```
+
+`tag_ids.before` 与 `tag_ids.after` 均为有序对象数组，按各自关联顺序返回 `{id, name}`；`name` 是记录产生时的标签名称快照。历史数据中若仍是数字 ID，读取接口会尽可能从标签记录补充名称。
+
+`assignee_id.before` 与 `assignee_id.after` 返回 `{id, display_name}` 快照；姓名取操作发生时的员工姓名。旧历史若只有数字 ID，读取接口会尽可能从员工记录补充姓名。Android 和 Web 均以“姓名（ID）”显示负责人变更。
 
 #### POST /api/v1/app/tasks/
 
@@ -2726,11 +2778,54 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 月视图的 `tasks`、周/日视图的 `all_day_tasks` 每项增加 `bar_color`。颜色按当前关联中最早新增的关系计算；移除最早标签后顺延到剩余最早关联；无标签时返回固定中性灰色。工作视图不返回标签名称或停用标记供任务条展示。
 
+月、周、日工作视图响应增加 `calendar_days` 数组，列出当前响应日期范围内已配置的中国大陆节假日安排。月视图范围为完整可见日期网格；周视图范围为所选周；日视图范围为顶部七日日期条所在周。普通日期和未配置年份的日期不返回数组项。
+
+月视图响应的 `start_date`、`end_date` 保持所选自然月边界；新增 `calendar_start_date`、`calendar_end_date`，分别表示日期网格首个周一和末个周日。`days` 从 `calendar_start_date` 到 `calendar_end_date` 按自然日连续返回，含上月/下月日期；相邻月份日期可被客户端浅色显示并可点击。任务跨度与这些可见日期相交时，也需出现在对应 `days[].bars` 中，任务条超出完整网格时由网格边缘裁剪。月视图 `calendar_days` 的范围同样为完整可见网格。
+
+每项结构如下：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `date` | `YYYY-MM-DD` | 标记所属日期 |
+| `day_type` | 字符串 | `holiday`（节日名称对应的正式节日日期）、`rest_day`（放假安排中的其他休息日）或 `makeup_workday`（调休上班日） |
+| `holiday_name` | 字符串或 `null` | 节假日名称；调休上班日为 `null` |
+| `label` | 字符串 | 客户端展示文字：节日日期使用短节日名，其他放假日使用“休”，调休上班日使用“班”；节日名称优先于“休” |
+
+年度日期来自后端版本化日历数据，不新增接口或数据库表。未配置年份返回空数组；客户端不得按周末或农历推算。第一版数据覆盖 2025—2027 年，并按国务院办公厅公布的年度安排维护。
+
+月视图中的完整日期数组示例：
+
+```json
+{
+  "start_date": "2025-10-01",
+  "end_date": "2025-10-31",
+  "calendar_start_date": "2025-09-29",
+  "calendar_end_date": "2025-11-02",
+  "days": [
+    {"date": "2025-09-29", "bars": [], "overflow_count": 0},
+    {"date": "2025-09-30", "bars": [], "overflow_count": 0},
+    {"date": "2025-10-01", "bars": [], "overflow_count": 0},
+    {"date": "2025-10-30", "bars": [{"task_id": 101, "title": "跨月任务", "bar_color": "#C7DDFF", "start_date": "2025-10-30", "end_date": "2025-11-02"}], "overflow_count": 0},
+    {"date": "2025-10-31", "bars": [{"task_id": 101, "title": "跨月任务", "bar_color": "#C7DDFF", "start_date": "2025-10-30", "end_date": "2025-11-02"}], "overflow_count": 0},
+    {"date": "2025-11-01", "bars": [{"task_id": 101, "title": "跨月任务", "bar_color": "#C7DDFF", "start_date": "2025-10-30", "end_date": "2025-11-02"}], "overflow_count": 0},
+    {"date": "2025-11-02", "bars": [{"task_id": 101, "title": "跨月任务", "bar_color": "#C7DDFF", "start_date": "2025-10-30", "end_date": "2025-11-02"}], "overflow_count": 0}
+  ],
+  "calendar_days": [
+    {"date": "2025-10-01", "day_type": "holiday", "holiday_name": "国庆节、中秋节", "label": "国庆"},
+    {"date": "2025-10-06", "day_type": "holiday", "holiday_name": "中秋节", "label": "中秋"}
+  ]
+}
+```
+
+上例 `days` 为结构节选；真实响应会按日期连续包含 2025-09-29 至 2025-11-02 的全部 35 天。2025-10-06 是连续假期内的正式中秋节日期，因此名称“中秋”优先显示，不返回通用“休”标签。
+
 ### 4.7 Android 月、周、日视图
 
 #### GET /api/v1/app/work-views/month/?user_id=42&year=2026&month=10
 
 **请求：** 无 JSON 请求体；如有筛选条件，查询参数见接口 URL。
+
+**响应说明：** `days` 按完整可见网格连续返回；下例只展示代表日期。
 
 **响应 JSON**
 
@@ -2742,16 +2837,21 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
     "user_id": 42,
     "year": 2026,
     "month": 10,
-    "tasks": [
+    "start_date": "2026-10-01",
+    "end_date": "2026-10-31",
+    "calendar_start_date": "2026-09-28",
+    "calendar_end_date": "2026-11-01",
+    "days": [
       {
-        "task_id": 101,
-        "title": "完成需求梳理",
-        "bar_color": "#C7DDFF",
-        "start_date": "2026-10-05",
-        "due_date": "2026-10-20",
-        "completion_status": "unfinished",
-        "is_personal_focus": true
+        "date": "2026-10-01",
+        "bars": [{"task_id": 101, "title": "完成需求梳理", "bar_color": "#C7DDFF", "start_date": "2026-10-01", "end_date": "2026-10-05"}],
+        "overflow_count": 0
       }
+    ],
+    "calendar_days": [
+      {"date": "2026-10-01", "day_type": "holiday", "holiday_name": "国庆节", "label": "国庆"},
+      {"date": "2026-10-02", "day_type": "rest_day", "holiday_name": "国庆节", "label": "休"},
+      {"date": "2026-10-10", "day_type": "makeup_workday", "holiday_name": null, "label": "班"}
     ]
   },
   "requestId": "<uuid>"
@@ -2770,38 +2870,13 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "message": "success",
   "data": {
     "user_id": 42,
-    "week_start": "2026-10-05",
-    "week_end": "2026-10-11",
-    "days": [
-      {
-        "date": "2026-10-05",
-        "weekday": "周一"
-      },
-      {
-        "date": "2026-10-11",
-        "weekday": "周日"
-      }
-    ],
-    "all_day_tasks": [
-      {
-        "task_id": 101,
-        "title": "完成需求梳理",
-        "bar_color": "#C7DDFF",
-        "start_date": "2026-10-05",
-        "due_date": "2026-10-20",
-        "completion_status": "unfinished"
-      }
-    ],
-    "events": [
-      {
-        "id": "update-801",
-        "date": "2026-10-11",
-        "occurred_at": "2026-10-11T11:00:00+08:00",
-        "task_id": 101,
-        "task_title": "完成需求梳理",
-        "event_type": "update",
-        "tag_color": "#159A84"
-      }
+    "start_date": "2026-10-05",
+    "end_date": "2026-10-11",
+    "dates": ["2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09", "2026-10-10", "2026-10-11"],
+    "all_day_tasks": [{"task_id": 101, "title": "完成需求梳理", "bar_color": "#C7DDFF", "start_date": "2026-10-05", "end_date": "2026-10-07"}],
+    "events": [{"task_id": 101, "task_title": "完成需求梳理", "event_type": "progress_updated", "occurred_at": "2026-10-11T11:00:00+08:00", "tag_color": "#159A84"}],
+    "calendar_days": [
+      {"date": "2026-10-10", "day_type": "makeup_workday", "holiday_name": null, "label": "班"}
     ]
   },
   "requestId": "<uuid>"
@@ -2821,25 +2896,13 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
   "data": {
     "user_id": 42,
     "date": "2026-10-11",
-    "all_day_tasks": [
-      {
-        "task_id": 101,
-        "title": "完成需求梳理",
-        "bar_color": "#C7DDFF",
-        "start_date": "2026-10-05",
-        "due_date": "2026-10-20",
-        "completion_status": "unfinished"
-      }
-    ],
-    "events": [
-      {
-        "id": "submission-901",
-        "occurred_at": "2026-10-11T16:00:00+08:00",
-        "task_id": 101,
-        "task_title": "完成需求梳理",
-        "event_type": "submitted",
-        "tag_color": "#159A84"
-      }
+    "start_date": "2026-10-05",
+    "end_date": "2026-10-11",
+    "dates": ["2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09", "2026-10-10", "2026-10-11"],
+    "all_day_tasks": [{"task_id": 101, "title": "完成需求梳理", "bar_color": "#C7DDFF", "start_date": "2026-10-11", "end_date": "2026-10-11"}],
+    "events": [{"task_id": 101, "task_title": "完成需求梳理", "event_type": "completion_submitted", "occurred_at": "2026-10-11T16:00:00+08:00", "tag_color": "#159A84"}],
+    "calendar_days": [
+      {"date": "2026-10-10", "day_type": "makeup_workday", "holiday_name": null, "label": "班"}
     ]
   },
   "requestId": "<uuid>"

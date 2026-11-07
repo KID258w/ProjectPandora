@@ -9,6 +9,7 @@ data class BusinessUser(
     val supervisor: String? = null,
     val idNumberMasked: String? = null,
     val isActive: Boolean = true,
+    val accountCreatedDate: String? = null,
 ) {
     val organization: String
         get() = listOfNotNull(department, team).joinToString(" · ").ifEmpty { "公司" }

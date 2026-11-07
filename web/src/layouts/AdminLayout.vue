@@ -50,7 +50,7 @@ onMounted(loadAdmin)
         </el-sub-menu>
         <el-menu-item index="/company-items">
           <span class="menu-symbol">事</span>
-          <span>公司重要事项</span>
+          <span>事件纪</span>
         </el-menu-item>
         <el-sub-menu index="system">
           <template #title>

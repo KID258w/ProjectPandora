@@ -156,7 +156,7 @@ class AppOperationAuditApiTests(APITestCase):
         self.assertEqual(log_row.object_label_snapshot, str(self.today))
         self.assertIsNone(log_row.before_data)
         self.assertEqual(log_row.after_data["completed_work"], "接口开发")
-        self.assertEqual(log_row.after_data["tag_ids"], [tag.pk])
+        self.assertEqual(log_row.after_data["tag_ids"], [{"id": tag.pk, "name": tag.name}])
 
         # 无实际变更的保存不产生记录
         self.client.put(url, {"completed_work": "接口开发"}, format="json")
@@ -193,7 +193,9 @@ class AppOperationAuditApiTests(APITestCase):
         self.assertEqual(create_row.object_label_snapshot, "上线新接口")
         self.assertIsNone(create_row.before_data)
         self.assertEqual(create_row.after_data["title"], "上线新接口")
-        self.assertEqual(create_row.after_data["assignee_id"], self.leader.pk)
+        self.assertEqual(create_row.after_data["assignee_id"], {
+            "id": self.leader.pk, "display_name": self.leader.display_name,
+        })
 
         # 创建人修改任务定义
         edited = self.client.patch(f"/api/v1/app/tasks/{task.pk}/", {"title": "上线新接口 v2"}, format="json")

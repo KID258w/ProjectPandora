@@ -51,6 +51,22 @@ class Task(models.Model):
         ]
 
 
+class TaskPin(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pinned_tasks")
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="user_pins")
+    pinned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "tasks_task_pin"
+        ordering = ["-pinned_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "task"], name="unique_user_task_pin"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "pinned_at"], name="task_pin_user_recent"),
+        ]
+
+
 class TaskApprovalRecord(models.Model):
     class Decision(models.TextChoices):
         PENDING = "pending", "待审批"

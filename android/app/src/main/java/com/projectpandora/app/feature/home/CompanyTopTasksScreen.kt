@@ -66,7 +66,7 @@ fun CompanyTopTasksScreen(
 
     PageColumn {
         BackButton(onBack)
-        PageTitle("公司十大重要任务", small = true)
+        PageTitle("任务看版", small = true)
         Text("按任务来源和截止时间排序，最多显示 10 项。", fontSize = 13.sp, color = C.Muted)
         if (loading) CircularProgressIndicator()
         if (error.isNotEmpty()) {

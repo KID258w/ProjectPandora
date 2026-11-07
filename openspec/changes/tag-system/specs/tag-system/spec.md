@@ -117,3 +117,14 @@ Month, week, and day work views SHALL show only a task title on each task bar an
 #### Scenario: Task retains an inactive tag association
 - **WHEN** a task's earliest current association is an inactive tag
 - **THEN** its task bar continues to use that tag's stored color
+
+### Requirement: Tag association history retains readable names
+When task-definition history or employee App operation audit records preserve tag-association changes, the system SHALL store each associated tag's ID together with its name at the time of the operation. Android task history and Web App operation details SHALL display the tag name, and MAY include the ID only alongside the name. Legacy numeric-only tag snapshots SHALL be resolved to a tag name on read when the corresponding tag record still exists.
+
+#### Scenario: User inspects task tag history
+- **WHEN** a user opens task change history for a creation or edit that changed tag associations
+- **THEN** each before/after tag is identifiable by its name, optionally followed by its ID, rather than appearing as a bare number
+
+#### Scenario: Administrator inspects tag associations in App audit
+- **WHEN** an administrator opens an App operation record whose task or log changes include tag associations
+- **THEN** the before/after values show tag names with their IDs, and the stored operation-time name remains unchanged after a later tag rename

@@ -48,3 +48,30 @@
 
 - Backend: `python manage.py test apps.tasks.test_work_views --noinput` passed all 6 work-view tests. Coverage verifies completed and overdue tasks appear in overlapping month/week/day periods, while pending, cancelled, and non-overlapping tasks remain absent; real task events keep their existing period and visibility rules.
 - `git diff --check` and `npx.cmd -y @fission-ai/openspec@1.14.1 validate month-week-day-work-views --strict` passed.
+
+## Official holiday markers follow-up
+
+- [x] H1 Add versioned China public-holiday and make-up workday schedules for 2025–2027 and expose date markers in month/week/day work-view responses; no database migration.
+- [x] H2 Update Android month, week, and day date displays with compact holiday/rest/make-up-workday markers that preserve task-bar colors and existing layout behavior.
+- [ ] H3 Add backend/API and Android presentation coverage for configured dates, adjusted weekend workdays, and years without calendar data.
+- [x] H4 Update the work-view requirements, API and database documentation, and this OpenSpec change with the calendar contract and visual placement rules.
+
+### Initial implementation verification (2026-11-07)
+
+- Backend `manage.py check` passed; `makemigrations --check --dry-run` reported no changes.
+- Android `:app:compileDebugKotlin` passed.
+- OpenSpec strict validation and `git diff --check` passed.
+- Automated holiday-specific test coverage remains in H3.
+
+## Month grid and named holiday follow-up
+
+- [x] M1 Return a complete Monday–Sunday month grid, its visible date bounds, adjacent-month task bars, and holiday metadata for all visible dates.
+- [x] M2 Render adjacent-month dates in a lighter color, keep them selectable, and continue task bars through those cells.
+- [ ] M3 Add regression coverage for the 2025-10-06 Mid-Autumn label priority and 2025-10-30–2025-11-02 cross-month task span.
+- [x] M4 Update requirements, API/database documentation, and this OpenSpec change for named holiday priority and the full month grid.
+
+### Follow-up implementation verification (2026-11-07)
+
+- Backend `manage.py check` passed; `makemigrations --check --dry-run` reported no changes.
+- Android `:app:compileDebugKotlin` passed.
+- `git diff --check` passed. OpenSpec strict validation initially flagged long requirement statements; the statements were shortened and strict validation was rerun.

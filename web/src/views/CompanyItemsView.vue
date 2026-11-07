@@ -104,7 +104,7 @@ async function publish(row) {
       tone: 'publish',
       eyebrow: '内容面向全体用户',
       title: '确认发布这条事项？',
-      description: '发布后，这条公司重要事项将展示给全体 App 用户。',
+      description: '发布后，这条公司事件将展示给全体 App 用户。',
       itemTitle: row.title,
       note: `当前已发布 ${publishedCount.value} / 10 条；发布后将占用一个展示名额。`,
     }), '发布公司事项', {
@@ -252,7 +252,7 @@ onMounted(loadItems)
 
 <template>
   <section class="page-heading">
-    <div><p class="eyebrow">COMPANY INFORMATION</p><h1>公司重要事项</h1><p class="page-description">维护全体 App 用户共同可见的公司信息。草稿和下线事项不会出现在 App。</p></div>
+    <div><p class="eyebrow">COMPANY INFORMATION</p><h1>事件纪</h1><p class="page-description">维护全体 App 用户共同可见的公司事件。草稿和下线内容不会出现在 App。</p></div>
     <el-button type="primary" @click="openCreate"><span class="button-plus">＋</span> 新建事项</el-button>
   </section>
 
@@ -273,7 +273,7 @@ onMounted(loadItems)
         <el-button :loading="loading" @click="loadItems">查询</el-button>
       </div>
     </div>
-    <el-table v-loading="loading" :data="visibleItems" class="admin-table company-items-table" empty-text="暂无公司重要事项">
+    <el-table v-loading="loading" :data="visibleItems" class="admin-table company-items-table" empty-text="暂无公司事件">
       <el-table-column label="顺序" width="116" align="center">
         <template #default="{ row }">
           <div v-if="row.status === 'published'" class="order-controls"><span>{{ publishedSequence(row) }}</span><el-button link :disabled="publishedIndex(row) === 0 || loading || Boolean(search.trim()) || Boolean(statusFilter)" aria-label="上移" @click="moveItem(row, -1)">↑</el-button><el-button link :disabled="publishedIndex(row) === publishedCount - 1 || loading || Boolean(search.trim()) || Boolean(statusFilter)" aria-label="下移" @click="moveItem(row, 1)">↓</el-button></div>
@@ -293,7 +293,7 @@ onMounted(loadItems)
     <div class="table-footnote">排序仅作用于已发布事项；请先清除搜索和状态筛选再调整。草稿和已下线事项不会参与排序。发布上限由后端再次校验，达到 10 条时请先下线一条已发布事项。</div>
   </el-card>
 
-  <el-dialog v-model="editorVisible" :title="editingId ? '编辑公司重要事项' : '新建公司重要事项'" width="min(760px, 94vw)" destroy-on-close @closed="clearForm">
+  <el-dialog v-model="editorVisible" :title="editingId ? '编辑公司事件' : '新建公司事件'" width="min(760px, 94vw)" destroy-on-close @closed="clearForm">
     <p class="dialog-intro">事项作为公司信息发布给全体 App 用户，不包含任务负责人、进度或验收信息。新建内容以草稿保存；编辑现有事项会保留其当前发布状态。</p>
     <el-form ref="editorRef" :model="form" :rules="rules" label-position="top" class="item-editor-form">
       <el-form-item label="事项标题" prop="title"><el-input v-model="form.title" maxlength="200" show-word-limit placeholder="输入清晰、简短的标题" /></el-form-item>
@@ -313,7 +313,7 @@ onMounted(loadItems)
   </el-dialog>
 
   <el-dialog v-model="previewVisible" title="App 事项样式预览" width="min(470px, 94vw)" class="item-preview-dialog">
-    <div v-if="selectedItem" class="mobile-preview-shell"><div class="mobile-preview-status"><span>9:41</span><span>● ● ●</span></div><div class="mobile-preview-header"><span>‹ 首页</span><span>Pandora</span></div><div class="mobile-preview-list"><div class="mobile-preview-list-heading"><strong>公司重要事项</strong><span>已发布事项</span></div><article class="mobile-preview-expanded-item"><div class="preview-date">{{ selectedItem.published_at ? formatDate(selectedItem.published_at) : '预览' }}</div><h3>{{ selectedItem.title }} <span>⌃</span></h3><p class="preview-summary">{{ selectedItem.summary }}</p><p class="preview-body">{{ selectedItem.body }}</p></article></div></div>
+    <div v-if="selectedItem" class="mobile-preview-shell"><div class="mobile-preview-status"><span>9:41</span><span>● ● ●</span></div><div class="mobile-preview-header"><span>‹ 首页</span><span>Pandora</span></div><div class="mobile-preview-list"><div class="mobile-preview-list-heading"><strong>事件纪</strong><span>已发布事项</span></div><article class="mobile-preview-expanded-item"><div class="preview-date">{{ selectedItem.published_at ? formatDate(selectedItem.published_at) : '预览' }}</div><h3>{{ selectedItem.title }} <span>⌃</span></h3><p class="preview-summary">{{ selectedItem.summary }}</p><p class="preview-body">{{ selectedItem.body }}</p></article></div></div>
     <template #footer><el-button @click="previewVisible = false">关闭预览</el-button></template>
   </el-dialog>
 </template>

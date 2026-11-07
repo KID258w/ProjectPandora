@@ -11,6 +11,7 @@ See `proposal.md` for motivation and `specs/tag-system/spec.md` for observable b
 - Define founder-only tag management and shared read/search behavior for App roles.
 - Let the Founder choose one of ten preset colors when creating a tag, edit the color of an enabled tag, and render associated task/log tags as colored oval chips.
 - Preserve tag history and enforce inactive-tag association rules on task/log writes.
+- Preserve readable tag-name snapshots in task change history and employee App operation audit records.
 - Make task-bar color deterministic on the server so Android clients use the same color in every work view.
 - Add relational tables without changing task, log, approval, or submission lifecycle columns.
 
@@ -21,6 +22,8 @@ See `proposal.md` for motivation and `specs/tag-system/spec.md` for observable b
 - Changing existing task/log permissions, workflows, or visibility scopes.
 
 ## Decisions
+
+- Store tag association history as ordered `{id, name}` snapshots, where `name` is captured at operation time. Read APIs resolve legacy numeric-only values from retained tag rows when possible; Android and Web render the name with the ID, never a bare numeric ID.
 
 ### App API surface
 

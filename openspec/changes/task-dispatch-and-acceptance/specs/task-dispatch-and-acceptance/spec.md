@@ -310,3 +310,14 @@ The system SHALL allow a direct dispatcher to cancel their own unfinished task w
 #### Scenario: Non-dispatcher attempts cancellation
 - **WHEN** a user who is not the direct dispatcher attempts to cancel a task
 - **THEN** the system rejects the operation and returns no cancellation capability
+
+### Requirement: Task change history identifies referenced records by name
+Task creation and definition-change history SHALL preserve tag associations as ordered ID/name snapshots and task assignees as ID/display-name snapshots, using names at operation time. The task-history API SHALL resolve legacy numeric-only snapshots when the referenced record still exists. Android task history SHALL display the referenced name and MAY show its ID only alongside that name.
+
+#### Scenario: User reviews task tag changes
+- **WHEN** a user with task-history access inspects a task creation or edit that changed associated tags
+- **THEN** the before/after values identify each tag by name and do not display a bare numeric ID
+
+#### Scenario: User reviews an assignee change
+- **WHEN** a user with task-history access inspects task creation or an edit that changed the assignee
+- **THEN** the before/after values identify the assignee by name and do not display a bare numeric ID

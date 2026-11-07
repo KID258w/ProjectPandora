@@ -12,7 +12,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from .models import AppOperationAuditLog
+from .models import AppOperationAuditLog, User
 
 Module = AppOperationAuditLog.Module
 
@@ -67,15 +67,41 @@ def _changed_keys(before, after):
     return changed
 
 
+def user_reference_snapshot(value):
+    """Return an operation-time employee name with the referenced user ID."""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        user_id = value.get("id")
+        display_name = value.get("display_name") or value.get("name")
+    else:
+        user_id = value
+        display_name = None
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return {"id": user_id, "display_name": str(display_name or "未知成员")}
+    if not display_name:
+        user = User.objects.filter(pk=user_id).only("display_name", "username").first()
+        display_name = (user.display_name or user.username) if user else "未知成员"
+    return {"id": user_id, "display_name": str(display_name)}
+
+
 def _sanitized_values(values, module):
     if not values:
         return None
     allowlist = ALLOWED_VALUE_FIELDS.get(module, frozenset())
-    cleaned = {
-        key: _json_safe(value)
-        for key, value in values.items()
-        if key in allowlist and not is_sensitive_field(key)
-    }
+    cleaned = {}
+    for key, value in values.items():
+        if key not in allowlist or is_sensitive_field(key):
+            continue
+        if key == "tag_ids":
+            from apps.tags.services import tag_name_snapshots
+
+            value = tag_name_snapshots(value)
+        elif key == "assignee_id":
+            value = user_reference_snapshot(value)
+        cleaned[key] = _json_safe(value)
     return cleaned or None
 
 

@@ -152,3 +152,41 @@ Week bars SHALL use the intersection of the task's date span and the selected Mo
 #### Scenario: Any selected day shows all-day task bars
 - **WHEN** the selected responsible person views a date covered by an approved, non-cancelled task's date span
 - **THEN** the “全天” area shows clickable task bars without extra status, deadline, or summary text above the complete 24-hour timeline
+
+### Requirement: Work views show official holiday and make-up workday markers
+Month, week, and day views SHALL show concise markers from versioned official calendar data. Month markers appear beside day numbers; week/day markers appear below dates. A named public holiday SHALL take precedence over a generic rest marker. Markers SHALL NOT alter task bars, colors, filtering, or access control.
+
+#### Scenario: Month view marks an official holiday period
+- **WHEN** a user opens a month containing a configured public-holiday period
+- **THEN** the first day displays the holiday's short name, other rest days display “休” except named public-holiday dates, which display their holiday name; existing task bars remain visible with their tag colors
+
+#### Scenario: Week and day date strips use the same calendar markers
+- **WHEN** a user opens a week or a day whose seven-day strip includes holiday or make-up workday dates
+- **THEN** the corresponding dates display the same holiday, rest-day, or “班” marker as month view; the day response includes metadata for the entire seven-day strip
+
+#### Scenario: Adjusted workday falls on a weekend
+- **WHEN** an officially announced make-up workday falls on Saturday or Sunday
+- **THEN** the date displays “班” instead of an automatic weekend-rest marker
+
+#### Scenario: Calendar data is unavailable for a year
+- **WHEN** a user views a date from a year not present in backend calendar data
+- **THEN** the API returns no calendar marker for that date and the client does not infer a holiday from lunar dates or weekday
+
+#### Scenario: Named holiday wins over a generic rest marker
+- **WHEN** a named public-holiday date falls within a longer rest period, such as the 2025 Mid-Autumn Festival during the National Day break
+- **THEN** the API returns the named holiday marker (“中秋”) for October 6, 2025, and the client does not replace it with the generic “休” marker
+
+### Requirement: Month view fills adjacent-month dates and continues task bars
+Month view SHALL render a complete Monday–Sunday grid covering the weeks containing the first and last days of the selected month. Adjacent-month dates SHALL use lighter text and remain selectable. Task bars SHALL appear on each visible date in their inclusive span and SHALL be clipped only at the grid boundary.
+
+#### Scenario: Adjacent-month dates fill the month grid
+- **WHEN** a user opens October 2025
+- **THEN** the calendar fills its first and last weeks with September and November dates, displays those date numbers in a lighter color, and opens the corresponding day view when selected
+
+#### Scenario: Task bar continues through adjacent-month dates
+- **WHEN** an approved, non-cancelled task spans October 30 through November 2, 2025
+- **THEN** October month view shows one continuous task bar over October 30, October 31, November 1, and November 2, with the task's tag color and title
+
+#### Scenario: Task continues beyond the visible grid
+- **WHEN** a task span starts before or ends after the visible month grid
+- **THEN** its bar begins or ends at the first or last visible grid date and is clipped at that grid boundary

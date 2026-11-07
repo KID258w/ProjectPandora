@@ -4,6 +4,8 @@
 - [x] 1.2 Record successful login and supported App write events with allowlisted changed fields and before/after values in the business transaction.
 - [x] 1.3 Exclude failed/read-only/exempt operations and redact passwords, full identity numbers, tokens and avatar binary data.
 - [x] 1.4 Add backend tests for event coverage, snapshot accuracy, atomicity, redaction and failure paths.
+- [x] 1.5 Preserve tag association IDs and operation-time names in App audit before/after snapshots, and resolve legacy numeric-only values on read.
+- [x] 1.6 Preserve task assignee IDs and operation-time names in App audit before/after snapshots, and resolve legacy numeric-only values on read.
 
 ## 2. Administrator API
 
@@ -16,6 +18,8 @@
 - [x] 3.1 Add a separate Employee App Operation History page with global latest records and employee filtering.
 - [x] 3.2 Add record detail showing actor/object snapshots and changed field values without restore, edit, or export actions.
 - [x] 3.3 Verify ordinary task and employee-log browsing remains unavailable in Web.
+- [x] 3.4 Render audit tag-association values as names with IDs in the Web record detail.
+- [x] 3.5 Render task assignee audit values as names with IDs in the Web record detail.
 
 ## 4. Contracts and verification
 

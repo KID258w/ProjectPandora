@@ -8,13 +8,14 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.app_audit import record_app_operation
+from apps.accounts.app_audit import record_app_operation, user_reference_snapshot
 from apps.accounts.authentication import IsBusinessUser, ScopedJWTAuthentication, has_complete_supervisor_chain
 from apps.accounts.models import AppOperationAuditLog, Department, Team, User
 from apps.core.api import BusinessAPIView, StandardPagination, paginated_response
 from apps.logs.views import descendants, parse_date
+from apps.tags.services import tag_name_snapshots
 
-from .models import (Task, TaskApprovalRecord, TaskChangeHistory, TaskNotification,
+from .models import (Task, TaskApprovalRecord, TaskChangeHistory, TaskNotification, TaskPin,
                      TaskSubmission, TaskUpdate)
 from .serializers import (CancelInputSerializer, DecisionInputSerializer, HistoryItemSerializer,
                           MarkReadInputSerializer, NotificationSerializer, PersonSerializer,
@@ -132,8 +133,13 @@ class TaskListView(BusinessAPIView):
                 )
                 set_task_tags(task, tags)
                 changes = {key: {"before": None, "after": json_value(value)} for key, value in values.items() if key != "tag_ids"}
+                if "assignee_id" in changes:
+                    changes["assignee_id"]["after"] = user_reference_snapshot(assignee.pk)
                 if tags:
-                    changes["tag_ids"] = {"before": [], "after": [tag.pk for tag in tags]}
+                    changes["tag_ids"] = {
+                        "before": [],
+                        "after": tag_name_snapshots([tag.pk for tag in tags]),
+                    }
                 TaskChangeHistory.objects.create(task=task, actor=request.user,
                     change_type=TaskChangeHistory.Change.CREATED, changes=changes)
                 if task.approval_status == Task.Approval.PENDING:
@@ -149,6 +155,46 @@ class TaskListView(BusinessAPIView):
         except IntegrityError as exc:
             raise ValidationError("创建任务时发生并发冲突，请重试。") from exc
         return Response(task_detail(task), status=201)
+
+
+class PinnedTaskListView(BusinessAPIView):
+    serializer_class = TaskSummarySerializer
+    pagination_class = StandardPagination
+
+    @extend_schema(tags=["App 任务"], summary="查询本人置顶任务")
+    def get(self, request):
+        pins = TaskPin.objects.filter(
+            user=request.user,
+            task__approval_status=Task.Approval.APPROVED,
+        ).filter(
+            Q(task__creator=request.user) | Q(task__assignee=request.user),
+        ).select_related("task", "task__creator", "task__assignee")
+        return paginated_response(self, request, pins,
+                                  lambda rows: [task_summary(row.task) for row in rows])
+
+
+class TaskPinView(BusinessAPIView):
+    serializer_class = TaskSummarySerializer
+
+    @extend_schema(tags=["App 任务"], summary="置顶本人可见任务", request=None,
+                   responses={200: TaskSummarySerializer, 201: TaskSummarySerializer})
+    def post(self, request, pk):
+        require_empty_body(request)
+        task = Task.objects.select_related("creator", "assignee").filter(pk=pk).first()
+        if task is None:
+            raise NotFound("任务不存在。")
+        if (task.approval_status != Task.Approval.APPROVED
+                or (task.creator_id != request.user.pk and task.assignee_id != request.user.pk)):
+            raise PermissionDenied("只能置顶本人任务中心中可见的已审批任务。")
+        _pin, created = TaskPin.objects.get_or_create(user=request.user, task=task)
+        return Response(task_summary(task), status=201 if created else 200)
+
+    @extend_schema(tags=["App 任务"], summary="取消本人任务置顶", request=None,
+                   responses=OpenApiTypes.OBJECT)
+    def delete(self, request, pk):
+        require_empty_body(request)
+        TaskPin.objects.filter(user=request.user, task_id=pk).delete()
+        return Response({"pinned": False})
 
 
 class SubordinateTaskListView(BusinessAPIView):
@@ -241,12 +287,18 @@ class TaskDetailView(BusinessAPIView):
                     after = [tag_id for tag_id in before if tag_id in wanted]
                     after.extend(tag.pk for tag in tags if tag.pk not in before)
                     if before != after:
-                        changes[field] = {"before": before, "after": after}
+                        changes[field] = {
+                            "before": tag_name_snapshots(before),
+                            "after": tag_name_snapshots(after),
+                        }
                     continue
                 if field == "assignee_id":
                     if task.assignee_id != value:
                         assignee = validate_assignee(request.user, value)
-                        changes[field] = {"before": task.assignee_id, "after": value}
+                        changes[field] = {
+                            "before": user_reference_snapshot(task.assignee_id),
+                            "after": user_reference_snapshot(value),
+                        }
                         task.assignee = assignee
                         task.assignee_department = assignee.department
                         key_changed = True
@@ -290,9 +342,26 @@ class TaskHistoryView(BusinessAPIView):
     @extend_schema(tags=["App 任务"], summary="读取任务定义变更历史", responses=OpenApiTypes.OBJECT)
     def get(self, request, pk):
         task = visible_task(request, pk)
-        return Response({"results": [{"id": row.pk, "change_type": row.change_type,
-            "actor": user_brief(row.actor), "changes": row.changes, "created_at": row.created_at}
-            for row in task.changes.select_related("actor")]})
+        results = []
+        for row in task.changes.select_related("actor"):
+            changes = dict(row.changes)
+            tag_diff = changes.get("tag_ids")
+            if isinstance(tag_diff, dict):
+                changes["tag_ids"] = {
+                    **tag_diff,
+                    "before": tag_name_snapshots(tag_diff.get("before", [])),
+                    "after": tag_name_snapshots(tag_diff.get("after", [])),
+                }
+            assignee_diff = changes.get("assignee_id")
+            if isinstance(assignee_diff, dict):
+                changes["assignee_id"] = {
+                    **assignee_diff,
+                    "before": user_reference_snapshot(assignee_diff.get("before")),
+                    "after": user_reference_snapshot(assignee_diff.get("after")),
+                }
+            results.append({"id": row.pk, "change_type": row.change_type,
+                "actor": user_brief(row.actor), "changes": changes, "created_at": row.created_at})
+        return Response({"results": results})
 
 
 class TaskResubmitView(BusinessAPIView):

@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -20,6 +21,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -97,6 +99,7 @@ private fun assigneeOptionLabel(person: JsonObject, currentUserId: Long, current
 
 @Composable
 fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? = null, initialApprovalContext: Boolean = false, initialApprovalCenter: Boolean = false, initialSubordinateId: Long? = null, forceReadOnly: Boolean = false) {
+    val scope = rememberCoroutineScope()
     var page by remember { mutableStateOf(if (initialTaskId != null) "detail" else if (initialApprovalCenter) "approval" else "list") }
     var approvalCenterDestination by remember { mutableStateOf(initialApprovalCenter) }
     var section by remember { mutableStateOf(if (initialApprovalCenter) "inbox" else if (initialSubordinateId != null) "subordinates" else "mine") }
@@ -107,6 +110,10 @@ fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? 
     var taskId by remember { mutableLongStateOf(initialTaskId ?: 0L) }
     var task by remember { mutableStateOf<JsonObject?>(null) }
     var rows by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    var pinnedRows by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    var pinTarget by remember { mutableStateOf<JsonObject?>(null) }
+    var pinActionError by remember { mutableStateOf("") }
+    var pinBusy by remember { mutableStateOf(false) }
     var history by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var me by remember { mutableLongStateOf(0L) }
     var error by remember { mutableStateOf("") }; var busy by remember { mutableStateOf(false) }
@@ -146,7 +153,7 @@ fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? 
             busy = targetLoading
             return@LaunchedEffect
         }
-        busy = true; error = ""; rows = emptyList()
+        busy = true; error = ""; rows = emptyList(); pinnedRows = emptyList()
         try {
             val filters = mutableMapOf("completion_status" to status, "lifecycle_status" to lifecycle)
             if (startDate.isNotBlank()) filters["due_from"] = startDate
@@ -157,6 +164,9 @@ fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? 
                 "inbox", "outbox" -> api.all(ROOT + "task-approvals/$section/")
                 "subordinates" -> { filters["task_scope"] = subordinateScope; selectedPerson?.let { filters["user_id"] = it.long("id").toString() }; api.all(ROOT + "tasks/subordinates/", filters) }
                 else -> { filters["scope"] = section; api.all(ROOT + "tasks/", filters) }
+            }
+            if (page == "list" && section != "subordinates") {
+                pinnedRows = api.all(ROOT + "tasks/pinned/")
             }
         } catch (e: Exception) { error = e.businessMessage() } finally { busy = false }
     }
@@ -195,6 +205,8 @@ fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? 
     val canInspect = role in setOf("founder", "department_manager", "team_leader")
     val canInbox = canInspect
     val canOutbox = role in setOf("department_manager", "team_leader", "employee")
+    val pinnedTaskIds = remember(pinnedRows) { pinnedRows.mapTo(mutableSetOf()) { it.long("id") } }
+    val ordinaryRows = if (section == "subordinates") rows else rows.filterNot { it.long("id") in pinnedTaskIds }
     Box(Modifier.fillMaxSize()) {
         PageColumn {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -205,6 +217,19 @@ fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? 
                 }
             }
             PageTitle(if (page == "approval") "审批中心" else if (section == "subordinates") "下属任务" else "任务中心", small = true)
+            if (page == "list" && section != "subordinates" && pinnedRows.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("置顶任务", color = C.Ink, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("长按可取消置顶 · 不受当前筛选影响", color = C.Muted, fontSize = 11.sp)
+                }
+                TaskTable(
+                    pinnedRows,
+                    currentTimeMillis,
+                    onOpen = { row -> open(row.long("id")) },
+                    onLongPress = { row -> pinActionError = ""; pinTarget = row },
+                )
+            }
             if (page == "approval") {
                 Text("按审批流程处理任务；待审批任务不会进入普通任务列表。", color = C.Muted, fontSize = 13.sp)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -225,11 +250,13 @@ fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? 
                     if (section == "subordinates" && selectedPerson == null) targetReload++ else reload++
                 }) { Text("重试") }
             }
-            if (!busy && rows.isEmpty() && error.isBlank()) TaskEmptyState(
+            if (!busy && ordinaryRows.isEmpty() && error.isBlank()
+                && !(page == "list" && section != "subordinates" && pinnedRows.isNotEmpty() && rows.isEmpty())) TaskEmptyState(
                 when {
                     page == "approval" && section == "inbox" -> "目前没有待你审批的任务。"
                     page == "approval" -> "目前没有待上级审批或退回待修改的任务。"
                     section == "subordinates" -> "当前筛选下没有已审批的下属任务。"
+                    pinnedRows.isNotEmpty() && rows.isNotEmpty() -> "当前筛选下没有其他任务。"
                     else -> "没有符合条件的任务。"
                 },
             )
@@ -238,13 +265,55 @@ fun TaskCenterScreen(api: BusinessApi, onBack: () -> Unit, initialTaskId: Long? 
                     val id = row.long("task_id", row.long("id"))
                     ApprovalQueueCard(row, section == "inbox") { open(id) }
                 }
-            } else if (rows.isNotEmpty()) {
-                Text("左右滑动查看完整信息", color = C.Muted, fontSize = 12.sp)
-                TaskTable(rows, currentTimeMillis) { row -> open(row.long("task_id", row.long("id"))) }
+            } else if (ordinaryRows.isNotEmpty()) {
+                Text(
+                    if (section == "subordinates") "左右滑动查看完整信息" else "左右滑动查看 · 长按任务可置顶",
+                    color = C.Muted,
+                    fontSize = 12.sp,
+                )
+                TaskTable(
+                    ordinaryRows,
+                    currentTimeMillis,
+                    onOpen = { row -> open(row.long("task_id", row.long("id"))) },
+                    onLongPress = if (section == "subordinates") null else { row -> pinActionError = ""; pinTarget = row },
+                )
             }
             Spacer(Modifier.height(80.dp))
         }
         if (page == "list" && section != "subordinates") FloatingActionButton(onClick = { task = null; detailOrigin = "list"; page = "form" }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).testTag("create-task").semantics { contentDescription = "创建任务" }, shape = androidx.compose.foundation.shape.CircleShape) { Text("＋") }
+    }
+    pinTarget?.let { target ->
+        val selectedTaskId = target.long("id")
+        val isPinned = selectedTaskId in pinnedTaskIds
+        AlertDialog(
+            onDismissRequest = { if (!pinBusy) { pinTarget = null; pinActionError = "" } },
+            title = { Text(if (isPinned) "取消置顶任务" else "置顶任务") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(target.string("title", "未命名任务"), color = C.Ink)
+                    if (pinActionError.isNotBlank()) Text(pinActionError, color = C.Error, fontSize = 12.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !pinBusy, onClick = {
+                    scope.launch {
+                        pinBusy = true
+                        pinActionError = ""
+                        try {
+                            val path = ROOT + "tasks/$selectedTaskId/pin/"
+                            if (isPinned) api.delete(path) else api.postEmpty(path)
+                            pinTarget = null
+                            reload++
+                        } catch (e: Exception) {
+                            pinActionError = e.businessMessage()
+                        } finally {
+                            pinBusy = false
+                        }
+                    }
+                }) { Text(if (pinBusy) "处理中…" else if (isPinned) "取消置顶" else "置顶任务") }
+            },
+            dismissButton = { TextButton(enabled = !pinBusy, onClick = { pinTarget = null; pinActionError = "" }) { Text("取消") } },
+        )
     }
     if (showFilter && page == "list") {
         var draftSection by remember { mutableStateOf(section) }
@@ -528,7 +597,12 @@ private fun ApprovalQueueCard(row: JsonObject, inbox: Boolean, onClick: () -> Un
 }
 
 @Composable
-private fun TaskTable(rows: List<JsonObject>, nowMillis: Long, onOpen: (JsonObject) -> Unit) {
+private fun TaskTable(
+    rows: List<JsonObject>,
+    nowMillis: Long,
+    onOpen: (JsonObject) -> Unit,
+    onLongPress: ((JsonObject) -> Unit)? = null,
+) {
     val columns = listOf(
         "任务标题" to 220.dp,
         "创建人" to 128.dp,
@@ -569,7 +643,13 @@ private fun TaskTable(rows: List<JsonObject>, nowMillis: Long, onOpen: (JsonObje
                     Row(
                         Modifier.fillMaxWidth()
                             .background(if (index % 2 == 0) Color.White else C.BluePale.copy(alpha = 0.16f))
-                            .clickable { onOpen(row) }
+                            .then(
+                                if (onLongPress == null) Modifier.clickable { onOpen(row) }
+                                else Modifier.combinedClickable(
+                                    onClick = { onOpen(row) },
+                                    onLongClick = { onLongPress(row) },
+                                ),
+                            )
                             .padding(vertical = 13.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -578,12 +658,20 @@ private fun TaskTable(rows: List<JsonObject>, nowMillis: Long, onOpen: (JsonObje
                         TaskTableCell(row.string("assignee_name").ifBlank { "未知" }, columns[2].second)
                         TaskTableCell(row.string("estimated_start_at").takeIf { it.isNotBlank() }?.let(::displayTimestamp) ?: "未设置", columns[3].second)
                         TaskTableCell(row.string("due_at").takeIf { it.isNotBlank() }?.let(::displayTimestamp) ?: "—", columns[4].second)
-                        Column(Modifier.width(columns[5].second).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            TaskStatusBadge(if (row.string("completion_status") == "completed") "已完成" else "未完成")
-                            if (cancelled) Text("已取消", color = C.Error, fontSize = 10.sp, maxLines = 1)
-                            if (isOverdueTask(row, nowMillis)) {
-                                Surface(modifier = Modifier.align(Alignment.End), color = C.ErrorPale, shape = RoundedCornerShape(50)) {
-                                    Text("逾期", Modifier.padding(horizontal = 7.dp, vertical = 3.dp), color = C.Error, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Column(Modifier.width(columns[5].second).padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                TaskStatusBadge(
+                                    if (row.string("completion_status") == "completed") "已完成" else "未完成",
+                                    horizontalPadding = 6.dp,
+                                )
+                                if (cancelled) TaskStatusBadge("已取消", horizontalPadding = 6.dp)
+                                if (isOverdueTask(row, nowMillis)) {
+                                    Surface(color = C.ErrorPale, shape = RoundedCornerShape(50)) {
+                                        Text("逾期", Modifier.padding(horizontal = 6.dp, vertical = 5.dp), color = C.Error, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                    }
                                 }
                             }
                         }
@@ -617,7 +705,7 @@ private fun TaskMetadata(label: String, value: String) {
 }
 
 @Composable
-private fun TaskStatusBadge(label: String) {
+private fun TaskStatusBadge(label: String, horizontalPadding: Dp = 10.dp) {
     val (background, foreground) = when (label) {
         "已完成", "验收通过", "完成：已完成" -> C.TealPale to C.Teal
         "已取消", "已退回待修改" -> C.ErrorPale to C.Error
@@ -626,7 +714,7 @@ private fun TaskStatusBadge(label: String) {
         else -> C.AmberPale to C.Orange
     }
     Surface(color = background, contentColor = foreground, shape = RoundedCornerShape(50)) {
-        Text(label, Modifier.padding(horizontal = 10.dp, vertical = 5.dp), fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        Text(label, Modifier.padding(horizontal = horizontalPadding, vertical = 5.dp), fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -907,11 +995,48 @@ private fun formatTaskChanges(changes: JsonObject?): String {
     )
     return changes.entrySet().joinToString("\n") { (key, value) ->
         val diff = value.takeIf { it.isJsonObject }?.asJsonObject
-        val before = formatJsonValue(diff?.get("before"))
-        val after = formatJsonValue(diff?.get("after"))
+        val before = formatTaskChangeValue(key, diff?.get("before"))
+        val after = formatTaskChangeValue(key, diff?.get("after"))
         "${labels[key] ?: key}：$before → $after"
     }
 }
+
+private fun formatTaskChangeValue(field: String, value: JsonElement?): String =
+    when (field) {
+        "tag_ids" -> formatTagSnapshots(value)
+        "assignee_id" -> formatPersonSnapshot(value)
+        else -> formatJsonValue(value)
+    }
+
+private fun formatPersonSnapshot(value: JsonElement?): String {
+    if (value == null || value.isJsonNull) return "无"
+    val person = value.takeIf { it.isJsonObject }?.asJsonObject
+    val id = person?.get("id")?.let { formatJsonValue(it) }
+        ?: value.takeIf { it.isJsonPrimitive }?.asStringOrValue().orEmpty()
+    val name = person?.get("display_name")?.takeUnless { it.isJsonNull }?.asStringOrNull()
+        ?: person?.get("name")?.takeUnless { it.isJsonNull }?.asStringOrNull()
+    val label = name?.takeIf { it.isNotBlank() } ?: "未知成员"
+    return if (id.isBlank()) label else "$label（ID $id）"
+}
+
+private fun formatTagSnapshots(value: JsonElement?): String {
+    if (value == null || value.isJsonNull) return "无"
+    if (!value.isJsonArray) return "未知标签（ID ${value.asStringOrValue()}）"
+    return value.asJsonArray.joinToString("、") { item ->
+        val tag = item.takeIf { it.isJsonObject }?.asJsonObject
+        val id = tag?.get("id")?.let { formatJsonValue(it) }
+            ?: item.takeIf { it.isJsonPrimitive }?.asStringOrValue().orEmpty()
+        val name = tag?.get("name")?.takeUnless { it.isJsonNull }?.asStringOrNull().orEmpty()
+        val label = name.ifBlank { "未知标签" }
+        if (id.isBlank()) label else "$label（ID $id）"
+    }.ifBlank { "无" }
+}
+
+private fun JsonElement.asStringOrValue(): String =
+    if (isJsonPrimitive) asString else toString()
+
+private fun JsonElement.asStringOrNull(): String? =
+    if (isJsonPrimitive) asString else null
 
 private fun formatJsonValue(value: JsonElement?): String = when {
     value == null || value.isJsonNull -> "无"

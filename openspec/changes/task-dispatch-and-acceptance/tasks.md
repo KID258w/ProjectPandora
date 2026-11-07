@@ -15,6 +15,8 @@
 - [x] 2.5 Implement reason-required cancellation of only the direct-dispatcher's unfinished task; preserve the record and do not cascade.
 - [x] 2.6 Implement in-app notifications with unread/read state, including direct-supervisor approval notices, approval outcome notices for the creator, and assignment notices after another user's task is approved and visible to its assignee; preserve other lifecycle reminders as applicable.
 - [x] 2.7 Implement cancellation, result-submission, acceptance, and return notification events; resolve superseded notices without changing their read state, and exclude resolved notices from unread counts and unread-only queries.
+- [x] 2.8 Store task-history tag changes as ordered ID/name snapshots and display legacy and current snapshots by tag name in the App.
+- [x] 2.9 Store task-history assignee changes as ID/display-name snapshots and display legacy and current snapshots by assignee name in the App.
 
 ## 3. Android task workflows
 

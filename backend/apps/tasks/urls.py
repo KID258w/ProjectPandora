@@ -8,6 +8,8 @@ urlpatterns = [
     path("work-views/week/", work_views.WeekWorkView.as_view()),
     path("work-views/day/", work_views.DayWorkView.as_view()),
     path("tasks/subordinates/", views.SubordinateTaskListView.as_view()),
+    path("tasks/pinned/", views.PinnedTaskListView.as_view()),
+    path("tasks/<int:pk>/pin/", views.TaskPinView.as_view()),
     path("task-approvals/inbox/", views.ApprovalInboxView.as_view()),
     path("task-approvals/outbox/", views.ApprovalOutboxView.as_view()),
     path("tasks/<int:pk>/history/", views.TaskHistoryView.as_view()),

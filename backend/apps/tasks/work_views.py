@@ -15,6 +15,7 @@ from apps.logs.views import parse_date
 
 from .models import Task, TaskApprovalRecord, TaskChangeHistory, TaskSubmission, TaskUpdate
 from .services import subordinate_ids, visible_task
+from .china_calendar import calendar_days_for_range
 
 
 NEUTRAL_COLOR = "#D1D5DB"
@@ -36,6 +37,13 @@ class WorkDaySerializer(serializers.Serializer):
     overflow_count = serializers.IntegerField()
 
 
+class CalendarDaySerializer(serializers.Serializer):
+    date = serializers.DateField()
+    day_type = serializers.ChoiceField(choices=("holiday", "rest_day", "makeup_workday"))
+    holiday_name = serializers.CharField(allow_null=True)
+    label = serializers.CharField()
+
+
 class WorkEventSerializer(serializers.Serializer):
     task_id = serializers.IntegerField()
     task_title = serializers.CharField()
@@ -50,7 +58,10 @@ class MonthViewSerializer(serializers.Serializer):
     month = serializers.IntegerField()
     start_date = serializers.DateField()
     end_date = serializers.DateField()
+    calendar_start_date = serializers.DateField()
+    calendar_end_date = serializers.DateField()
     days = WorkDaySerializer(many=True)
+    calendar_days = CalendarDaySerializer(many=True)
 
 
 class WeekViewSerializer(serializers.Serializer):
@@ -60,6 +71,7 @@ class WeekViewSerializer(serializers.Serializer):
     dates = serializers.ListField(child=serializers.DateField())
     all_day_tasks = WorkBarSerializer(many=True)
     events = WorkEventSerializer(many=True)
+    calendar_days = CalendarDaySerializer(many=True)
 
 
 class DayViewSerializer(WeekViewSerializer):
@@ -109,21 +121,26 @@ def task_rows(queryset):
 def month_data(user, year, month):
     first = date(year, month, 1)
     last = date(year, month, calendar.monthrange(year, month)[1])
+    calendar_start = first - timedelta(days=first.weekday())
+    calendar_end = last + timedelta(days=6 - last.weekday())
     # DateTimeField date lookup uses the configured business time zone.
     tasks = task_rows(Task.objects.filter(
         assignee=user, approval_status=Task.Approval.APPROVED,
-        lifecycle_status=Task.Lifecycle.ACTIVE, due_at__date__gte=first,
+        lifecycle_status=Task.Lifecycle.ACTIVE, due_at__date__gte=calendar_start,
     ))
     bars = [bar(task) for task in tasks]
-    bars = [item for item in bars if item["start_date"] <= last and item["end_date"] >= first]
+    bars = [item for item in bars if item["start_date"] <= calendar_end and item["end_date"] >= calendar_start]
     bars.sort(key=lambda item: (item["start_date"], item["task_id"]))
     days = []
-    for number in range(1, last.day + 1):
-        day = date(year, month, number)
+    day = calendar_start
+    while day <= calendar_end:
         matching = [item for item in bars if item["start_date"] <= day <= item["end_date"]]
         days.append({"date": day, "bars": matching[:3], "overflow_count": max(0, len(matching) - 3)})
+        day += timedelta(days=1)
     return {"user_id": user.pk, "year": year, "month": month,
-            "start_date": first, "end_date": last, "days": days}
+            "start_date": first, "end_date": last,
+            "calendar_start_date": calendar_start, "calendar_end_date": calendar_end,
+            "days": days, "calendar_days": calendar_days_for_range(calendar_start, calendar_end)}
 
 
 def all_day_tasks(user, selected_start, selected_end):
@@ -222,7 +239,8 @@ class WeekWorkView(BusinessAPIView):
         return Response({"user_id": user.pk, "start_date": start, "end_date": end,
                          "dates": [start + timedelta(days=i) for i in range(7)],
                          "all_day_tasks": all_day_tasks(user, start, end),
-                         "events": events(request, user, start, end)})
+                         "events": events(request, user, start, end),
+                         "calendar_days": calendar_days_for_range(start, end)})
 
 
 class DayWorkView(BusinessAPIView):
@@ -237,4 +255,5 @@ class DayWorkView(BusinessAPIView):
         return Response({"user_id": user.pk, "date": selected, "start_date": start, "end_date": end,
                          "dates": [start + timedelta(days=i) for i in range(7)],
                          "all_day_tasks": all_day_tasks(user, selected, selected),
-                         "events": events(request, user, selected, selected)})
+                         "events": events(request, user, selected, selected),
+                         "calendar_days": calendar_days_for_range(start, end)})

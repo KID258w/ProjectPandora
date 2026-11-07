@@ -98,7 +98,7 @@ fun CompanyItemsScreen(api: BusinessApi, onBack: () -> Unit, reloadKey: Int = 0)
 
     PageColumn {
         BackButton(onBack)
-        PageTitle("公司重要事项", small = true)
+        PageTitle("事件纪", small = true)
         Text("按公司发布顺序查看事项。点按列表项，在当前页面展开正文。", fontSize = 13.sp, lineHeight = 20.sp, color = C.Muted)
 
         if (loading && items.isEmpty()) {
@@ -109,7 +109,7 @@ fun CompanyItemsScreen(api: BusinessApi, onBack: () -> Unit, reloadKey: Int = 0)
             TextButton(onClick = { reload++ }) { Text("重新加载") }
         }
         if (!loading && error.isEmpty() && items.isEmpty()) {
-            Note("暂无已发布的公司重要事项。", background = Color(0xFFF5F7FA))
+            Note("暂无已发布事件。", background = Color(0xFFF5F7FA))
         }
 
         items.forEachIndexed { index, item ->

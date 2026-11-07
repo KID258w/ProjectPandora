@@ -174,13 +174,13 @@ fun HomeScreen(user: BusinessUser, api: BusinessApi, onTask: (Long) -> Unit, onL
         Text(user.organization + "  " + date, fontSize = 12.sp, color = C.Muted)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             DashboardCard(
-                title = "公司重要事项", rows = companyItemRows, loading = homeLoading, error = homeError,
+                title = "事件纪", rows = companyItemRows, loading = homeLoading, error = homeError,
                 emptyText = "暂无已发布事项", pale = C.AmberPale, accent = C.Orange,
                 action = "查看全部 ›", modifier = Modifier.weight(1f), cardHeight = cardHeight,
                 onClick = { if (homeError.isNotBlank()) retryHome() else page = "company-items" },
             )
             DashboardCard(
-                title = "公司十大重要任务", rows = companyTaskRows, loading = homeLoading, error = homeError,
+                title = "任务看版", rows = companyTaskRows, loading = homeLoading, error = homeError,
                 emptyText = "暂无符合条件的任务", pale = C.BluePale, accent = C.Blue,
                 action = "查看全部 ›", modifier = Modifier.weight(1f), cardHeight = cardHeight,
                 onClick = { if (homeError.isNotBlank()) retryHome() else page = "company-top-tasks" },

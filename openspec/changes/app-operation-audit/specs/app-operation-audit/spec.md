@@ -1,7 +1,11 @@
 ## ADDED Requirements
 
 ### Requirement: Record successful employee App operations
-The system SHALL record successful App logins and successful state-changing core operations, including personal profile, avatar and password changes; task creation, editing, resubmission, approval, return, updates, completion submission, review and cancellation; daily-log creation, saving, submission, editing and comments; and founder tag creation, editing and deactivation. Records SHALL be written only after the operation succeeds. Read-only access, failed login or write attempts, personal-focus ordering and notification read status SHALL NOT create records.
+The system SHALL record successful App logins and supported state-changing operations. Reads, failed operations, personal-focus ordering and notification read status SHALL NOT create records.
+
+#### Scenario: Supported operations are recorded
+- **WHEN** an employee successfully changes their profile, avatar or password; performs a task workflow action; creates, saves, submits, edits or comments on a log; or the Founder manages a tag
+- **THEN** the system records the successful operation
 
 #### Scenario: Successful App write
 - **WHEN** an employee completes a supported state-changing App operation
@@ -12,7 +16,7 @@ The system SHALL record successful App logins and successful state-changing core
 - **THEN** the system creates no employee App operation record for that request
 
 ### Requirement: Preserve auditable historical values with privacy safeguards
-Each record SHALL preserve the actor's name, business role and department/team display information as they were at operation time, plus the target's display name or date where applicable. For task, daily-log and related business-content changes, the record SHALL preserve changed field names and allowlisted before/after values; creation SHALL use an empty before value. Password values, full identity numbers, authentication tokens and avatar binary data SHALL NOT be stored in operation snapshots. Audit data SHALL be append-only through application APIs.
+Each record SHALL preserve operation-time actor and target snapshots and allowlisted before/after business values. Creation SHALL have no before value. Audit snapshots SHALL exclude passwords, full identity numbers, authentication tokens and avatar binary data. Application APIs SHALL keep audit records append-only.
 
 #### Scenario: Employee later changes profile or organization
 - **WHEN** an administrator views an older operation after its actor has changed name, role or organization
@@ -21,6 +25,14 @@ Each record SHALL preserve the actor's name, business role and department/team d
 #### Scenario: Task or log content changes
 - **WHEN** a task, daily log, update or comment is created or changed
 - **THEN** the record detail can show the allowlisted changed business values before and after the operation, while omitting prohibited sensitive values
+
+#### Scenario: Task or log tag associations change
+- **WHEN** a task or daily-log operation changes its tag associations
+- **THEN** the audit snapshot preserves each tag ID and its operation-time name, and the Web detail shows the name with the ID instead of a bare numeric value
+
+#### Scenario: Task assignee changes
+- **WHEN** an App task operation creates a task or changes its assignee
+- **THEN** the audit snapshot preserves the assignee ID and operation-time display name, and the Web detail shows the name with the ID
 
 #### Scenario: Password or identity number changes
 - **WHEN** an employee changes a password or identity number

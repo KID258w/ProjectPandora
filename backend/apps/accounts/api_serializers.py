@@ -4,6 +4,7 @@ import warnings
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from PIL import Image, UnidentifiedImageError
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -12,7 +13,9 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .authentication import has_complete_supervisor_chain
+from .app_audit import user_reference_snapshot
 from .models import AdminAuditLog, AppOperationAuditLog, Department, Team, User
+from apps.tags.services import tag_name_snapshots
 
 
 class StrictInputMixin:
@@ -287,12 +290,16 @@ class UserSerializer(serializers.ModelSerializer):
 
 class AppMeSerializer(UserSerializer):
     avatar_url = serializers.SerializerMethodField()
+    account_created_date = serializers.SerializerMethodField()
 
     class Meta(UserSerializer.Meta):
-        fields = UserSerializer.Meta.fields + ["avatar_url"]
+        fields = UserSerializer.Meta.fields + ["avatar_url", "account_created_date"]
 
     def get_avatar_url(self, obj) -> str | None:
         return "/api/v1/app/me/avatar/" if obj.avatar_data else None
+
+    def get_account_created_date(self, obj) -> str:
+        return timezone.localtime(obj.date_joined).date().isoformat()
 
 
 class AppAvatarUploadSerializer(serializers.Serializer):
@@ -475,6 +482,21 @@ class AppOperationLogListSerializer(serializers.ModelSerializer):
 class AppOperationLogDetailSerializer(AppOperationLogListSerializer):
     class Meta(AppOperationLogListSerializer.Meta):
         fields = AppOperationLogListSerializer.Meta.fields + ["before_data", "after_data"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        for field in ("before_data", "after_data"):
+            snapshot = data.get(field)
+            if isinstance(snapshot, dict) and "tag_ids" in snapshot:
+                snapshot = dict(snapshot)
+                snapshot["tag_ids"] = tag_name_snapshots(snapshot["tag_ids"])
+                data[field] = snapshot
+            snapshot = data.get(field)
+            if isinstance(snapshot, dict) and "assignee_id" in snapshot:
+                snapshot = dict(snapshot)
+                snapshot["assignee_id"] = user_reference_snapshot(snapshot["assignee_id"])
+                data[field] = snapshot
+        return data
 
 
 class BusinessUserCreateResponseSerializer(UserSerializer):

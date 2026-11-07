@@ -13,6 +13,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import java.util.concurrent.TimeUnit
 import com.projectpandora.app.feature.account.BusinessUser
 import com.projectpandora.app.feature.account.AccountPreferences
 import com.projectpandora.app.feature.account.AccountRepository
@@ -24,16 +29,40 @@ fun IdentityCard(
     user: BusinessUser,
     avatarRepository: AccountRepository? = null,
     allowAvatarChange: Boolean = false,
+    showTenure: Boolean = false,
 ) {
+    val tenureDays = remember(showTenure, user.accountCreatedDate) {
+        if (showTenure) calculateTenureDays(user.accountCreatedDate) else null
+    }
     Row(Modifier.fillMaxWidth().background(C.AmberPale, RoundedCornerShape(24.dp)).padding(20.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
         ProfileAvatar(user, avatarRepository, allowAvatarChange)
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(user.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, lineHeight = 36.sp)
             Text(user.role, fontSize = 14.sp, color = C.Muted)
             Text(user.organization, fontSize = 12.sp, color = C.Muted)
         }
+        if (tenureDays != null) {
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("任职天数", fontSize = 11.sp, color = C.Muted)
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(tenureDays.toString(), fontSize = 23.sp, fontWeight = FontWeight.Bold, color = C.Ink)
+                    Text("天", Modifier.padding(start = 2.dp, bottom = 3.dp), fontSize = 12.sp, color = C.Muted)
+                }
+            }
+        }
     }
+}
+
+private fun calculateTenureDays(accountCreatedDate: String?): Long? {
+    if (accountCreatedDate.isNullOrBlank()) return null
+    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+        isLenient = false
+        timeZone = TimeZone.getTimeZone("Asia/Shanghai")
+    }
+    val createdDate = runCatching { dateFormat.parse(accountCreatedDate) }.getOrNull() ?: return null
+    val today = runCatching { dateFormat.parse(dateFormat.format(Date())) }.getOrNull() ?: return null
+    return (TimeUnit.MILLISECONDS.toDays(today.time - createdDate.time) + 1).coerceAtLeast(1)
 }
 
 @Composable

@@ -55,8 +55,29 @@ function safeValue(source, field) {
   if (!source || typeof source !== 'object' || isSensitiveField(field)) return undefined
   const value = source[field]
   if (value === undefined || value === null || value === '') return undefined
+  if (field === 'tag_ids') return formatTagSnapshots(value)
+  if (field === 'assignee_id') return formatPersonSnapshot(value)
   if (typeof value === 'string') return value
   return JSON.stringify(value, null, 2)
+}
+
+function formatTagSnapshots(value) {
+  if (!Array.isArray(value) || value.length === 0) return '（无）'
+  return value.map((tag) => {
+    const id = tag && typeof tag === 'object' ? tag.id : tag
+    const name = tag && typeof tag === 'object' ? tag.name : ''
+    const label = name || '未知标签'
+    return id === undefined || id === null ? label : `${label}（ID ${id}）`
+  }).join('、')
+}
+
+function formatPersonSnapshot(value) {
+  if (value && typeof value === 'object') {
+    const id = value.id
+    const name = value.display_name || value.name || '未知成员'
+    return id === undefined || id === null ? name : `${name}（ID ${id}）`
+  }
+  return `未知成员（ID ${value}）`
 }
 
 function displayValue(source, field) {

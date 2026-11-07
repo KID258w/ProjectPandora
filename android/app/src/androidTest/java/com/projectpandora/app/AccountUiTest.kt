@@ -134,9 +134,9 @@ class AccountUiTest {
         repository.seed(TestUsers.EMPLOYEE)
         start()
         compose.onNodeWithText("你好，陈宁").assertExists()
-        listOf("视图", "日志", "AI地图", "我的", "首页").forEach { compose.onNodeWithText(it).performClick() }
+        listOf("公司", "日志", "AI地图", "我的", "首页").forEach { compose.onNodeWithText(it).performClick() }
         compose.onNodeWithText("你好，陈宁").assertIsDisplayed()
-        compose.onNodeWithText("视图").performClick()
+        compose.onNodeWithText("公司").performClick()
         compose.onNodeWithTag("task-center-entry").performClick()
         compose.onNodeWithText("‹ 返回").performClick()
         compose.onNodeWithText("陈宁的视图").assertIsDisplayed()
