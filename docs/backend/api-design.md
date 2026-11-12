@@ -10,8 +10,10 @@
 
 > **Issue #21 后端实施更新**：第 3.2、4.4 节所列任务、审批、进展、提交/验收、取消、组织候选人与站内通知接口已实现。任务创建、进展和完成提交返回 `201`，其他写操作返回 `200`。任务摘要和详情增加可空的 `estimated_start_at`，表示预计开始时间；普通及下属任务列表支持按预计开始日期与截止日期的起止范围筛选，日期边界均包含在内。未填写预计开始时间的任务不匹配预计开始日期范围筛选。默认仅返回活动任务。通知列表只读取，不自动标记已读；用户点击单条通知时，客户端将该通知 ID 送至 `mark-read/`；打开或浏览通知列表不会自动标记已读。任务详情返回创建人/负责人、状态、标签、审批历史、进展和提交记录；无权访问的详情返回 `404`。任务定义变更历史不保存密码等身份资料。
 
+> **Issue #8 每日事项 API/数据库契约（目标设计，尚未实现）**：新增独立的个人每日事项数据与 `/api/v1/app/personal-items/` 接口。事项按当前 App 用户隔离，不接入公司任务、标签关联、日志、工作视图或审计。首页通过 `GET /api/v1/app/home/` 返回最多五条覆盖业务时区今天的本人事项。首页旧“个人十大重点”相关字段、接口和数据暂作兼容保留，不会自动转换成每日事项；新 App 不再将其作为首页面板使用。
+
 > 维护说明：由项目统筹与后端同学共同维护，作为 API 设计的持续文档。接口路径、字段名和错误格式可随开发协商调整。  
-> 依据：`docs/requirements/01` 至 `07`、`docs/cooperate/swagger-guide.md` 与当前 Django 骨架。需求变化时以最新确认的需求为准。
+> 依据：`docs/requirements/01` 至 `09`、`docs/cooperate/swagger-guide.md` 与当前 Django 骨架。需求变化时以最新确认的需求为准。
 
 ## 1. 设计约定
 
@@ -38,7 +40,11 @@
 | App 首页四面板与公司事项 | `GET /api/v1/app/home/`、`GET /api/v1/app/company-items/`、`GET /api/v1/app/company-items/{id}/`、`GET /api/v1/app/home/company-top-tasks/`、`GET, PUT /api/v1/app/home/personal-focus/`、`GET .../personal-focus/candidates/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
+Issue #8 目标路由（尚未实现）：`GET, POST /api/v1/app/personal-items/`、`GET, PATCH, DELETE /api/v1/app/personal-items/{id}/`、`POST /api/v1/app/personal-items/{id}/move/`；同时扩展现有 `GET /api/v1/app/home/` 响应增加 `personal_daily_items`。新 App 不再使用旧个人重点路由；旧字段、路由和数据在兼容期内保留。
+
 下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、Web 管理员操作审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口、Issue #21 的任务、审批、通知接口、Issue #22 的公司重要事项、首页四面板与个人重点接口，以及 Issue #30 的员工 App 操作审计（见 2.2）均已实现。
+
+需求 09 的每日事项接口属于目标契约，当前后端尚未实现。它替换首页旧个人重点面板的数据用途，但不复用旧表，也不自动迁移旧个人重点数据。
 
 事项附件后端实现约定（Issue #22）：管理端 `POST .../attachments/` 使用 `multipart/form-data`，字段名 `file`；开发环境文件写入 `MEDIA_ROOT`（默认 `backend/media/`）并由 Django 在 `DEBUG` 下提供 `/media/` 访问，正式部署须改为对象存储或由反向代理提供持久化目录。默认上限 10 MB，类型白名单为 PDF、PNG/JPEG、纯文本、Word、Excel，可用环境变量 `COMPANY_ITEM_ATTACHMENT_MAX_BYTES` 与 `COMPANY_ITEM_ATTACHMENT_MIME_TYPES` 覆盖。该能力及管理端上传/删除 API 保留在后端，但当前 Web 页面和 App 公司事项流程均不提供附件入口；App 正文接口不返回附件元数据或 URL。未来如需增加公司事项详情页及附件上传/下载，另行确认客户端需求和文件访问规则。当前任务模块的材料字段是文字说明，不包含文件附件；如需任务附件，应作为任务模块的独立需求设计上传/下载接口和存储规则。
 | App 组织关系 | `GET /api/v1/app/organization/tree/`、`GET /api/v1/app/organization/members/{id}/`、`GET /api/v1/app/organization/members/{id}/avatar/` |
@@ -178,18 +184,26 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `PATCH /api/v1/app/me/` | 员工本人修改姓名、手机号、身份证号；手机号更新现有 `username` 登录标识 |
 | `GET, PUT /api/v1/app/me/avatar/` | 读取、上传或替换当前业务用户自己的头像；图片二进制存入账号数据库记录 |
 | `POST /api/v1/app/me/password/` | 员工本人验证当前密码后修改密码；不提供 Web 重置入口 |
-| `GET /api/v1/app/home/` | 返回首页四大面板摘要（每卡最多 5 条）及任务通知未读数；个人数据按当前登录用户隔离 |
+| `GET /api/v1/app/home/` | 返回首页四大面板摘要（每卡最多 5 条）及任务通知未读数；Issue #8 目标契约增加本人 `personal_daily_items` 预览，当前后端尚未实现该字段 |
+| `GET /api/v1/app/personal-items/?start_date=&end_date=`（Issue #8 目标） | 返回当前账号在闭区间日期范围内的每日事项；按范围相交筛选，返回全部结果供月历完整绘制，不分页 |
+| `POST /api/v1/app/personal-items/`（Issue #8 目标） | 创建本人每日事项；归属人从令牌确定，不接受客户端传入 `owner_id` |
+| `GET /api/v1/app/personal-items/{id}/`（Issue #8 目标） | 查看本人每日事项详情；返回说明及完整事项字段 |
+| `PATCH /api/v1/app/personal-items/{id}/`（Issue #8 目标） | 部分更新本人事项标题、日期范围、说明或预设颜色；校验更新后的完整日期范围 |
+| `POST /api/v1/app/personal-items/{id}/move/`（Issue #8 目标） | 拖动事项任务条时整体平移日期范围；请求目标起始日，服务端按原跨度计算新结束日 |
+| `DELETE /api/v1/app/personal-items/{id}/`（Issue #8 目标） | 删除本人事项；删除确认由客户端负责，服务端物理删除记录 |
 | `GET /api/v1/app/company-items/` | 为“事件纪”提供已发布公司事项列表，最多 10 条 |
 | `GET /api/v1/app/company-items/{id}/` | 返回单条已发布事项正文数据，供列表项在当前页展开；不返回附件元数据或 URL，也不要求跳转到独立详情页 |
 
-首页“任务看版”是根据当前用户承担的未完成任务计算出的最多 10 条，不是管理员维护的全公司排行榜；按当前需求文档规定的来源和截止时间排序。个人十大重点工作由用户选择并拖拽排序，服务端持久化顺序；最多 10 条，任务完成、取消或不再由本人承担时应从可选范围中移除。首页聚合和个人重点列表首次读取时共用同一初始化逻辑：按当时的任务看版预填一次，之后不随榜单变化自动重置。
+首页“任务看版”是根据当前用户承担的未完成任务计算出的最多 10 条，不是管理员维护的全公司排行榜；按当前需求文档规定的来源和截止时间排序。每日事项是员工自行创建的备忘录，首页只预览日期范围覆盖业务时区今天的本人事项，最多五条，创建和管理入口位于个人月历。旧个人重点接口仅为已有客户端兼容保留；新 App 不调用这些接口，也不把其任务数据展示为每日事项。
 
 | 方法与路径 | 用途 |
 |---|---|
 | `GET /api/v1/app/home/company-top-tasks/` | 返回当前用户“任务看版”完整列表，最多 10 条；保留现有接口路径 |
-| `GET /api/v1/app/home/personal-focus/` | 返回个人重点任务及顺序；首次使用时初始化 |
-| `GET /api/v1/app/home/personal-focus/candidates/` | 返回可加入个人重点的本人未完成任务 |
-| `PUT /api/v1/app/home/personal-focus/` | 一次性保存任务 ID 有序数组；校验均为本人未完成任务且不超过 10 条 |
+| `GET /api/v1/app/home/personal-focus/`（旧接口，弃用） | 为旧客户端返回个人重点任务及顺序；首次使用时初始化；不供每日事项页面调用 |
+| `GET /api/v1/app/home/personal-focus/candidates/`（旧接口，弃用） | 为旧客户端返回可加入个人重点的本人未完成任务 |
+| `PUT /api/v1/app/home/personal-focus/`（旧接口，弃用） | 为旧客户端保存任务 ID 有序数组；不写入每日事项 |
+
+旧 `personal-focus` 路由及 `home_personal_focus_task`、`home_personal_focus_state` 数据在兼容期内保持独立，不自动复制或转换。具体移除时间另行确定。
 
 ### 3.2 任务中心、创建、审批与验收
 
@@ -1333,7 +1347,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 当前密码错误、新密码与当前密码相同、新密码确认不一致或新密码未通过密码校验器时返回 `400`，在 `data` 中给出对应字段错误；未登录或令牌失效返回 `401`。响应不得回显任何密码。
 
-#### GET /api/v1/app/home/
+#### GET /api/v1/app/home/（Issue #8 目标响应）
 
 **请求：** 无 JSON 请求体；如有筛选条件，查询参数见接口 URL。
 
@@ -1361,6 +1375,12 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
         "due_at": "2026-10-20T18:00:00+08:00"
       }
     ],
+    "personal_daily_items": [
+      {
+        "id": 602,
+        "title": "整理项目资料"
+      }
+    ],
     "personal_focus_tasks": [
       {
         "id": 101,
@@ -1383,9 +1403,103 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 }
 ```
 
-该聚合响应中，四个面板分别最多返回 5 条摘要；`recent_logs` 只含当前用户已提交日志，按日期倒序，不含草稿。公司重要事项对所有 App 用户相同；任务和日志字段按当前用户权限返回。`unread_notification_count` 供任务铃铛显示红点，通知列表仍通过独立通知接口读取。
+最新 App 的四个面板分别使用 `company_items`、`company_top_tasks`、`personal_daily_items` 和 `recent_logs`，每个面板最多返回 5 条摘要。`personal_daily_items` 仅含当前账号、且其闭区间日期范围覆盖服务端业务时区今天的事项，按开始日、结束日、ID 升序排列，只返回 `id` 和 `title`；没有符合事项时返回空数组。`recent_logs` 只含当前用户已提交日志，按日期倒序，不含草稿。公司重要事项对所有 App 用户相同；任务和日志字段按当前用户权限返回。`unread_notification_count` 供任务铃铛显示红点，通知列表仍通过独立通知接口读取。`personal_focus_tasks` 是旧版兼容字段，保留期间只供旧客户端使用，新 App 不显示该旧面板。
 
-该接口属于“首次使用”入口：当前用户尚无个人重点初始化记录时，本次请求会在同一事务内按当时的任务看版预填最多 10 项并返回，因此新用户的 `personal_focus_tasks` 在首次打开首页时即有内容。初始化只发生一次，之后仅清理失效项。
+`GET /api/v1/app/home/` 不创建每日事项，也不对每日事项执行首次初始化。旧 `personal_focus_tasks` 的首次预填仅属于弃用的兼容功能，不影响 `personal_daily_items`。
+
+#### GET /api/v1/app/personal-items/?start_date=2026-10-01&end_date=2026-10-31
+
+**请求：** 必须提供 `start_date` 和 `end_date`，格式均为 `YYYY-MM-DD`；两端日期均包含。月历请求当前可见日期网格的起止日；查看单日事项时将两个参数设为同一天。
+
+**响应 JSON**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "items": [
+      {
+        "id": 602,
+        "title": "整理项目资料",
+        "start_date": "2026-10-29",
+        "end_date": "2026-11-02",
+        "color": "#C7DDFF"
+      },
+      {
+        "id": 605,
+        "title": "准备会议材料",
+        "start_date": "2026-10-31",
+        "end_date": "2026-10-31",
+        "color": "#FFE59E"
+      }
+    ]
+  },
+  "requestId": "<uuid>"
+}
+```
+
+返回满足 `start_date <= 查询 end_date AND end_date >= 查询 start_date` 的本人事项；返回该日期区间内所有相交事项，不分页，以免月历无法准确计算“+N项”和完整绘制跨周任务条。结果按 `start_date`、`end_date`、`id` 升序排列；列表响应不含说明正文，点击事项后由详情接口读取。
+
+#### POST /api/v1/app/personal-items/
+
+**请求 JSON**
+
+```json
+{
+  "title": "整理项目资料",
+  "start_date": "2026-10-29",
+  "end_date": "2026-11-02",
+  "description": "归档本周项目文件",
+  "color": "#C7DDFF"
+}
+```
+
+`title`、`start_date`、`end_date`、`color` 必填；标题去除首尾空格后不能为空，最多 200 个字符；`description` 可省略或为空。日期必须为有效的 `YYYY-MM-DD`，结束日不能早于开始日。`color` 必须为以下预设色值之一：`#C7DDFF`、`#BDEAF2`、`#BFEBDD`、`#CFE6B4`、`#E7ECB0`、`#FFE59E`、`#FFD0A3`、`#FFBFB3`、`#F1C1D8`、`#D7C8F2`。`owner_id`、重复规则、任务状态、标签 ID 和排序字段不接受客户端输入。成功创建返回 `201` 及完整事项对象。
+
+#### GET /api/v1/app/personal-items/602/
+
+返回当前账号的完整事项对象：`id`、`title`、`start_date`、`end_date`、`description`、`color`、`created_at`、`updated_at`。示例：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": 602,
+    "title": "整理项目资料",
+    "start_date": "2026-10-29",
+    "end_date": "2026-11-02",
+    "description": "归档本周项目文件",
+    "color": "#C7DDFF",
+    "created_at": "2026-10-27T09:30:00+08:00",
+    "updated_at": "2026-10-27T09:30:00+08:00"
+  },
+  "requestId": "<uuid>"
+}
+```
+
+#### PATCH /api/v1/app/personal-items/602/
+
+接受 `title`、`start_date`、`end_date`、`description`、`color` 中一个或多个字段；未提交字段保持不变。服务端使用更新后的完整字段校验日期范围。清空说明可提交 `"description": ""`；颜色仅接受标签系统的十种预设色值。成功返回更新后的完整事项对象。
+
+#### POST /api/v1/app/personal-items/602/move/
+
+**请求 JSON**
+
+```json
+{
+  "target_start_date": "2026-11-03"
+}
+```
+
+客户端根据拖动开始时手指所在日与松手目标日计算新的起始日并提交。服务端按当前事项原有跨度整体平移起止日期，不允许用该接口改变跨度；重复提交相同 `target_start_date` 不会继续累加位移。成功返回新的完整事项对象。
+
+#### DELETE /api/v1/app/personal-items/602/
+
+客户端先显示删除确认框；确认后调用此接口。服务端以 `200` 物理删除当前账号的事项并返回 `{"deleted": true, "id": 602}`；该操作不产生 App 或 Web 审计记录，不提供恢复接口。
+
+上述每日事项接口仅接受有效的 App 业务用户令牌，所有读取和写入均自动限定 `owner_id` 为当前用户。访问其他用户的事项 ID 与不存在的事项统一返回 `404`。日期格式错误、结束日早于开始日、超出预设调色板或缺少必填字段时返回 `400`；接口不接受管理员 Web 令牌。
 
 #### GET /api/v1/app/company-items/?page=1&page_size=10
 

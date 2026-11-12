@@ -28,7 +28,7 @@ context: |
   Confirmed log and work-view rules:
   - Each user has at most one daily log per natural day. “Today's completed work” is required for submission; task links are optional. Drafts are private to the author; authorized managers may read submitted subordinate logs only. Same-day editing is allowed; past dates are read-only and cannot be backfilled. MVP has no attachments, comments, or log search.
   - Work views are read-only and show tasks, progress, and status history only; they never read or display logs. The default is the current week for the current user. Managers may filter only within their authorized subordinate scope. Past-day state freezes at the end of that natural day; current day/current week show unfinished tasks; future dates show planned tasks only.
-  - Home panels distinguish admin-managed company important items, the current user's system-selected top company tasks, the user's manually ordered personal top tasks, and recent log summaries. Follow docs/requirements/02-home-four-panels.md for exact selection and ordering rules.
+  - Home panels distinguish admin-managed company important items, the current user's system-selected company tasks, the user's personal daily items, and recent log summaries. Personal daily items are user-created memo entries with their own calendar and do not enter company tasks or operation-audit records. Follow docs/requirements/02-home-four-panels.md and docs/requirements/09-personal-daily-items.md.
 
   Confirmed AI boundaries:
   - AI Map includes Work Assistant, MBTI, and emotional “Treehole” support. Users may keep multiple conversations, but context memory is limited to the current conversation and feature.

@@ -12,6 +12,12 @@
 
 `content_company_item` 保存标题、摘要、正文、`draft/published/offline` 状态、手动顺序、发布人与发布/下线时间及最近一次下线原因（重新发布时清空），索引 `(status, sort_order)`；发布上限 10 条由服务层在事务内校验（SQLite 下靠单写入者，MySQL 下对已发布行加锁）。`content_company_item_attachment` 只保存文件引用与元数据（`file_key`、`original_name`、`mime_type`、`size_bytes`），开发期文件落在 `MEDIA_ROOT`，不把二进制写入关系表。该表及管理端上传/删除接口在后端保留；当前 App 公司事项流程只在列表内折叠/展开正文，不进入独立详情页，也不展示或下载附件。后续若确认增加公司事项详情页或附件上传/下载，应另行补充客户端需求与接口契约。任务模块目前仅有材料文字说明字段，不包含任务附件；若后续需要任务附件，应在任务模块单独定义。`home_personal_focus_task` 保存用户自选的任务顺序，`(user_id, task_id)` 与 `(user_id, sort_order)` 唯一；`home_personal_focus_state` 以一对一保存首次预填时间。首页其余三个面板直接读取 `content_company_item`、`tasks_task` 与 `logs_daily_log`，不另建摘要表；`AdminAuditLog.module` 扩展 `company_items` 记录事项创建、编辑、发布、下线、排序与附件操作。管理端事项接口写审计，App 端全部只读。
 
+## Issue #8 目标数据模型：个人每日事项（尚未实现）
+
+`home_personaldailyitem` 是员工本人创建的个人备忘录，独立于 `tasks_task`、`logs_daily_log`、标签关系表和操作审计表。每条记录保存标题、包含首尾日期的起止范围、选填说明和从标签系统十色调色板中选择的颜色。创建、编辑、拖动和删除均不生成 App 或 Web 审计记录。首页通过该表按当前用户和业务时区的今天日期读取最多五条摘要；个人月历按可见日期范围读取所有相交事项。它是目标设计，后端尚未实现。
+
+需求 09 取代首页原“个人十大重点工作”面板。既有 `home_personal_focus_task`、`home_personal_focus_state` 及对应接口不转换成每日事项，也不在本 change 中物理删除；迁移期保留旧数据和旧接口以兼容旧 App，新的每日事项页面不读取或写入这些表。后续若要清理旧功能，另行确定版本兼容和数据保留方案。
+
 ## Issue #6 已落地的数据模型
 
 本节记录 Issue #6 已落地及 Issue1 账号创建对齐后的真实结构，后文其余模块仍为目标设计。初始化与旧数据库升级见 [账号录入契约](account-provisioning.md)。
@@ -34,7 +40,7 @@ Issue #15（Issue2）已落地：部门/团队 `is_active` 启停（停用前校
 
 > 维护说明：由项目统筹与后端同学共同维护，作为数据库设计的持续文档。本文描述逻辑模型，字段、类型、索引及历史策略可随实现和需求协商调整。  
 > 当前后端使用 SQLite 开发；下表按 Django ORM 可实现、未来可迁移 MySQL 的关系模型设计。  
-> 依据：`docs/requirements/01` 至 `07`。数据库设计与最新确认的需求保持一致。
+> 依据：`docs/requirements/01` 至 `09`。数据库设计与最新确认的需求保持一致。
 
 ## 1. 设计原则
 
@@ -75,6 +81,7 @@ erDiagram
   USER ||--o{ PERSONAL_FOCUS_TASK : orders
   TASK ||--o{ PERSONAL_FOCUS_TASK : selected
   USER ||--o| PERSONAL_FOCUS_STATE : initializes
+  USER ||--o{ PERSONAL_DAILY_ITEM : owns
   COMPANY_ITEM ||--o{ COMPANY_ITEM_ATTACHMENT : includes
   USER ||--o{ ADMIN_AUDIT_LOG : acts
   USER ||--o{ AI_CONVERSATION : owns
@@ -254,11 +261,11 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 
 `approval_required` 只发给创建人的直属上级，任务进入待本人审批时生成。审批人通过或退回后，系统结束该轮待审批提醒，并向创建人生成 `approval_approved` 或 `approval_returned` 结果事件通知；结果通知通过任务 ID、审批轮次和决定构造唯一事件键，退回通知从该轮审批记录读取原因。创建人结果通知不与后续轮次合并或覆盖，保留在通知历史中直至用户阅读。其他用户创建的任务通过审批并进入负责人的“我的任务”时，向负责人生成派发通知。待审批任务取消时，通知当前待审批人；已审批的他人派发任务取消时，通知负责人。负责人提交完成结果时结束尚未处理的新任务通知，并通知直接派发人；验收通过或退回时通知负责人，重新提交会结束上一次验收退回通知。本人创建并由本人承担的任务不生成派发、提交或验收通知。已结束通知保留在历史记录中，但不再进入未读数和未读筛选；结束状态与已读状态独立；迁移会依据任务当前状态结束已取消、已完成、已改派、已进入其他审批轮次或已有提交记录的旧提醒。每个通知仅对接收人可读，通知列表打开时由客户端将当次页面实际展示的未读 ID 批量标记已读。通知是 App 内消息，不发送操作系统推送。
 
-### 3.3 首页四大面板相关数据实体与来源
+### 3.3 首页面板与个人每日事项相关数据实体
 
-首页不复制任务、日志或公司事项数据。首页聚合结果直接读取 `tasks_task`、`logs_daily_log` 和 `content_company_item`；只有用户自行选择的个人重点顺序及其首次初始化状态需要单独持久化。
+首页不复制任务、日志、公司事项或每日事项正文数据。公司事项、任务和日志摘要仍分别从权威业务表读取；每日事项摘要直接从 `home_personaldailyitem` 按本人和日期范围查询。下方个人重点表属于被需求 09 替换的旧首页面板，保留用于旧 App 兼容，不供新的每日事项功能使用。
 
-#### `home_personal_focus_task`
+#### `home_personal_focus_task`（旧个人重点功能，兼容保留）
 
 | 字段 | 类型 / 约束 | 说明 |
 |---|---|---|
@@ -270,7 +277,7 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 
 唯一约束 `(user_id, task_id)` 与 `(user_id, sort_order)`；服务层限制每人最多 10 条，且仅能选择本人承担的未完成任务。任务完成、取消或转派后移除或从查询中排除。任务看版由任务数据动态计算，不另建排行榜表。
 
-#### `home_personal_focus_state`
+#### `home_personal_focus_state`（旧个人重点功能，兼容保留）
 
 | 字段 | 类型 / 约束 | 说明 |
 |---|---|---|
@@ -280,6 +287,25 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 | `created_at`, `updated_at` | 时间 | 状态记录创建和更新时间 |
 
 首次读取或首次保存个人重点列表时，在同一事务中用当时的任务看版初始化最多 10 项，并记录初始化状态。之后用户的列表独立维护；任务完成、取消或不再由本人承担时从个人重点中清除。任务看版本身不建立额外实体或排行榜表。
+
+#### `home_personaldailyitem`（Issue #8 目标）
+
+| 字段 | 类型 / 约束 | 说明 |
+|---|---|---|
+| `id` | BigAutoField 主键 | 每日事项 ID |
+| `owner_id` | User 外键，必填，`CASCADE` | 所属 App 业务账号；由认证上下文确定，客户端不能指定 |
+| `title` | 字符串，必填，最长 200 | 事项标题 |
+| `start_date` | `DATE`，必填 | 覆盖范围开始日，包含当天 |
+| `end_date` | `DATE`，必填 | 覆盖范围结束日，包含当天 |
+| `description` | 文本，空值默认为空字符串 | 选填备忘说明 |
+| `color` | `CHAR(7)`，必填 | 大写 `#RRGGBB`；必须为标签系统预设的十种颜色之一，事项独立保存色值，不建立 Tag 外键 |
+| `created_at`, `updated_at` | 自动时间 | 创建及最近一次修改时间 |
+
+数据库约束要求 `end_date >= start_date`，并将 `color` 限定在 `#C7DDFF`、`#BDEAF2`、`#BFEBDD`、`#CFE6B4`、`#E7ECB0`、`#FFE59E`、`#FFD0A3`、`#FFBFB3`、`#F1C1D8`、`#D7C8F2` 中。颜色值随事项保存，标签后续改名或改色不影响个人事项。按 `(owner_id, start_date)` 和 `(owner_id, end_date)` 建索引；月历/日期查询只返回满足 `start_date <= 查询结束日 AND end_date >= 查询开始日` 的事项，并按 `start_date`、`end_date`、`id` 升序稳定排序。用户停用不删除事项；若账号最终物理删除，则级联清理其个人事项。删除事项为物理删除，不提供恢复记录或软删除状态。
+
+不设所有者/日期唯一约束，同一天可以有多条或跨日重叠的事项。
+
+该实体不含完成、审批、重复规则、任务 ID、标签 ID、排序、管理端状态或审计字段。首页预览由服务端按 `TIME_ZONE` 计算今天，筛选包含今天的本人事项并按上述顺序取前五条；月历响应返回请求日期范围内的全部相交事项，以保证客户端可计算日期格溢出数和绘制完整任务条。每日事项不进入任务看版、任务中心、日志、公司工作视图或审计查询。
 
 #### `content_company_item`
 
@@ -473,7 +499,7 @@ Issue #29 的后端实现直接查询现有 `tasks_task`、`tasks_taskchangehist
 - 任务变更历史：`(task_id, created_at)`；任务通知：`(recipient_id, is_read, created_at)`、`(recipient_id, event_key)` 唯一。
 - 日志：`(author_id, log_date)` 唯一；`(department_id, log_date)`、`(team_id, log_date)` 用于授权范围查询。
 - 标签：启用状态下的名称唯一；按 `(is_active, name)` 支持管理列表/搜索；关联表分别对 `(task_id, tag_id)`、`(daily_log_id, tag_id)` 唯一，并按 `(task_id, added_at, id)`、`(daily_log_id, added_at, id)` 读取关联顺序。
-- 个人重点：`(user_id, sort_order)` 索引、`(user_id, task_id)` 唯一。
+- 个人重点（旧功能）：`(user_id, sort_order)` 索引、`(user_id, task_id)` 唯一；每日事项：`(owner_id, start_date)`、`(owner_id, end_date)`，按请求日期范围查询闭区间相交记录。
 - 公司事项：`(status, sort_order)`；发布上限 10 由事务/服务层校验，不能只依赖单行约束。
 - Web 管理员操作记录：`(created_at, id)`、`(actor_id, created_at)`、`(module, created_at)`；员工 App 操作记录：`(created_at, id)`、`(actor_id, created_at)`、`(module, created_at)`、`(object_type, object_id, created_at)`。
 - JSON 字段只用于确有动态结构的数据（审计快照、问卷答案），核心业务查询字段应保持关系列。
@@ -489,4 +515,4 @@ Issue #29 的后端实现直接查询现有 `tasks_task`、`tasks_taskchangehist
 
 ## 7. 实施顺序建议
 
-先冻结 `User` 与组织归属模型，再建立任务、审批、进展、提交、变更历史和通知记录；日志模块完成后，首页四面板复用任务、日志和公司事项的权威数据，只新增个人重点顺序及首次初始化状态。AI、附件和完整历史月视图可按各自需求确认结果后再补。
+先冻结 `User` 与组织归属模型，再建立任务、审批、进展、提交、变更历史和通知记录；日志模块完成后，首页面板复用任务、日志和公司事项的权威数据。需求 09 的每日事项使用独立用户归属表，不复用旧个人重点关系，也不写审计；旧个人重点数据及接口在兼容期保留，清理前另行评估。AI、附件和完整历史月视图可按各自需求确认结果后再补。
