@@ -12,9 +12,9 @@
 
 `content_company_item` 保存标题、摘要、正文、`draft/published/offline` 状态、手动顺序、发布人与发布/下线时间及最近一次下线原因（重新发布时清空），索引 `(status, sort_order)`；发布上限 10 条由服务层在事务内校验（SQLite 下靠单写入者，MySQL 下对已发布行加锁）。`content_company_item_attachment` 只保存文件引用与元数据（`file_key`、`original_name`、`mime_type`、`size_bytes`），开发期文件落在 `MEDIA_ROOT`，不把二进制写入关系表。该表及管理端上传/删除接口在后端保留；当前 App 公司事项流程只在列表内折叠/展开正文，不进入独立详情页，也不展示或下载附件。后续若确认增加公司事项详情页或附件上传/下载，应另行补充客户端需求与接口契约。任务模块目前仅有材料文字说明字段，不包含任务附件；若后续需要任务附件，应在任务模块单独定义。`home_personal_focus_task` 保存用户自选的任务顺序，`(user_id, task_id)` 与 `(user_id, sort_order)` 唯一；`home_personal_focus_state` 以一对一保存首次预填时间。首页其余三个面板直接读取 `content_company_item`、`tasks_task` 与 `logs_daily_log`，不另建摘要表；`AdminAuditLog.module` 扩展 `company_items` 记录事项创建、编辑、发布、下线、排序与附件操作。管理端事项接口写审计，App 端全部只读。
 
-## Issue #8 目标数据模型：个人每日事项（尚未实现）
+## Issue #8 已落地数据模型：个人每日事项
 
-`home_personaldailyitem` 是员工本人创建的个人备忘录，独立于 `tasks_task`、`logs_daily_log`、标签关系表和操作审计表。每条记录保存标题、包含首尾日期的起止范围、选填说明和从标签系统十色调色板中选择的颜色。创建、编辑、拖动和删除均不生成 App 或 Web 审计记录。首页通过该表按当前用户和业务时区的今天日期读取最多五条摘要；个人月历按可见日期范围读取所有相交事项。它是目标设计，后端尚未实现。
+`home_personaldailyitem` 由 `home/0002_homepersonaldailyitem` 创建，是员工本人创建的个人备忘录，独立于 `tasks_task`、`logs_daily_log`、标签关系表和操作审计表。每条记录保存标题、包含首尾日期的起止范围、选填说明和从标签系统十色调色板中选择的颜色。数据库约束保证结束日不早于开始日且颜色属于预设色板；按 `(owner_id, start_date)` 和 `(owner_id, end_date)` 建索引。创建、编辑、拖动和删除均不生成 App 或 Web 审计记录。首页通过该表按当前用户和业务时区的今天日期读取最多五条摘要；个人月历按可见日期范围读取所有相交事项。
 
 需求 09 取代首页原“个人十大重点工作”面板。既有 `home_personal_focus_task`、`home_personal_focus_state` 及对应接口不转换成每日事项，也不在本 change 中物理删除；迁移期保留旧数据和旧接口以兼容旧 App，新的每日事项页面不读取或写入这些表。后续若要清理旧功能，另行确定版本兼容和数据保留方案。
 
@@ -288,7 +288,7 @@ Issue2 已调整用户角色/组织约束，使负责人撤销或停用后的过
 
 首次读取或首次保存个人重点列表时，在同一事务中用当时的任务看版初始化最多 10 项，并记录初始化状态。之后用户的列表独立维护；任务完成、取消或不再由本人承担时从个人重点中清除。任务看版本身不建立额外实体或排行榜表。
 
-#### `home_personaldailyitem`（Issue #8 目标）
+#### `home_personaldailyitem`（Issue #8 已实现）
 
 | 字段 | 类型 / 约束 | 说明 |
 |---|---|---|

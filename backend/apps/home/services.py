@@ -13,7 +13,7 @@ from apps.content.services import HOME_PREVIEW_ITEMS, published_items
 from apps.logs.services import recent_submitted_logs
 from apps.tasks.models import Task, TaskNotification
 
-from .models import HomePersonalFocusState, HomePersonalFocusTask
+from .models import HomePersonalDailyItem, HomePersonalFocusState, HomePersonalFocusTask
 
 COMPANY_TOP_LIMIT = 10
 PERSONAL_FOCUS_LIMIT = 10
@@ -69,6 +69,16 @@ def unread_notification_count(user):
     return TaskNotification.objects.filter(
         recipient=user, is_read=False, resolved_at__isnull=True,
     ).count()
+
+
+def personal_daily_items_today(user, limit=5):
+    """Return this user's items whose inclusive date range contains today."""
+    today = timezone.localdate()
+    return HomePersonalDailyItem.objects.filter(
+        owner=user,
+        start_date__lte=today,
+        end_date__gte=today,
+    ).order_by("start_date", "end_date", "id")[:limit]
 
 
 def _focus_entries(user):
@@ -173,6 +183,10 @@ def home_payload(user):
                 "completion_status": entry.task.completion_status, "due_at": entry.task.due_at,
             }
             for entry in focus_entries[:HOME_PREVIEW_ITEMS]
+        ],
+        "personal_daily_items": [
+            {"id": item.pk, "title": item.title}
+            for item in personal_daily_items_today(user, HOME_PREVIEW_ITEMS)
         ],
         "recent_logs": [
             {"id": log.pk, "log_date": log.log_date, "summary": log_summary(log)}

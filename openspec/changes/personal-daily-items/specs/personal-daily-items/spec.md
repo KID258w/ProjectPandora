@@ -1,7 +1,15 @@
 ## ADDED Requirements
 
 ### Requirement: Home shows four role-appropriate panels
-The system SHALL provide four mobile Home panels: Company Important Items, Company Top Ten Tasks, Personal Daily Items, and Recent Logs. Each card SHALL preview up to five authorized rows. The Personal Daily Items card SHALL show only items owned by the current account whose inclusive date range covers today and SHALL provide navigation to a separate personal calendar without a creation action on Home.
+The system SHALL provide four mobile Home panels: Company Important Items, Company Top Ten Tasks, Personal Daily Items, and Daily Greeting. The three business-data cards SHALL preview up to five authorized rows. The Personal Daily Items card SHALL show only items owned by the current account whose inclusive date range covers today and SHALL provide navigation to a separate personal calendar without a creation action on Home. The Daily Greeting card SHALL display one locally bundled short message and a kaomoji selected by date, without requesting business data.
+
+#### Scenario: User sees a stable daily greeting
+- **WHEN** an authenticated user opens Home on a given local date
+- **THEN** the Daily Greeting card shows the same bundled message and kaomoji throughout that date and remains display-only
+
+#### Scenario: User taps the daily greeting
+- **WHEN** the user taps the Daily Greeting card
+- **THEN** no navigation or business action occurs; the Logs tab remains the separate entry to logs
 
 #### Scenario: User opens Home with personal items
 - **WHEN** an authenticated mobile business user opens Home
@@ -98,6 +106,8 @@ Deleting a personal item SHALL require explicit confirmation. A confirmed deleti
 ### Requirement: Dragging an item bar shifts its entire date range
 The owner SHALL be able to long-press and drag an item bar to another date. While dragging, the bar SHALL visibly lift and follow the pointer; on release it SHALL settle onto the target date with a clear motion cue. The drop date SHALL be computed from the date under the initial touch and the date under release. The app SHALL shift the start and end dates by the same day delta, preserving the inclusive duration; resizing is performed through the edit form.
 
+When the pointer enters the left or right edge zone while dragging, the calendar SHALL advance to the adjacent month in that direction with a smooth horizontal transition while keeping the drag active. Remaining in the edge zone SHALL continue advancing months at a controlled interval; leaving the zone or releasing SHALL stop edge navigation.
+
 #### Scenario: Owner moves a multi-day item
 - **WHEN** the owner drags the bar from date A to date B
 - **THEN** both endpoints move by the same number of days, keeping the original duration, color, title, and description
@@ -105,6 +115,10 @@ The owner SHALL be able to long-press and drag an item bar to another date. Whil
 #### Scenario: Owner needs to change the duration
 - **WHEN** the owner needs to shorten or extend an item's date range
 - **THEN** the owner edits its start or end date in the item form instead of resizing the bar
+
+#### Scenario: Owner drags an item across a month boundary
+- **WHEN** the owner drags an item into the calendar's left or right edge zone
+- **THEN** the calendar smoothly switches to the adjacent month and keeps the item under drag so the owner can continue to a date in that month
 
 ### Requirement: Personal items do not repeat automatically
 Each created personal item SHALL remain a single item over its selected date range. The app SHALL NOT generate additional items from weekly, monthly, or other recurrence rules.

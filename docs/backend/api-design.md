@@ -10,7 +10,7 @@
 
 > **Issue #21 后端实施更新**：第 3.2、4.4 节所列任务、审批、进展、提交/验收、取消、组织候选人与站内通知接口已实现。任务创建、进展和完成提交返回 `201`，其他写操作返回 `200`。任务摘要和详情增加可空的 `estimated_start_at`，表示预计开始时间；普通及下属任务列表支持按预计开始日期与截止日期的起止范围筛选，日期边界均包含在内。未填写预计开始时间的任务不匹配预计开始日期范围筛选。默认仅返回活动任务。通知列表只读取，不自动标记已读；用户点击单条通知时，客户端将该通知 ID 送至 `mark-read/`；打开或浏览通知列表不会自动标记已读。任务详情返回创建人/负责人、状态、标签、审批历史、进展和提交记录；无权访问的详情返回 `404`。任务定义变更历史不保存密码等身份资料。
 
-> **Issue #8 每日事项 API/数据库契约（目标设计，尚未实现）**：新增独立的个人每日事项数据与 `/api/v1/app/personal-items/` 接口。事项按当前 App 用户隔离，不接入公司任务、标签关联、日志、工作视图或审计。首页通过 `GET /api/v1/app/home/` 返回最多五条覆盖业务时区今天的本人事项。首页旧“个人十大重点”相关字段、接口和数据暂作兼容保留，不会自动转换成每日事项；新 App 不再将其作为首页面板使用。
+> **Issue #8 每日事项后端实施更新**：新增用户隔离的个人每日事项表与 `/api/v1/app/personal-items/` 列表、创建、详情、编辑、删除和拖动接口；首页通过 `GET /api/v1/app/home/` 返回最多五条日期范围覆盖业务时区今天的本人事项。该功能不接入公司任务、标签关联、日志、工作视图或审计。首页旧“个人十大重点”相关字段、接口和数据保留兼容，不会自动转换成每日事项；新 App 使用每日事项面板。
 
 > 维护说明：由项目统筹与后端同学共同维护，作为 API 设计的持续文档。接口路径、字段名和错误格式可随开发协商调整。  
 > 依据：`docs/requirements/01` 至 `09`、`docs/cooperate/swagger-guide.md` 与当前 Django 骨架。需求变化时以最新确认的需求为准。
@@ -36,15 +36,16 @@
 | App 任务、审批及历史 | `GET, POST /api/v1/app/tasks/`、`GET /api/v1/app/tasks/pinned/`、`POST, DELETE /api/v1/app/tasks/{id}/pin/`、`GET /api/v1/app/tasks/subordinates/`、`GET, PATCH /api/v1/app/tasks/{id}/`、`GET /api/v1/app/tasks/{id}/history/`、`GET /api/v1/app/task-approvals/inbox/`、`GET /api/v1/app/task-approvals/outbox/`，以及第 3.2 节所列操作路径 |
 | App 任务通知和人员选择 | `GET /api/v1/app/notifications/`、`GET /api/v1/app/notifications/unread-count/`、`POST /api/v1/app/notifications/mark-read/`、`GET /api/v1/app/organization/assignable-users/`、`GET /api/v1/app/organization/visible-subordinates/` |
 | App 工作视图 | `GET /api/v1/app/work-views/month/`、`GET /api/v1/app/work-views/week/`、`GET /api/v1/app/work-views/day/` |
+| App 每日事项（Issue #8） | `GET, POST /api/v1/app/personal-items/`、`GET, PATCH, DELETE /api/v1/app/personal-items/{id}/`、`POST /api/v1/app/personal-items/{id}/move/` |
 | 公司重要事项管理（管理端） | `GET, POST /api/v1/admin/company-items/`、`GET, PATCH /api/v1/admin/company-items/{id}/`、`POST .../publish/`、`POST .../offline/`、`PUT .../order/`、`POST .../attachments/`、`DELETE .../attachments/{attachment_id}/` |
 | App 首页四面板与公司事项 | `GET /api/v1/app/home/`、`GET /api/v1/app/company-items/`、`GET /api/v1/app/company-items/{id}/`、`GET /api/v1/app/home/company-top-tasks/`、`GET, PUT /api/v1/app/home/personal-focus/`、`GET .../personal-focus/candidates/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
-Issue #8 目标路由（尚未实现）：`GET, POST /api/v1/app/personal-items/`、`GET, PATCH, DELETE /api/v1/app/personal-items/{id}/`、`POST /api/v1/app/personal-items/{id}/move/`；同时扩展现有 `GET /api/v1/app/home/` 响应增加 `personal_daily_items`。新 App 不再使用旧个人重点路由；旧字段、路由和数据在兼容期内保留。
+Issue #8 已实现路由：`GET, POST /api/v1/app/personal-items/`、`GET, PATCH, DELETE /api/v1/app/personal-items/{id}/`、`POST /api/v1/app/personal-items/{id}/move/`；现有 `GET /api/v1/app/home/` 响应增加 `personal_daily_items`。旧个人重点字段、路由和数据在兼容期内保留。
 
 下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、Web 管理员操作审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口、Issue #21 的任务、审批、通知接口、Issue #22 的公司重要事项、首页四面板与个人重点接口，以及 Issue #30 的员工 App 操作审计（见 2.2）均已实现。
 
-需求 09 的每日事项接口属于目标契约，当前后端尚未实现。它替换首页旧个人重点面板的数据用途，但不复用旧表，也不自动迁移旧个人重点数据。
+需求 09 的每日事项接口与首页预览已由 Issue #8 实现。它替换首页旧个人重点面板的数据用途，但不复用旧表，也不自动迁移旧个人重点数据。
 
 事项附件后端实现约定（Issue #22）：管理端 `POST .../attachments/` 使用 `multipart/form-data`，字段名 `file`；开发环境文件写入 `MEDIA_ROOT`（默认 `backend/media/`）并由 Django 在 `DEBUG` 下提供 `/media/` 访问，正式部署须改为对象存储或由反向代理提供持久化目录。默认上限 10 MB，类型白名单为 PDF、PNG/JPEG、纯文本、Word、Excel，可用环境变量 `COMPANY_ITEM_ATTACHMENT_MAX_BYTES` 与 `COMPANY_ITEM_ATTACHMENT_MIME_TYPES` 覆盖。该能力及管理端上传/删除 API 保留在后端，但当前 Web 页面和 App 公司事项流程均不提供附件入口；App 正文接口不返回附件元数据或 URL。未来如需增加公司事项详情页及附件上传/下载，另行确认客户端需求和文件访问规则。当前任务模块的材料字段是文字说明，不包含文件附件；如需任务附件，应作为任务模块的独立需求设计上传/下载接口和存储规则。
 | App 组织关系 | `GET /api/v1/app/organization/tree/`、`GET /api/v1/app/organization/members/{id}/`、`GET /api/v1/app/organization/members/{id}/avatar/` |
@@ -184,13 +185,13 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `PATCH /api/v1/app/me/` | 员工本人修改姓名、手机号、身份证号；手机号更新现有 `username` 登录标识 |
 | `GET, PUT /api/v1/app/me/avatar/` | 读取、上传或替换当前业务用户自己的头像；图片二进制存入账号数据库记录 |
 | `POST /api/v1/app/me/password/` | 员工本人验证当前密码后修改密码；不提供 Web 重置入口 |
-| `GET /api/v1/app/home/` | 返回首页四大面板摘要（每卡最多 5 条）及任务通知未读数；Issue #8 目标契约增加本人 `personal_daily_items` 预览，当前后端尚未实现该字段 |
-| `GET /api/v1/app/personal-items/?start_date=&end_date=`（Issue #8 目标） | 返回当前账号在闭区间日期范围内的每日事项；按范围相交筛选，返回全部结果供月历完整绘制，不分页 |
-| `POST /api/v1/app/personal-items/`（Issue #8 目标） | 创建本人每日事项；归属人从令牌确定，不接受客户端传入 `owner_id` |
-| `GET /api/v1/app/personal-items/{id}/`（Issue #8 目标） | 查看本人每日事项详情；返回说明及完整事项字段 |
-| `PATCH /api/v1/app/personal-items/{id}/`（Issue #8 目标） | 部分更新本人事项标题、日期范围、说明或预设颜色；校验更新后的完整日期范围 |
-| `POST /api/v1/app/personal-items/{id}/move/`（Issue #8 目标） | 拖动事项任务条时整体平移日期范围；请求目标起始日，服务端按原跨度计算新结束日 |
-| `DELETE /api/v1/app/personal-items/{id}/`（Issue #8 目标） | 删除本人事项；删除确认由客户端负责，服务端物理删除记录 |
+| `GET /api/v1/app/home/` | 返回首页四大面板摘要（每卡最多 5 条）及任务通知未读数；`personal_daily_items` 只含日期范围覆盖今天的本人事项摘要 |
+| `GET /api/v1/app/personal-items/?start_date=&end_date=` | 返回当前账号在闭区间日期范围内的每日事项；按范围相交筛选，返回全部结果供月历完整绘制，不分页 |
+| `POST /api/v1/app/personal-items/` | 创建本人每日事项；归属人从令牌确定，不接受客户端传入 `owner_id` |
+| `GET /api/v1/app/personal-items/{id}/` | 查看本人每日事项详情；返回说明及完整事项字段 |
+| `PATCH /api/v1/app/personal-items/{id}/` | 部分更新本人事项标题、日期范围、说明或预设颜色；校验更新后的完整日期范围 |
+| `POST /api/v1/app/personal-items/{id}/move/` | 拖动事项任务条时整体平移日期范围；请求目标起始日，服务端按原跨度计算新结束日 |
+| `DELETE /api/v1/app/personal-items/{id}/` | 删除本人事项；删除确认由客户端负责，服务端物理删除记录 |
 | `GET /api/v1/app/company-items/` | 为“事件纪”提供已发布公司事项列表，最多 10 条 |
 | `GET /api/v1/app/company-items/{id}/` | 返回单条已发布事项正文数据，供列表项在当前页展开；不返回附件元数据或 URL，也不要求跳转到独立详情页 |
 
@@ -1347,7 +1348,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 
 当前密码错误、新密码与当前密码相同、新密码确认不一致或新密码未通过密码校验器时返回 `400`，在 `data` 中给出对应字段错误；未登录或令牌失效返回 `401`。响应不得回显任何密码。
 
-#### GET /api/v1/app/home/（Issue #8 目标响应）
+#### GET /api/v1/app/home/（Issue #8 实施后响应）
 
 **请求：** 无 JSON 请求体；如有筛选条件，查询参数见接口 URL。
 

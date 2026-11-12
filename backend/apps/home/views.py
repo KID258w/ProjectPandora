@@ -1,16 +1,27 @@
 """App 首页四面板与个人十大重点工作接口。"""
 
+from datetime import timedelta
+
+from django.db import transaction
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.response import Response
+from rest_framework import status
 
 from apps.core.api import BusinessAPIView, StandardPagination, paginated_response
 
 from .serializers import (HomePayloadSerializer, HomeTaskRowSerializer, PersonalFocusInputSerializer,
-                          PersonalFocusSavedSerializer, PersonalFocusSerializer)
+                          PersonalDailyItemDeletedSerializer, PersonalDailyItemListSerializer,
+                          PersonalDailyItemCalendarRowSerializer, PersonalDailyItemMoveSerializer,
+                          PersonalDailyItemSerializer,
+                          PersonalDailyItemRangeSerializer, PersonalFocusSavedSerializer,
+                          PersonalFocusSerializer)
 from .services import (COMPANY_TOP_LIMIT, company_top_tasks, home_payload, ordered_candidates,
                        personal_focus, save_personal_focus, task_panel_row)
+from .models import HomePersonalDailyItem
 
 TAGS = ["首页"]
+PERSONAL_ITEM_TAGS = ["每日事项"]
 
 
 def validated(serializer_class, data):
@@ -96,3 +107,108 @@ class PersonalFocusCandidatesView(BusinessAPIView):
         if keyword:
             queryset = queryset.filter(title__icontains=keyword)
         return paginated_response(self, request, queryset, lambda page: [task_panel_row(row) for row in page])
+
+
+class PersonalDailyItemListCreateView(BusinessAPIView):
+    serializer_class = PersonalDailyItemSerializer
+
+    @extend_schema(
+        tags=PERSONAL_ITEM_TAGS,
+        summary="查询日期范围内的本人每日事项",
+        operation_id="personal_daily_items_list",
+        description="返回与查询闭区间相交的全部事项，不分页，仅限当前 App 用户本人。",
+        parameters=[
+            OpenApiParameter("start_date", str, required=True, description="查询起始日，YYYY-MM-DD"),
+            OpenApiParameter("end_date", str, required=True, description="查询结束日，YYYY-MM-DD"),
+        ],
+        responses=PersonalDailyItemListSerializer,
+    )
+    def get(self, request):
+        query = validated(PersonalDailyItemRangeSerializer, request.query_params)
+        items = HomePersonalDailyItem.objects.filter(
+            owner=request.user,
+            start_date__lte=query["end_date"],
+            end_date__gte=query["start_date"],
+        ).order_by("start_date", "end_date", "id")
+        return Response({"items": PersonalDailyItemCalendarRowSerializer(items, many=True).data})
+
+    @extend_schema(
+        tags=PERSONAL_ITEM_TAGS,
+        summary="创建本人每日事项",
+        request=PersonalDailyItemSerializer,
+        responses={status.HTTP_201_CREATED: PersonalDailyItemSerializer},
+    )
+    def post(self, request):
+        serializer = PersonalDailyItemSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        item = serializer.save()
+        return Response(PersonalDailyItemSerializer(item).data, status=status.HTTP_201_CREATED)
+
+
+class PersonalDailyItemDetailView(BusinessAPIView):
+    serializer_class = PersonalDailyItemSerializer
+    lookup_url_kwarg = "id"
+
+    def get_queryset(self):
+        return HomePersonalDailyItem.objects.filter(owner=self.request.user)
+
+    @extend_schema(
+        tags=PERSONAL_ITEM_TAGS,
+        summary="读取本人每日事项详情",
+        operation_id="personal_daily_item_detail",
+        responses=PersonalDailyItemSerializer,
+    )
+    def get(self, request, id=None):
+        return Response(PersonalDailyItemSerializer(self.get_object()).data)
+
+    @extend_schema(
+        tags=PERSONAL_ITEM_TAGS,
+        summary="编辑本人每日事项",
+        request=PersonalDailyItemSerializer,
+        responses=PersonalDailyItemSerializer,
+    )
+    def patch(self, request, id=None):
+        item = self.get_object()
+        serializer = PersonalDailyItemSerializer(
+            item, data=request.data, partial=True, context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        return Response(PersonalDailyItemSerializer(serializer.save()).data)
+
+    @extend_schema(
+        tags=PERSONAL_ITEM_TAGS,
+        summary="删除本人每日事项",
+        responses=PersonalDailyItemDeletedSerializer,
+    )
+    def delete(self, request, id=None):
+        item = self.get_object()
+        item_id = item.pk
+        item.delete()
+        return Response({"deleted": True, "id": item_id})
+
+
+class PersonalDailyItemMoveView(BusinessAPIView):
+    serializer_class = PersonalDailyItemMoveSerializer
+    lookup_url_kwarg = "id"
+
+    @extend_schema(
+        tags=PERSONAL_ITEM_TAGS,
+        summary="拖动本人每日事项",
+        description="按目标开始日整体平移原有日期跨度；重复提交同一目标开始日是幂等的。",
+        request=PersonalDailyItemMoveSerializer,
+        responses=PersonalDailyItemSerializer,
+    )
+    def post(self, request, id=None):
+        values = validated(PersonalDailyItemMoveSerializer, request.data)
+        with transaction.atomic():
+            item = get_object_or_404(
+                HomePersonalDailyItem.objects.select_for_update().filter(owner=request.user),
+                pk=id,
+            )
+            target_start = values["target_start_date"]
+            delta = target_start - item.start_date
+            if delta != timedelta(0):
+                item.start_date += delta
+                item.end_date += delta
+                item.save(update_fields=["start_date", "end_date", "updated_at"])
+        return Response(PersonalDailyItemSerializer(item).data)

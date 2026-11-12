@@ -5,12 +5,12 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
 
-from apps.accounts.models import Department, Team, User
+from apps.accounts.models import AppOperationAuditLog, Department, Team, User
 from apps.content.models import CompanyImportantItem
 from apps.logs.models import DailyLog
 from apps.tasks.models import Task, TaskNotification
 
-from .models import HomePersonalFocusState, HomePersonalFocusTask
+from .models import HomePersonalDailyItem, HomePersonalFocusState, HomePersonalFocusTask
 
 
 @override_settings(PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"])
@@ -282,3 +282,185 @@ class HomePanelApiTests(APITestCase):
         admin = User.objects.create_superuser(username="admin", password="Pandora-test-938!")
         self.auth(admin)
         self.assertEqual(self.client.get("/api/v1/app/home/").status_code, 403)
+
+    # ---- 每日事项 ----
+
+    def test_personal_items_list_returns_inclusive_overlaps_for_current_user_only(self):
+        today = timezone.localdate()
+        before = HomePersonalDailyItem.objects.create(
+            owner=self.employee, title="跨入查询范围", start_date=today - timedelta(days=2),
+            end_date=today - timedelta(days=1), color="#C7DDFF",
+        )
+        overlap_start = HomePersonalDailyItem.objects.create(
+            owner=self.employee, title="起点相交", start_date=today - timedelta(days=1),
+            end_date=today, color="#BDEAF2",
+        )
+        overlap_end = HomePersonalDailyItem.objects.create(
+            owner=self.employee, title="终点相交", start_date=today + timedelta(days=1),
+            end_date=today + timedelta(days=2), color="#BFEBDD",
+        )
+        HomePersonalDailyItem.objects.create(
+            owner=self.employee, title="范围外", start_date=today + timedelta(days=3),
+            end_date=today + timedelta(days=4), color="#CFE6B4",
+        )
+        HomePersonalDailyItem.objects.create(
+            owner=self.colleague, title="同事事项", start_date=today - timedelta(days=2),
+            end_date=today + timedelta(days=2), color="#E7ECB0",
+        )
+
+        self.auth(self.employee)
+        response = self.client.get(
+            "/api/v1/app/personal-items/",
+            {"start_date": today.isoformat(), "end_date": (today + timedelta(days=1)).isoformat()},
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        rows = response.data["data"]["items"]
+        self.assertEqual([row["id"] for row in rows], [overlap_start.pk, overlap_end.pk])
+        self.assertNotIn(before.pk, [row["id"] for row in rows])
+        self.assertTrue(all("description" not in row for row in rows))
+        self.assertEqual(self.client.get("/api/v1/app/personal-items/").status_code, 400)
+        invalid_range = self.client.get(
+            "/api/v1/app/personal-items/",
+            {"start_date": (today + timedelta(days=1)).isoformat(), "end_date": today.isoformat()},
+        )
+        self.assertEqual(invalid_range.status_code, 400)
+
+    def test_personal_items_create_patch_and_delete_validate_fields_and_date_range(self):
+        today = timezone.localdate()
+        self.auth(self.employee)
+        payload = {
+            "title": "  整理项目资料  ",
+            "start_date": today.isoformat(),
+            "end_date": (today + timedelta(days=1)).isoformat(),
+            "description": "准备周会",
+            "color": "#FFE59E",
+        }
+        created = self.client.post("/api/v1/app/personal-items/", payload, format="json")
+        self.assertEqual(created.status_code, 201, created.data)
+        item_id = created.data["data"]["id"]
+        self.assertEqual(created.data["data"]["title"], "整理项目资料")
+        self.assertEqual(created.data["data"]["description"], "准备周会")
+        self.assertEqual(created.data["data"]["color"], "#FFE59E")
+
+        invalid = self.client.patch(
+            f"/api/v1/app/personal-items/{item_id}/",
+            {"end_date": (today - timedelta(days=1)).isoformat()},
+            format="json",
+        )
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(HomePersonalDailyItem.objects.get(pk=item_id).end_date, today + timedelta(days=1))
+
+        invalid_color = self.client.patch(
+            f"/api/v1/app/personal-items/{item_id}/", {"color": "#000000"}, format="json",
+        )
+        self.assertEqual(invalid_color.status_code, 400)
+        unknown = self.client.patch(
+            f"/api/v1/app/personal-items/{item_id}/", {"owner_id": self.colleague.pk}, format="json",
+        )
+        self.assertEqual(unknown.status_code, 400)
+
+        updated = self.client.patch(
+            f"/api/v1/app/personal-items/{item_id}/", {"description": ""}, format="json",
+        )
+        self.assertEqual(updated.status_code, 200, updated.data)
+        self.assertEqual(updated.data["data"]["description"], "")
+
+        deleted = self.client.delete(f"/api/v1/app/personal-items/{item_id}/")
+        self.assertEqual(deleted.status_code, 200, deleted.data)
+        self.assertEqual(deleted.data["data"], {"deleted": True, "id": item_id})
+        self.assertFalse(HomePersonalDailyItem.objects.filter(pk=item_id).exists())
+
+    def test_personal_items_are_scoped_and_available_to_all_app_roles(self):
+        today = timezone.localdate()
+        item = HomePersonalDailyItem.objects.create(
+            owner=self.employee, title="员工私有", start_date=today, end_date=today,
+            color="#FFD0A3",
+        )
+        for user in (self.founder, self.manager, self.leader):
+            self.auth(user)
+            response = self.client.post(
+                "/api/v1/app/personal-items/",
+                {"title": f"{user.username}事项", "start_date": today.isoformat(),
+                 "end_date": today.isoformat(), "color": "#FFBFB3"},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 201, response.data)
+            created_id = response.data["data"]["id"]
+            self.assertEqual(
+                self.client.get(f"/api/v1/app/personal-items/{created_id}/").data["data"]["title"],
+                f"{user.username}事项",
+            )
+            self.assertEqual(self.client.get(f"/api/v1/app/personal-items/{item.pk}/").status_code, 404)
+
+        admin = User.objects.create_superuser(username="admin", password="Pandora-test-938!")
+        self.auth(admin)
+        self.assertEqual(
+            self.client.get(
+                "/api/v1/app/personal-items/",
+                {"start_date": today.isoformat(), "end_date": today.isoformat()},
+            ).status_code,
+            403,
+        )
+
+    def test_personal_item_move_preserves_span_and_is_idempotent(self):
+        today = timezone.localdate()
+        item = HomePersonalDailyItem.objects.create(
+            owner=self.employee, title="拖动事项", start_date=today,
+            end_date=today + timedelta(days=3), color="#F1C1D8",
+        )
+        self.auth(self.employee)
+        url = f"/api/v1/app/personal-items/{item.pk}/move/"
+        target = today + timedelta(days=5)
+
+        first = self.client.post(url, {"target_start_date": target.isoformat()}, format="json")
+        self.assertEqual(first.status_code, 200, first.data)
+        self.assertEqual(first.data["data"]["start_date"], target.isoformat())
+        self.assertEqual(first.data["data"]["end_date"], (target + timedelta(days=3)).isoformat())
+
+        retry = self.client.post(url, {"target_start_date": target.isoformat()}, format="json")
+        self.assertEqual(retry.status_code, 200, retry.data)
+        self.assertEqual(retry.data["data"]["start_date"], target.isoformat())
+        self.assertEqual(retry.data["data"]["end_date"], (target + timedelta(days=3)).isoformat())
+
+        self.auth(self.colleague)
+        self.assertEqual(self.client.post(url, {"target_start_date": target.isoformat()}, format="json").status_code, 404)
+
+    def test_personal_items_home_preview_is_today_scoped_and_capped_at_five(self):
+        today = timezone.localdate()
+        for index in range(7):
+            HomePersonalDailyItem.objects.create(
+                owner=self.employee, title=f"今天事项{index}",
+                start_date=today - timedelta(days=index), end_date=today + timedelta(days=1),
+                color="#D7C8F2",
+            )
+        HomePersonalDailyItem.objects.create(
+            owner=self.employee, title="昨天结束", start_date=today - timedelta(days=3),
+            end_date=today - timedelta(days=1), color="#C7DDFF",
+        )
+        HomePersonalDailyItem.objects.create(
+            owner=self.colleague, title="他人事项", start_date=today, end_date=today,
+            color="#BDEAF2",
+        )
+
+        self.auth(self.employee)
+        data = self.client.get("/api/v1/app/home/").data["data"]
+        self.assertEqual([row["title"] for row in data["personal_daily_items"]], [
+            "今天事项6", "今天事项5", "今天事项4", "今天事项3", "今天事项2",
+        ])
+        self.assertEqual(set(data["personal_daily_items"][0]), {"id", "title"})
+
+    def test_personal_item_mutations_do_not_create_app_audit_records(self):
+        today = timezone.localdate()
+        before_count = AppOperationAuditLog.objects.count()
+        self.auth(self.employee)
+        response = self.client.post(
+            "/api/v1/app/personal-items/",
+            {"title": "不审计", "start_date": today.isoformat(), "end_date": today.isoformat(), "color": "#C7DDFF"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        item_id = response.data["data"]["id"]
+        self.client.patch(f"/api/v1/app/personal-items/{item_id}/", {"title": "仍不审计"}, format="json")
+        self.client.delete(f"/api/v1/app/personal-items/{item_id}/")
+        self.assertEqual(AppOperationAuditLog.objects.count(), before_count)

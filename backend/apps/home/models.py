@@ -1,5 +1,20 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import F, Q
+
+
+PERSONAL_DAILY_ITEM_COLORS = (
+    "#C7DDFF",
+    "#BDEAF2",
+    "#BFEBDD",
+    "#CFE6B4",
+    "#E7ECB0",
+    "#FFE59E",
+    "#FFD0A3",
+    "#FFBFB3",
+    "#F1C1D8",
+    "#D7C8F2",
+)
 
 
 class HomePersonalFocusState(models.Model):
@@ -37,3 +52,41 @@ class HomePersonalFocusTask(models.Model):
             models.UniqueConstraint(fields=["user", "sort_order"], name="unique_personal_focus_user_order"),
         ]
         indexes = [models.Index(fields=["user", "sort_order"])]
+
+
+class HomePersonalDailyItem(models.Model):
+    """A user's private, date-spanning memo shown in their personal calendar."""
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="personal_daily_items",
+    )
+    title = models.CharField(max_length=200)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    description = models.TextField(blank=True, default="")
+    color = models.CharField(
+        max_length=7,
+        choices=[(value, value) for value in PERSONAL_DAILY_ITEM_COLORS],
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "home_personaldailyitem"
+        ordering = ["start_date", "end_date", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(end_date__gte=F("start_date")),
+                name="home_pdi_end_on_or_after_start",
+            ),
+            models.CheckConstraint(
+                condition=Q(color__in=PERSONAL_DAILY_ITEM_COLORS),
+                name="home_pdi_color_in_palette",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["owner", "start_date"], name="home_pdi_owner_start_idx"),
+            models.Index(fields=["owner", "end_date"], name="home_pdi_owner_end_idx"),
+        ]
