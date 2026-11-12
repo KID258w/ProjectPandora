@@ -1,12 +1,17 @@
 package com.example.pandorademo
 
 import android.os.Bundle
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas as ComposeCanvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -59,18 +64,22 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.example.pandorademo.ui.theme.PandoraDemoTheme
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.math.floor
 
 private val Canvas = Color(0xFFF6F7F9)
 private val Paper = Color(0xFFFFFFFF)
@@ -96,7 +105,7 @@ private enum class RootTab(val title: String, val symbol: String) {
     MINE("我的", "○")
 }
 
-private enum class ChildPage { TASKS, LOG_EDITOR, TAG_MANAGEMENT, COMPANY_MATTERS, COMPANY_TASKS, PERSONAL_FOCUS, NOTIFICATIONS, ORGANIZATION, MEMBER_PROFILE }
+private enum class ChildPage { TASKS, LOG_EDITOR, TAG_MANAGEMENT, COMPANY_MATTERS, COMPANY_TASKS, PERSONAL_ITEMS, NOTIFICATIONS, ORGANIZATION, MEMBER_PROFILE }
 private enum class ViewMode(val title: String) { MONTH("月"), WEEK("周"), DAY("日") }
 private data class WorkViewUiState(
     val mode: ViewMode = ViewMode.MONTH,
@@ -165,6 +174,28 @@ private data class DemoWorkEvent(
 private data class UnfinishedViewTask(val task: DemoTask, val weekEndColumn: Int)
 private data class DemoMatter(val title: String, val context: String, val detail: String)
 private data class DemoLogSummary(val title: String, val date: String)
+private data class DemoPersonalItem(
+    val id: Int,
+    val title: String,
+    val startOffset: Int,
+    val endOffset: Int,
+    val description: String,
+    val color: Color
+)
+
+private val personalItemPalette = listOf(
+    Color(0xFFC7DDFF), Color(0xFFBDEAF2), Color(0xFFBFEBDD), Color(0xFFCFE6B4), Color(0xFFE7ECB0),
+    Color(0xFFFFE59E), Color(0xFFFFD0A3), Color(0xFFFFBFB3), Color(0xFFF1C1D8), Color(0xFFD7C8F2)
+)
+
+private val initialPersonalItems = listOf(
+    DemoPersonalItem(1, "整理本周工作安排", -2, 1, "把个人待办和需要准备的材料梳理清楚。", personalItemPalette[0]),
+    DemoPersonalItem(2, "准备产品分享", 0, 2, "整理最近的产品设计心得。", personalItemPalette[5]),
+    DemoPersonalItem(3, "阅读交互设计资料", -1, 1, "阅读并记录值得参考的交互案例。", personalItemPalette[8]),
+    DemoPersonalItem(4, "整理灵感与想法", 0, 0, "", personalItemPalette[2]),
+    DemoPersonalItem(5, "个人学习计划", 2, 5, "留出时间继续学习。", personalItemPalette[9]),
+    DemoPersonalItem(6, "复盘近期工作", 4, 6, "", personalItemPalette[7])
+)
 private enum class DemoRole(val label: String, val actor: String, val unit: String) {
     FOUNDER("创始人", "周总", "公司"),
     DEPARTMENT_MANAGER("部门经理", "林经理", "产品部"),
@@ -431,26 +462,6 @@ private val companyTasks = listOf(
     DemoTask("市场方案协同确认", "他人派发", "未完成", "10月19日", Blue)
 )
 
-private val personalFocusTasks = listOf(
-    DemoTask("完成需求评审", "上级分配", "未完成", "10月10日", Blue),
-    DemoTask("整理测试计划", "部门自主", "未完成", "10月12日", Blue),
-    DemoTask("跨部门资料整理", "他人派发", "未完成", "10月14日", Blue),
-    DemoTask("完善产品交付规范", "部门自主", "未完成", "10月16日", Blue),
-    DemoTask("确认项目风险清单", "上级分配", "未完成", "10月11日", Blue),
-    DemoTask("产品路线确认", "部门自主", "未完成", "10月20日", Blue),
-    DemoTask("客户需求复盘", "上级分配", "未完成", "10月18日", Blue),
-    DemoTask("研发协作流程梳理", "部门自主", "未完成", "10月22日", Blue),
-    DemoTask("市场方案协同确认", "他人派发", "未完成", "10月19日", Blue),
-    DemoTask("部门月度评审准备", "部门自主", "未完成", "10月24日", Blue)
-)
-
-private val otherMyTasks = listOf(
-    DemoTask("整理团队培训材料", "部门自主", "未完成", "10月27日", Blue),
-    DemoTask("复核客户反馈清单", "上级分配", "未完成", "10月26日", Blue),
-    DemoTask("准备新员工入职指引", "部门自主", "未完成", "10月30日", Blue),
-    DemoTask("协助财务核对项目预算", "他人派发", "未完成", "10月28日", Blue)
-)
-
 private fun demoUnfinishedViewTasks(target: DemoPerson, tags: List<DemoTag>): List<UnfinishedViewTask> {
     val tasks = if (target.role == DemoRole.EMPLOYEE) {
         listOf(
@@ -605,7 +616,7 @@ private fun PandoraPrototype() {
     var taskCenterInitialTarget by remember { mutableStateOf<String?>(null) }
     var taskCenterReturnPage by remember { mutableStateOf<ChildPage?>(null) }
     var taskDetailReadOnly by remember { mutableStateOf(false) }
-    var orderedPersonalTasks by remember { mutableStateOf(personalFocusTasks) }
+    var personalItems by remember { mutableStateOf(initialPersonalItems) }
     var workflowTasks by remember { mutableStateOf(initialWorkflowTasks) }
     var demoPerson by remember { mutableStateOf(demoPeople.first { it.role == DemoRole.DEPARTMENT_MANAGER }) }
     var readTaskNotificationKeys by remember { mutableStateOf(emptySet<String>()) }
@@ -749,11 +760,10 @@ private fun PandoraPrototype() {
                     onBack = { childPage = null },
                     onTaskClick = { openHomeTask(it, ChildPage.COMPANY_TASKS) }
                 )
-                ChildPage.PERSONAL_FOCUS -> PersonalFocusScreen(
-                    orderedTasks = orderedPersonalTasks,
-                    onTasksChange = { orderedPersonalTasks = it },
+                ChildPage.PERSONAL_ITEMS -> PersonalItemsScreen(
+                    items = personalItems,
+                    onItemsChange = { personalItems = it },
                     onBack = { childPage = null },
-                    onTaskClick = { openHomeTask(it, ChildPage.PERSONAL_FOCUS) }
                 )
                 ChildPage.NOTIFICATIONS -> TaskNotificationsScreen(
                     notifications = taskNotifications,
@@ -790,7 +800,7 @@ private fun PandoraPrototype() {
                 }
                 null -> when (selectedTab) {
                     RootTab.HOME -> HomeScreen(
-                        personalFocus = orderedPersonalTasks,
+                        personalItems = personalItems,
                         hasUnreadTaskNotifications = taskNotifications.any { it.key !in readTaskNotificationKeys },
                         onNotifications = ::openTaskNotifications,
                         onLogs = { selectedTab = RootTab.LOG },
@@ -804,7 +814,7 @@ private fun PandoraPrototype() {
                         },
                         onCompanyMatters = { childPage = ChildPage.COMPANY_MATTERS },
                         onCompanyTasks = { childPage = ChildPage.COMPANY_TASKS },
-                        onPersonalFocus = { childPage = ChildPage.PERSONAL_FOCUS }
+                        onPersonalItems = { childPage = ChildPage.PERSONAL_ITEMS }
                     )
                     RootTab.VIEW -> WorkViewScreen(
                         viewer = demoPerson,
@@ -869,12 +879,12 @@ private fun PandoraPrototype() {
 
 @Composable
 private fun HomeScreen(
-    personalFocus: List<DemoTask>,
+    personalItems: List<DemoPersonalItem>,
     hasUnreadTaskNotifications: Boolean,
     onNotifications: () -> Unit,
     onCompanyMatters: () -> Unit,
     onCompanyTasks: () -> Unit,
-    onPersonalFocus: () -> Unit,
+    onPersonalItems: () -> Unit,
     onLogs: () -> Unit,
     onWriteLog: () -> Unit
 ) {
@@ -916,13 +926,14 @@ private fun HomeScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             HomePanel(
                 modifier = Modifier.weight(1f).height(235.dp),
-                title = "个人重点工作",
-                icon = "★",
+                title = "每日事项",
+                icon = "▦",
                 accent = Teal,
                 tint = TealPale,
-                rows = personalFocus.take(5).map { it.title },
-                onClick = onPersonalFocus,
-                footer = "查看全部"
+                rows = personalItems.filter { it.startOffset <= 0 && it.endOffset >= 0 }.sortedBy { it.startOffset }.take(5).map { it.title },
+                onClick = onPersonalItems,
+                footer = "查看全部",
+                emptyLabel = "今天暂无安排"
             )
             HomePanel(
                 modifier = Modifier.weight(1f).height(235.dp),
@@ -1009,7 +1020,8 @@ private fun HomePanel(
     rows: List<String>,
     onClick: () -> Unit,
     footer: String? = null,
-    footerAction: (() -> Unit)? = null
+    footerAction: (() -> Unit)? = null,
+    emptyLabel: String? = null
 ) {
     Card(
         modifier = modifier.clickable(onClick = onClick),
@@ -1025,10 +1037,14 @@ private fun HomePanel(
                 Text(title, color = Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 2, lineHeight = 17.sp, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(12.dp))
-            rows.forEachIndexed { index, item ->
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(22.dp)) {
-                    Text("${index + 1}".padStart(2, '0'), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(17.dp))
-                    Text(item, color = Ink, fontSize = 10.sp, lineHeight = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (rows.isEmpty() && emptyLabel != null) {
+                Text(emptyLabel, color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+            } else {
+                rows.forEachIndexed { index, item ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(22.dp)) {
+                        Text("${index + 1}".padStart(2, '0'), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(17.dp))
+                        Text(item, color = Ink, fontSize = 10.sp, lineHeight = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -1084,99 +1100,595 @@ private fun CompanyTasksScreen(onBack: () -> Unit, onTaskClick: (DemoTask) -> Un
     }
 }
 
+private data class PersonalItemSegment(
+    val item: DemoPersonalItem,
+    val lane: Int,
+    val startOffset: Int,
+    val endOffset: Int
+)
+
+private enum class PersonalDateField { START, END }
+
+private val personalItemColorNames = listOf("蓝", "天青", "青绿", "草绿", "黄绿", "柠檬黄", "杏橙", "珊瑚", "玫瑰粉", "薰衣草")
+private val personalCalendarWeekHeight = 132.dp
+private val personalCalendarDateHeight = 30.dp
+private val personalCalendarBarHeight = 22.dp
+private const val personalCalendarVisibleLanes = 3
+
+private fun personalItemWeekSegments(items: List<DemoPersonalItem>, weekStart: Int): List<PersonalItemSegment> {
+    val weekEnd = weekStart + 6
+    val laneEndOffsets = mutableListOf<Int>()
+    return items
+        .filter { it.startOffset <= weekEnd && it.endOffset >= weekStart }
+        .sortedWith(compareBy<DemoPersonalItem> { it.startOffset }.thenBy { it.endOffset }.thenBy { it.id })
+        .map { item ->
+            val segmentStart = maxOf(item.startOffset, weekStart)
+            val segmentEnd = minOf(item.endOffset, weekEnd)
+            val availableLane = laneEndOffsets.indexOfFirst { it < segmentStart }
+            val lane = if (availableLane == -1) {
+                laneEndOffsets.add(segmentEnd)
+                laneEndOffsets.lastIndex
+            } else {
+                laneEndOffsets[availableLane] = segmentEnd
+                availableLane
+            }
+            PersonalItemSegment(item, lane, segmentStart, segmentEnd)
+        }
+}
+
 @Composable
-private fun PersonalFocusScreen(
-    orderedTasks: List<DemoTask>,
-    onTasksChange: (List<DemoTask>) -> Unit,
-    onBack: () -> Unit,
-    onTaskClick: (DemoTask) -> Unit
+private fun PersonalItemsScreen(
+    items: List<DemoPersonalItem>,
+    onItemsChange: (List<DemoPersonalItem>) -> Unit,
+    onBack: () -> Unit
 ) {
-    var editing by remember { mutableStateOf(false) }
-    var showCandidates by remember { mutableStateOf(false) }
-    fun move(from: Int, to: Int) {
-        if (to !in orderedTasks.indices) return
-        val next = orderedTasks.toMutableList()
-        val item = next.removeAt(from)
-        next.add(to, item)
-        onTasksChange(next)
+    var monthShift by remember { mutableStateOf(0) }
+    var showMonthPicker by remember { mutableStateOf(false) }
+    var pickerYear by remember { mutableStateOf(DemoBaseYear) }
+    var pickerMonth by remember { mutableStateOf(DemoBaseMonth + 1) }
+    var selectedDateOffset by remember { mutableStateOf(0) }
+    var dayListOffset by remember { mutableStateOf<Int?>(null) }
+    var detailItemId by remember { mutableStateOf<Int?>(null) }
+    var editorDraft by remember { mutableStateOf<DemoPersonalItem?>(null) }
+    var deleteTarget by remember { mutableStateOf<DemoPersonalItem?>(null) }
+    val detailItem = items.firstOrNull { it.id == detailItemId }
+    val month = monthCalendar(monthShift)
+    fun beginCreate() {
+        editorDraft = DemoPersonalItem(
+            id = 0,
+            title = "",
+            startOffset = selectedDateOffset,
+            endOffset = selectedDateOffset,
+            description = "",
+            color = personalItemPalette.first()
+        )
     }
-    val companyTaskTitles = companyTasks.map { it.title }.toSet()
-    val candidates = (companyTasks + personalFocusTasks + otherMyTasks)
-        .distinctBy { it.title }
-        .filterNot { candidate -> orderedTasks.any { it.title == candidate.title } }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-        ChildTopBar("个人重点工作", onBack)
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
-            Text("${orderedTasks.size}/10", color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-            TextButton(onClick = { editing = !editing }) {
-                Text(if (editing) "完成" else "编辑", color = Blue, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-            }
+    fun saveItem(draft: DemoPersonalItem) {
+        if (draft.id == 0) {
+            val nextId = (items.maxOfOrNull { it.id } ?: 0) + 1
+            onItemsChange(items + draft.copy(id = nextId))
+        } else {
+            onItemsChange(items.map { if (it.id == draft.id) draft else it })
         }
-        if (editing) {
+        editorDraft = null
+    }
+
+    Column(
+        Modifier.fillMaxSize().background(Canvas).verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("‹", color = Ink, fontSize = 30.sp, modifier = Modifier.clickable(onClick = onBack).padding(end = 12.dp))
+            Text("每日事项", color = Ink, fontSize = 21.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             OutlinedButton(
-                onClick = { showCandidates = true },
-                enabled = orderedTasks.size < 10,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 9.dp),
-                shape = RoundedCornerShape(15.dp)
+                onClick = ::beginCreate,
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, Teal.copy(alpha = 0.35f)),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp)
             ) {
-                Text(if (orderedTasks.size < 10) "＋  从我的任务中添加" else "已达10项 · 移除后可继续添加", color = if (orderedTasks.size < 10) Blue else Muted, fontSize = 12.sp)
+                Text("＋ 新建", color = Teal, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
-        orderedTasks.forEachIndexed { index, task ->
-            key(task.title) {
-                RankedTaskCard(
-                    rank = index + 1,
-                    task = task,
-                    editing = editing,
-                    itemCount = orderedTasks.size,
-                    onReorder = ::move,
-                    onClick = { onTaskClick(task) },
-                    onRemove = { onTasksChange(orderedTasks.filterIndexed { current, _ -> current != index }) }
+
+        Row(
+            Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = { monthShift -= 1 }) { Text("‹", color = Teal, fontSize = 22.sp) }
+            Row(
+                Modifier.weight(1f).clip(RoundedCornerShape(13.dp)).background(Paper)
+                    .clickable {
+                        pickerYear = month.get(Calendar.YEAR)
+                        pickerMonth = month.get(Calendar.MONTH) + 1
+                        showMonthPicker = true
+                    }
+                    .padding(horizontal = 13.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    SimpleDateFormat("yyyy年M月", Locale.CHINA).format(month.time),
+                    color = Ink,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
                 )
+                Spacer(Modifier.width(5.dp))
+                Text("⌄", color = Teal, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+            TextButton(onClick = { monthShift += 1 }) { Text("›", color = Teal, fontSize = 22.sp) }
+            TextButton(onClick = { monthShift = 0; selectedDateOffset = 0 }) {
+                Text("今天", color = Blue, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
-        Spacer(Modifier.height(12.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Paper),
+            border = BorderStroke(1.dp, Line)
+        ) {
+            PersonalItemsMonthCalendar(
+                month = month,
+                items = items,
+                selectedDateOffset = selectedDateOffset,
+                onDaySelected = { offset -> selectedDateOffset = offset; dayListOffset = offset },
+                onItemClick = { detailItemId = it.id },
+                onMove = { itemId, delta ->
+                    if (delta != 0) {
+                        onItemsChange(items.map { item ->
+                            if (item.id == itemId) item.copy(startOffset = item.startOffset + delta, endOffset = item.endOffset + delta) else item
+                        })
+                    }
+                }
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 18.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background(Teal))
+            Spacer(Modifier.width(6.dp))
+            Text("长按事项条可整体调整日期范围", color = Muted, fontSize = 10.sp)
+        }
     }
 
-    if (showCandidates) {
+    if (showMonthPicker) {
+        QuickMonthPickerDialog(
+            selectedYear = pickerYear,
+            selectedMonth = pickerMonth,
+            onDismiss = { showMonthPicker = false },
+            onYearChange = { pickerYear = it },
+            onMonthSelected = { chosenMonth ->
+                monthShift = monthShiftFor(pickerYear, chosenMonth)
+                selectedDateOffset = dayOffsetFor(pickerYear, chosenMonth, 1)
+                showMonthPicker = false
+            }
+        )
+    }
+
+    if (dayListOffset != null) {
+        PersonalItemsDayListDialog(
+            dateOffset = dayListOffset!!,
+            items = items.filter { it.startOffset <= dayListOffset!! && it.endOffset >= dayListOffset!! }
+                .sortedWith(compareBy<DemoPersonalItem> { it.startOffset }.thenBy { it.title }),
+            onDismiss = { dayListOffset = null },
+            onItemClick = { item -> dayListOffset = null; detailItemId = item.id }
+        )
+    }
+
+    if (detailItem != null) {
+        PersonalItemDetailDialog(
+            item = detailItem,
+            onDismiss = { detailItemId = null },
+            onEdit = { editorDraft = detailItem; detailItemId = null },
+            onDelete = { deleteTarget = detailItem; detailItemId = null }
+        )
+    }
+
+    if (editorDraft != null) {
+        PersonalItemEditorDialog(
+            item = editorDraft!!,
+            onDismiss = { editorDraft = null },
+            onSave = ::saveItem
+        )
+    }
+
+    if (deleteTarget != null) {
         AlertDialog(
-            onDismissRequest = { showCandidates = false },
+            onDismissRequest = { deleteTarget = null },
             containerColor = Paper,
-            title = { Text("从我的任务中添加", color = Ink, fontWeight = FontWeight.Bold, fontSize = 17.sp) },
-            text = {
-                Column(Modifier.heightIn(max = 390.dp).verticalScroll(rememberScrollState())) {
-                    candidates.forEach { task ->
-                        val outsideCompanyTopTen = task.title !in companyTaskTitles
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 7.dp).clickable {
-                                if (orderedTasks.size < 10) {
-                                    onTasksChange(orderedTasks + task)
-                                    showCandidates = false
-                                }
-                            },
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = if (outsideCompanyTopTen) TealPale else Canvas),
-                            border = BorderStroke(1.dp, if (outsideCompanyTopTen) Teal.copy(alpha = 0.25f) else Line)
-                        ) {
-                            Row(Modifier.fillMaxWidth().padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(task.title, color = Ink, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                    Text("${task.source} · ${task.status} · 截止${task.deadline}", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp))
-                                }
-                                Text(if (outsideCompanyTopTen) "十大外" else "公司十大", color = if (outsideCompanyTopTen) Teal else Blue, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                    if (candidates.isEmpty()) Text("没有更多可加入的未完成任务", color = Muted, fontSize = 12.sp)
-                }
-            },
+            title = { Text("删除这条每日事项？", color = Ink, fontWeight = FontWeight.Bold) },
+            text = { Text("“${deleteTarget!!.title}”删除后会从首页和个人月历中移除。", color = Muted, fontSize = 13.sp) },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("取消", color = Muted) } },
             confirmButton = {
-                TextButton(onClick = { showCandidates = false }) { Text("完成", color = Blue) }
+                TextButton(onClick = {
+                    val deletedId = deleteTarget!!.id
+                    onItemsChange(items.filterNot { it.id == deletedId })
+                    deleteTarget = null
+                }) { Text("确认删除", color = Rose, fontWeight = FontWeight.SemiBold) }
             }
         )
     }
 }
+
+@Composable
+private fun PersonalItemsMonthCalendar(
+    month: Calendar,
+    items: List<DemoPersonalItem>,
+    selectedDateOffset: Int,
+    onDaySelected: (Int) -> Unit,
+    onItemClick: (DemoPersonalItem) -> Unit,
+    onMove: (Int, Int) -> Unit
+) {
+    val year = month.get(Calendar.YEAR)
+    val monthNumber = month.get(Calendar.MONTH) + 1
+    val daysInMonth = month.getActualMaximum(Calendar.DAY_OF_MONTH)
+    val firstOffset = dayOffsetFor(year, monthNumber, 1)
+    val leadingDays = (month.get(Calendar.DAY_OF_WEEK) + 5) % 7
+    val gridStartOffset = firstOffset - leadingDays
+    val rowCount = (leadingDays + daysInMonth + 6) / 7
+    val todayOffset = 0
+    val weekdays = listOf("一", "二", "三", "四", "五", "六", "日")
+    val density = LocalDensity.current
+    val moveItem by rememberUpdatedState(onMove)
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp)) {
+        Row(Modifier.fillMaxWidth().height(25.dp), verticalAlignment = Alignment.CenterVertically) {
+            weekdays.forEach { label ->
+                Text(label, modifier = Modifier.weight(1f), color = Muted, fontSize = 10.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+        }
+        repeat(rowCount) { weekIndex ->
+            val weekStart = gridStartOffset + weekIndex * 7
+            val segments = personalItemWeekSegments(items, weekStart)
+            val visibleSegments = segments.filter { it.lane < personalCalendarVisibleLanes }
+            val overflowCounts = (0..6).map { column ->
+                val dayOffset = weekStart + column
+                segments.count { it.lane >= personalCalendarVisibleLanes && it.startOffset <= dayOffset && it.endOffset >= dayOffset }
+            }
+            Column(Modifier.fillMaxWidth().height(personalCalendarWeekHeight)) {
+                Row(Modifier.fillMaxWidth().height(personalCalendarDateHeight)) {
+                    repeat(7) { column ->
+                        val dateOffset = weekStart + column
+                        val date = demoDate(dateOffset)
+                        val isCurrentMonth = date.get(Calendar.YEAR) == year && date.get(Calendar.MONTH) + 1 == monthNumber
+                        val isToday = dateOffset == todayOffset
+                        val isSelected = dateOffset == selectedDateOffset
+                        Box(
+                            Modifier.weight(1f).fillMaxHeight()
+                                .clip(RoundedCornerShape(9.dp))
+                                .clickable { onDaySelected(dateOffset) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isToday || isSelected) {
+                                Box(
+                                    Modifier.size(25.dp).clip(CircleShape)
+                                        .background(if (isToday) AmberPale else TealPale)
+                                        .then(if (isSelected && !isToday) Modifier.border(1.dp, Teal.copy(alpha = 0.55f), CircleShape) else Modifier)
+                                )
+                            }
+                            Text(
+                                date.get(Calendar.DAY_OF_MONTH).toString(),
+                                color = when {
+                                    isToday -> Amber
+                                    !isCurrentMonth -> Muted.copy(alpha = 0.4f)
+                                    else -> Ink
+                                },
+                                fontSize = 11.sp,
+                                fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+
+                BoxWithConstraints(Modifier.fillMaxWidth().height(personalCalendarBarHeight * personalCalendarVisibleLanes)) {
+                    val cellWidth = maxWidth / 7
+                    val cellWidthPx = with(density) { cellWidth.toPx() }
+                    val weekHeightPx = with(density) { personalCalendarWeekHeight.toPx() }
+                    val dateHeaderPx = with(density) { personalCalendarDateHeight.toPx() }
+                    val barHeightPx = with(density) { personalCalendarBarHeight.toPx() }
+                    visibleSegments.forEach { segment ->
+                        val startColumn = segment.startOffset - weekStart
+                        val endColumn = segment.endOffset - weekStart
+                        val span = endColumn - startColumn + 1
+                        var dragOffset by remember(segment.item.id, weekIndex) { mutableStateOf(Offset.Zero) }
+                        var isDragging by remember(segment.item.id, weekIndex) { mutableStateOf(false) }
+                        val dragScale by animateFloatAsState(
+                            targetValue = if (isDragging) 1.08f else 1f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+                            label = "daily-item-drag-scale"
+                        )
+                        val dragElevation by animateDpAsState(
+                            targetValue = if (isDragging) 12.dp else 0.dp,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+                            label = "daily-item-drag-elevation"
+                        )
+                        Box(
+                            Modifier
+                                .offset(x = cellWidth * startColumn + 1.dp, y = personalCalendarBarHeight * segment.lane)
+                                .width(cellWidth * span - 2.dp)
+                                .height(personalCalendarBarHeight - 2.dp)
+                                .zIndex(if (isDragging) 1f else 0f)
+                                .graphicsLayer {
+                                    translationX = dragOffset.x
+                                    translationY = dragOffset.y
+                                    scaleX = dragScale
+                                    scaleY = dragScale
+                                    shadowElevation = dragElevation.toPx()
+                                    shape = RoundedCornerShape(7.dp)
+                                    clip = true
+                                }
+                                .clip(RoundedCornerShape(7.dp))
+                                .background(segment.item.color)
+                                .then(if (isDragging) Modifier.border(1.5.dp, Teal, RoundedCornerShape(7.dp)) else Modifier)
+                                .pointerInput(segment.item.id, weekIndex, month.timeInMillis) {
+                                    var dragStart = Offset.Zero
+                                    var dragAmount = Offset.Zero
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = {
+                                            dragStart = it
+                                            dragAmount = Offset.Zero
+                                            dragOffset = Offset.Zero
+                                            isDragging = true
+                                        },
+                                        onDrag = { change, amount ->
+                                            change.consume()
+                                            dragAmount += amount
+                                            dragOffset = dragAmount
+                                        },
+                                        onDragCancel = {
+                                            dragOffset = Offset.Zero
+                                            isDragging = false
+                                        },
+                                        onDragEnd = {
+                                            val targetColumn = floor((startColumn * cellWidthPx + dragStart.x + dragAmount.x) / cellWidthPx)
+                                                .toInt().coerceIn(0, 6)
+                                            val barTop = dateHeaderPx + segment.lane * barHeightPx
+                                            val targetRowInGrid = (weekIndex + floor((barTop + dragStart.y + dragAmount.y) / weekHeightPx).toInt())
+                                                .coerceIn(0, rowCount - 1)
+                                            val targetOffset = gridStartOffset + targetRowInGrid * 7 + targetColumn
+                                            val grabbedColumn = (startColumn + floor(dragStart.x / cellWidthPx).toInt()).coerceIn(startColumn, endColumn)
+                                            val grabbedOffset = weekStart + grabbedColumn
+                                            moveItem(segment.item.id, targetOffset - grabbedOffset)
+                                            dragOffset = Offset.Zero
+                                            isDragging = false
+                                        }
+                                    )
+                                }
+                                .clickable { onItemClick(segment.item) }
+                                .padding(horizontal = 4.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Text(
+                                segment.item.title,
+                                color = Ink,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+
+                Row(Modifier.fillMaxWidth().height(18.dp)) {
+                    overflowCounts.forEachIndexed { column, count ->
+                        Box(
+                            Modifier.weight(1f).fillMaxHeight().clickable(enabled = count > 0) {
+                                onDaySelected(weekStart + column)
+                            },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (count > 0) {
+                                Text("+${count}项", color = Teal, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PersonalItemsDayListDialog(
+    dateOffset: Int,
+    items: List<DemoPersonalItem>,
+    onDismiss: () -> Unit,
+    onItemClick: (DemoPersonalItem) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Paper,
+        title = {
+            Column {
+                Text("当天事项", color = Ink, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text(personalDateLabel(dateOffset), color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp))
+            }
+        },
+        text = {
+            if (items.isEmpty()) {
+                Text("这一天还没有安排事项。", color = Muted, fontSize = 12.sp)
+            } else {
+                Column(Modifier.heightIn(max = 390.dp).verticalScroll(rememberScrollState())) {
+                    items.forEach { item ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clickable { onItemClick(item) },
+                            shape = RoundedCornerShape(15.dp),
+                            colors = CardDefaults.cardColors(containerColor = item.color),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.75f))
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp)) {
+                                Text(item.title, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text("${personalDateLabel(item.startOffset)} — ${personalDateLabel(item.endOffset)}", color = Ink.copy(alpha = 0.68f), fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭", color = Teal) } }
+    )
+}
+
+@Composable
+private fun PersonalItemDetailDialog(
+    item: DemoPersonalItem,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Paper,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(5.dp).height(30.dp).clip(CircleShape).background(item.color))
+                Spacer(Modifier.width(10.dp))
+                Text(item.title, color = Ink, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column {
+                Text("${personalDateLabel(item.startOffset)} — ${personalDateLabel(item.endOffset)}", color = Teal, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(12.dp))
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = item.color.copy(alpha = 0.52f)),
+                    border = BorderStroke(1.dp, item.color.copy(alpha = 0.8f))
+                ) {
+                    Text(
+                        item.description.ifBlank { "没有补充说明" },
+                        modifier = Modifier.fillMaxWidth().padding(13.dp),
+                        color = if (item.description.isBlank()) Muted else Ink,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onEdit) { Text("编辑", color = Blue, fontWeight = FontWeight.SemiBold) }
+        },
+        confirmButton = {
+            TextButton(onClick = onDelete) { Text("删除", color = Rose, fontWeight = FontWeight.SemiBold) }
+        }
+    )
+}
+
+@Composable
+private fun PersonalItemEditorDialog(
+    item: DemoPersonalItem,
+    onDismiss: () -> Unit,
+    onSave: (DemoPersonalItem) -> Unit
+) {
+    var title by remember(item.id) { mutableStateOf(item.title) }
+    var description by remember(item.id) { mutableStateOf(item.description) }
+    var startOffset by remember(item.id) { mutableStateOf(item.startOffset) }
+    var endOffset by remember(item.id) { mutableStateOf(item.endOffset) }
+    var color by remember(item.id) { mutableStateOf(item.color) }
+    var dateField by remember(item.id) { mutableStateOf<PersonalDateField?>(null) }
+    val invalidRange = endOffset < startOffset
+    val startDate = demoDate(startOffset)
+    val endDate = demoDate(endOffset)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Paper,
+        title = { Text(if (item.id == 0) "新建每日事项" else "编辑每日事项", color = Ink, fontSize = 17.sp, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("事项标题 *") },
+                    singleLine = true
+                )
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { dateField = PersonalDateField.START },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                    ) { Text("开始  ${personalDateLabel(startOffset)}", color = Ink, fontSize = 10.sp, maxLines = 1) }
+                    OutlinedButton(
+                        onClick = { dateField = PersonalDateField.END },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                    ) { Text("结束  ${personalDateLabel(endOffset)}", color = Ink, fontSize = 10.sp, maxLines = 1) }
+                }
+                if (invalidRange) {
+                    Text("结束日期不能早于开始日期", color = Rose, fontSize = 10.sp, modifier = Modifier.padding(top = 5.dp))
+                }
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    label = { Text("说明（选填）") },
+                    minLines = 3,
+                    maxLines = 4
+                )
+                Text("选择颜色", color = Ink, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp, bottom = 7.dp))
+                personalItemPalette.chunked(5).forEachIndexed { rowIndex, colorRow ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        colorRow.forEachIndexed { columnIndex, swatch ->
+                            val index = rowIndex * 5 + columnIndex
+                            Column(
+                                Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { color = swatch }.padding(vertical = 5.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Box(
+                                    Modifier.size(30.dp).clip(CircleShape).background(swatch)
+                                        .border(if (color == swatch) 2.dp else 1.dp, if (color == swatch) Teal else Line, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (color == swatch) Text("✓", color = Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Text(personalItemColorNames[index], color = if (color == swatch) Teal else Muted, fontSize = 8.sp, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = Muted) } },
+        confirmButton = {
+            TextButton(
+                enabled = title.isNotBlank() && !invalidRange,
+                onClick = {
+                    onSave(item.copy(title = title.trim(), startOffset = startOffset, endOffset = endOffset, description = description.trim(), color = color))
+                }
+            ) { Text("保存", color = if (title.isNotBlank() && !invalidRange) Teal else Muted, fontWeight = FontWeight.SemiBold) }
+        }
+    )
+
+    if (dateField != null) {
+        val date = if (dateField == PersonalDateField.START) startDate else endDate
+        QuickDatePickerDialog(
+            selectedYear = date.get(Calendar.YEAR),
+            selectedMonth = date.get(Calendar.MONTH) + 1,
+            selectedDay = date.get(Calendar.DAY_OF_MONTH),
+            onDismiss = { dateField = null },
+            onDateSelected = { year, month, day ->
+                val offset = dayOffsetFor(year, month, day)
+                if (dateField == PersonalDateField.START) startOffset = offset else endOffset = offset
+                dateField = null
+            }
+        )
+    }
+}
+
+private fun personalDateLabel(offset: Int): String =
+    SimpleDateFormat("yyyy年M月d日", Locale.CHINA).format(demoDate(offset).time)
 
 @Composable
 private fun RankedTaskCard(

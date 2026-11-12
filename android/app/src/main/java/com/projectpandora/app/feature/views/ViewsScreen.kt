@@ -35,10 +35,26 @@ import java.util.*
 internal val BUSINESS_TIME_ZONE: TimeZone = TimeZone.getTimeZone("Asia/Shanghai")
 private fun format(pattern: String) = SimpleDateFormat(pattern, Locale.US).apply { timeZone = BUSINESS_TIME_ZONE }
 private fun cal(time: Long = System.currentTimeMillis()) = Calendar.getInstance(BUSINESS_TIME_ZONE).apply { timeInMillis = time; firstDayOfWeek = Calendar.MONDAY }
+internal fun businessCalendar(time: Long = System.currentTimeMillis()): Calendar = cal(time)
 internal fun date(c: Calendar): String = format("yyyy-MM-dd").format(c.time)
 internal fun parseBusinessDate(value: String): Long? = runCatching { format("yyyy-MM-dd").apply { isLenient = false }.parse(value)!!.time + 12 * 3_600_000L }.getOrNull()
 private fun weekStart(c: Calendar) = cal(c.timeInMillis).apply { add(Calendar.DAY_OF_MONTH, -((get(Calendar.DAY_OF_WEEK) + 5) % 7)) }
-private val WEEKDAYS = listOf("一", "二", "三", "四", "五", "六", "日")
+internal val MONTH_WEEKDAYS = listOf("一", "二", "三", "四", "五", "六", "日")
+
+/** Shared Monday-first calendar grid used by work views and personal daily items. */
+internal fun monthCalendarWeeks(
+    current: Calendar,
+    gridStart: Calendar? = null,
+    requestedRows: Int? = null,
+): List<List<Calendar>> {
+    val first = cal(current.timeInMillis).apply { set(Calendar.DAY_OF_MONTH, 1) }
+    val offset = (first.get(Calendar.DAY_OF_WEEK) + 5) % 7
+    val rows = requestedRows ?: ((offset + first.getActualMaximum(Calendar.DAY_OF_MONTH) + 6) / 7)
+    val start = gridStart ?: cal(first.timeInMillis).apply { add(Calendar.DAY_OF_MONTH, -offset) }
+    return (0 until rows).map { row -> (0..6).map { column ->
+        cal(start.timeInMillis).apply { add(Calendar.DAY_OF_MONTH, row * 7 + column) }
+    } }
+}
 
 internal fun calendarPickerMillis(current: Calendar): Long = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
     clear()
@@ -213,7 +229,7 @@ private fun ViewHeaderAction(label: String, tag: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PeriodArrow(previous: Boolean, description: String, onClick: () -> Unit) {
+internal fun PeriodArrow(previous: Boolean, description: String, onClick: () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(48.dp).semantics { contentDescription = description }) {
         Canvas(Modifier.size(20.dp)) {
             val left = size.width * 0.32f
@@ -228,7 +244,7 @@ private fun PeriodArrow(previous: Boolean, description: String, onClick: () -> U
 }
 
 @Composable
-private fun MonthPicker(current: Calendar, onDismiss: () -> Unit, onChoose: (Int, Int) -> Unit) {
+internal fun MonthPicker(current: Calendar, onDismiss: () -> Unit, onChoose: (Int, Int) -> Unit) {
     var year by remember { mutableIntStateOf(current.get(Calendar.YEAR)) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("选择年月") }, text = {
         Column {
@@ -319,12 +335,12 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
     val apiDays = data?.array("days").orEmpty()
     val days = apiDays.associateBy { it.string("date") }
     val calendarDays = data?.array("calendar_days")?.associateBy { it.string("date") } ?: emptyMap()
-    val defaultGridStart = cal(first.timeInMillis).apply { add(Calendar.DAY_OF_MONTH, -offset) }
-    val gridStart = data?.string("calendar_start_date")?.let(::parseBusinessDate)?.let(::cal) ?: defaultGridStart
-    val rows = if (apiDays.isNotEmpty()) (apiDays.size + 6) / 7 else (offset + count + 6) / 7
-    val weekDates = (0 until rows).map { row -> (0..6).map { column ->
-        cal(gridStart.timeInMillis).apply { add(Calendar.DAY_OF_MONTH, row * 7 + column) }
-    } }
+    // Keep the calendar's natural month rows even if an API response omits
+    // date entries with no tasks. Complete API responses can still extend the
+    // grid for their adjacent-month dates.
+    val rows = maxOf((offset + count + 6) / 7, (apiDays.size + 6) / 7)
+    val gridStart = data?.string("calendar_start_date")?.let(::parseBusinessDate)?.let(::cal)
+    val weekDates = monthCalendarWeeks(current, gridStart, rows)
     val weekCells = weekDates.map { dates -> dates.map { day -> days[date(day)] } }
     val weekBars = weekCells.map(::weekSegments)
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
@@ -336,7 +352,7 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
         }
         val extraHeight = ((maxHeight - 40.dp - minHeights.fold(0.dp) { sum, height -> sum + height }) / rows).coerceAtLeast(0.dp)
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 10.dp)) { listOf("一","二","三","四","五","六","日").forEach { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.Muted) } } }
+        Row(Modifier.fillMaxWidth().padding(vertical = 10.dp)) { MONTH_WEEKDAYS.forEach { Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.Muted) } } }
         repeat(rows) { row ->
             val dates = weekDates[row]
             val cells = weekCells[row]
@@ -433,7 +449,7 @@ private fun HolidayMarker(marker: JsonObject) {
                 val key = date(day)
                 val highlighted = key == date(current)
                 Column(Modifier.weight(1f).clickable { onDate(day.timeInMillis) }, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(WEEKDAYS[(day.get(Calendar.DAY_OF_WEEK) + 5) % 7], fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = C.Muted)
+                    Text(MONTH_WEEKDAYS[(day.get(Calendar.DAY_OF_WEEK) + 5) % 7], fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = C.Muted)
                     Box(Modifier.padding(vertical = 5.dp).size(28.dp).background(if (highlighted) C.Amber else Color.Transparent, RoundedCornerShape(14.dp))
                         .then(if (!highlighted && key == today) Modifier.border(1.5.dp, C.Amber, RoundedCornerShape(14.dp)) else Modifier)
                         .semantics { contentDescription = if (highlighted) "已选 $key" else key },
