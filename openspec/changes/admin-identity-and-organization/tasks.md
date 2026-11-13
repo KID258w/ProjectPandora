@@ -1,0 +1,50 @@
+## PR 1 — Backend (complete first)
+
+- [x] 1.1 Extend `Department` and `Team` with activation state and update timestamps; preserve existing records and default existing/new organizations to enabled. Relax user placement constraints to support temporary nullable `manager_id` during leader vacancy while retaining zero-or-one active leader uniqueness.
+- [x] 1.2 Implement department/team detail and update behavior at `GET, PATCH /api/v1/admin/departments/{id}/` and `GET, PATCH /api/v1/admin/teams/{id}/`. Permit name/description edits or standalone activation updates, keep leaders/members read-only, keep team department immutable, and enforce active-descendant deactivation guards.
+- [x] 1.3 Implement employee filtering and detail/update behavior at `GET /api/v1/admin/users/` and `GET, PATCH /api/v1/admin/users/{id}/`. Support name/phone keyword, role, department, team, and activation filters; allow updates only to `business_role`, `department_id`, `team_id`, and `is_active`; exclude inactive assignment candidates.
+- [x] 1.4 Enforce zero-or-one active department manager and team leader, permit temporary vacancies, reject second active leaders, keep `manager_id` server-owned, and rebuild direct-report links after valid leader assignment.
+- [x] 1.5 Implement App self-service `PATCH /api/v1/app/me/` for `display_name`, phone in `username`, and `id_number`. Allow name and identity number to be submitted together or separately, persist a multi-field update atomically, update the unique phone login identifier, and reject role/organization/manager/activation writes.
+- [x] 1.6 Implement `POST /api/v1/app/me/password/` with current-password verification, confirmation match, configured password validators, password-change hashing, and secret redaction. Return only a success flag; use the current JWT lifetime without adding server-side multi-device revocation.
+- [x] 1.7 Implement the administrator audit entity/query and management-only dashboard boundaries. Record allowed organization/employee changes without plaintext passwords, full identity numbers, employee-log content, or business-task data.
+- [x] 1.8 Update `docs/backend/api-design.md`, `docs/backend/database-design.md`, and `docs/backend/account-provisioning.md`; update the relevant requirement and OpenSpec contracts. Verify migrations, API permissions, validation, atomicity, and redaction with backend tests and schema validation.
+
+## Backend post-merge corrections on `dev`
+
+- [x] 1.9 Preflight duplicate national IDs before migration 0008 writes hashes; preserve derived hashes on reverse migration and report only conflicting User IDs.
+- [x] 1.10 Include the company Founder in leader-link maintenance; rebuild direct reports when a leader is created, enabled, or assigned, and prevent a user from becoming their own manager.
+- [x] 1.11 Deny App login, token refresh, and App API access while the required active supervisor chain is incomplete; keep administrator access available.
+- [x] 1.12 Require an active parent department before enabling a team and reject a team rename that duplicates another team in that department.
+- [x] 1.13 Align API, database, requirements, OpenSpec, and account-provisioning documentation with the repaired behavior and migration safeguards.
+- [x] 1.14 Run backend tests and migration/API schema checks for the post-merge corrections; record the results before closing backend acceptance.
+- [x] 1.15 Normalize national ID values before storage and hashing; preflight and canonicalize existing values in migration 0010; verify case variants are rejected as duplicates.
+- [x] 1.16 Include blocking active team/member counts and sample names in department/team deactivation validation errors.
+- [x] 1.17 Add database-backed avatar bytes, detected MIME type, migration, self-scoped multipart upload/read/delete endpoints, and profile `avatar_url` without exposing avatars to Web administrators.
+- [x] 1.18 Update the backend API/database contracts, account-management requirements, and this OpenSpec change for cross-device avatar storage.
+
+## PR 2 — Web management (may proceed in parallel with Android after backend contract is set)
+
+- [x] 2.1 Add department/team detail screens and list activation controls. Keep details read-only for leaders, members, and team parent; allow editing name/description only. Display “无” when an organization has no active leader.
+- [x] 2.2 Add employee filters and detail display for name, phone, masked identity number, role, organization, and status. Allow only role, department/team placement, and activation changes, including a list switch for activation; do not add personal-data editing or password reset.
+- [x] 2.3 Add active-only employee and organization choices, show backend validation for leader conflicts and activation guards, and connect the management summary/audit view to their APIs without exposing tasks or employee logs.
+- [x] 2.4 Update `docs/web/account-management-ui.md`; verify the rendered field boundaries, list/detail interactions, and API request payloads.
+- [x] 2.5 Show backend write failures from create forms in persistent error dialogs, including leader uniqueness conflicts; display organization deactivation blocker details.
+
+## PR 3 — Android App self-service (may proceed in parallel with Web after backend contract is set)
+
+- [x] 3.1 Add a personal-profile form for the employee's own name, phone, and identity number; allow name and identity number to be saved together or independently in one form, with no automatic synchronization.
+- [x] 3.2 Show the identity number only in masked form when reading the profile; allow the employee to re-enter the full value to change it. Refresh displayed profile values after a successful update.
+- [x] 3.3 Add current-password, new-password, and confirmation inputs for self-service password change; show backend validation feedback and never persist the plaintext password.
+- [x] 3.4 Preserve the existing phone login request field `username`; after a phone update, verify subsequent login uses the new phone. Keep role, organization, manager, and activation read-only in the App.
+- [x] 3.5 Update `docs/android/account-login-ui.md`; verify profile edits, atomic name/identity updates, password validation, and phone login behavior.
+- [x] 3.6 After a successful phone-number or password change, clear the local App session and require the employee to sign in again with the updated credential.
+- [x] 3.7 Replace device-local avatar storage with authenticated upload and retrieval; show the account's server-stored avatar on profile screens across devices.
+- [x] 3.8 Display App tenure as `X年X个月X天` using calendar anniversaries and the existing account-created date; synchronize the requirement and OpenSpec contract without changing the API or database schema.
+
+## Acceptance across the three PRs
+
+- [ ] 4.1 Verify department/team activation guards, leader vacancy and uniqueness, role-placement rules, and inactive-candidate filtering end to end.
+- [ ] 4.2 Verify Web cannot change employee personal fields and App cannot change administrator-managed role/organization/status fields.
+- [ ] 4.3 Verify a combined name/identity update either saves both values or neither; verify single-field updates preserve the other value.
+- [ ] 4.4 Verify password values and full identity numbers never appear in prohibited responses, application logs, or audit records.
+- [ ] 4.5 Run strict OpenSpec validation, synchronize the main spec after implementation, and archive the change when all three PRs and acceptance checks are complete.

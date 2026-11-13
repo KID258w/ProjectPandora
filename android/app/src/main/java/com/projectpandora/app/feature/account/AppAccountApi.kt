@@ -1,0 +1,115 @@
+package com.projectpandora.app.feature.account
+
+import com.google.gson.annotations.SerializedName
+import okhttp3.MultipartBody
+import okhttp3.ResponseBody
+import retrofit2.Call
+import retrofit2.Response
+import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.Multipart
+import retrofit2.http.PATCH
+import retrofit2.http.POST
+import retrofit2.http.Part
+import retrofit2.http.PUT
+
+data class ApiEnvelope<T>(
+    val code: Int,
+    val message: String,
+    val data: T,
+    @SerializedName("requestId") val requestId: String,
+)
+
+data class LoginRequest(
+    val username: String,
+    val password: String,
+)
+
+data class ProfileUpdateRequest(
+    @SerializedName("display_name") val displayName: String? = null,
+    val username: String? = null,
+    @SerializedName("id_number") val idNumber: String? = null,
+)
+
+data class PasswordChangeRequest(
+    @SerializedName("current_password") val currentPassword: String,
+    @SerializedName("new_password") val newPassword: String,
+    @SerializedName("new_password_confirm") val newPasswordConfirm: String,
+)
+
+data class PasswordChangeResponse(
+    @SerializedName("password_changed") val passwordChanged: Boolean,
+)
+
+data class RefreshRequest(
+    val refresh: String,
+)
+
+data class TokenResponse(
+    val access: String,
+    val refresh: String? = null,
+)
+
+data class AppUserResponse(
+    val id: Long,
+    val username: String,
+    @SerializedName("account_type") val accountType: String,
+    @SerializedName("business_role") val businessRole: String,
+    @SerializedName("display_name") val displayName: String,
+    @SerializedName("department_id") val departmentId: Long?,
+    @SerializedName("department_name") val departmentName: String?,
+    @SerializedName("team_id") val teamId: Long?,
+    @SerializedName("team_name") val teamName: String?,
+    @SerializedName("manager_id") val managerId: Long?,
+    @SerializedName("manager_name") val managerName: String?,
+    @SerializedName("is_active") val isActive: Boolean,
+    @SerializedName("id_number_masked") val idNumberMasked: String? = null,
+    @SerializedName("account_created_date") val accountCreatedDate: String? = null,
+) {
+    fun toBusinessUser(): BusinessUser {
+        val roleLabel = when (businessRole) {
+            "founder" -> "创始人"
+            "department_manager" -> "部门经理"
+            "team_leader" -> "团队长"
+            "employee" -> "员工"
+            else -> "业务用户"
+        }
+        return BusinessUser(
+            account = username,
+            name = displayName.ifBlank { username },
+            role = roleLabel,
+            department = departmentName,
+            team = teamName,
+            supervisor = managerName,
+            idNumberMasked = idNumberMasked,
+            isActive = isActive,
+            accountCreatedDate = accountCreatedDate,
+        )
+    }
+}
+
+interface AppAccountApi {
+    @POST("api/v1/app/auth/token/")
+    suspend fun login(@Body request: LoginRequest): Response<ApiEnvelope<TokenResponse>>
+
+    @GET("api/v1/app/me/")
+    suspend fun currentUser(): Response<ApiEnvelope<AppUserResponse>>
+
+    @PATCH("api/v1/app/me/")
+    suspend fun updateCurrentUser(@Body request: ProfileUpdateRequest): Response<ApiEnvelope<AppUserResponse>>
+
+    @GET("api/v1/app/me/avatar/")
+    suspend fun currentAvatar(): Response<ResponseBody>
+
+    @Multipart
+    @PUT("api/v1/app/me/avatar/")
+    suspend fun updateAvatar(@Part avatar: MultipartBody.Part): Response<ResponseBody>
+
+    @POST("api/v1/app/me/password/")
+    suspend fun changePassword(@Body request: PasswordChangeRequest): Response<ApiEnvelope<PasswordChangeResponse>>
+}
+
+interface AppTokenRefreshApi {
+    @POST("api/v1/app/auth/token/refresh/")
+    fun refresh(@Body request: RefreshRequest): Call<ApiEnvelope<TokenResponse>>
+}
