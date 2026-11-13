@@ -1,29 +1,21 @@
 ## ADDED Requirements
 
-### Requirement: Home shows four role-appropriate panels
-The system SHALL provide four mobile Home panels: Company Important Items, Company Top Ten Tasks, Personal Daily Items, and Daily Greeting. The three business-data cards SHALL preview up to five authorized rows. The Personal Daily Items card SHALL show only items owned by the current account whose inclusive date range covers today and SHALL provide navigation to a separate personal calendar without a creation action on Home. The Daily Greeting card SHALL display one locally bundled short message and a kaomoji selected by date, without requesting business data.
+### Requirement: Home embeds the personal items calendar below company summaries
+The system SHALL show two equal-width company overview cards at the top of Home: Company Important Items and Company Top Ten Tasks. Below those cards, Home SHALL embed the full Personal Daily Items monthly calendar for the signed-in account. The Home header SHALL NOT show a personalized greeting, employee position/organization line, or current-date line. Home SHALL NOT display the previous Personal Daily Items preview card or Daily Greeting card.
 
-#### Scenario: User sees a stable daily greeting
-- **WHEN** an authenticated user opens Home on a given local date
-- **THEN** the Daily Greeting card shows the same bundled message and kaomoji throughout that date and remains display-only
-
-#### Scenario: User taps the daily greeting
-- **WHEN** the user taps the Daily Greeting card
-- **THEN** no navigation or business action occurs; the Logs tab remains the separate entry to logs
-
-#### Scenario: User opens Home with personal items
+#### Scenario: User opens Home
 - **WHEN** an authenticated mobile business user opens Home
-- **THEN** the Personal Daily Items card shows up to five of that account's items where start date is on or before today and end date is on or after today
+- **THEN** the two company overview cards appear above the user's personal monthly calendar, which can be reached by scrolling the Home page
 
-#### Scenario: User has no item covering today
-- **WHEN** the current account has no personal item whose date range covers today
-- **THEN** the Home card shows an empty state and does not provide a create button
+#### Scenario: User views an empty personal calendar on Home
+- **WHEN** the current account has no items in the displayed month
+- **THEN** Home shows the calendar's empty state and its create-item action without a separate navigation step
 
-#### Scenario: User opens the personal calendar from Home
-- **WHEN** the user opens the Personal Daily Items panel's view-all action
-- **THEN** the app opens the separate personal item calendar, not the company task list or company work view
+#### Scenario: User interacts with personal items on Home
+- **WHEN** the user selects a date or item in the embedded calendar
+- **THEN** the existing date-list, detail, edit, delete, and drag interactions are available directly from Home
 
-### Requirement: Home panels keep personal items outside company workflows
+### Requirement: Home calendar keeps personal items outside company workflows
 The system SHALL keep Personal Daily Items separate from Company Top Ten Tasks, task execution, log records, company work views, and employee operation-audit records.
 
 #### Scenario: User creates a personal item
@@ -34,7 +26,7 @@ The system SHALL keep Personal Daily Items separate from Company Top Ten Tasks, 
 Every authenticated App business role SHALL be able to create, view, edit, and delete personal daily items owned by the current account. Other accounts and Web management users SHALL NOT read or manage those items.
 
 #### Scenario: User views the personal calendar
-- **WHEN** an authenticated user opens the Personal Daily Items calendar
+- **WHEN** an authenticated user opens Home and scrolls to its Personal Daily Items calendar
 - **THEN** the app shows only items owned by the current account
 
 #### Scenario: Another user attempts to access an item
@@ -70,6 +62,21 @@ The personal calendar SHALL allow the user to tap its displayed year and month t
 - **WHEN** the user taps the calendar's year/month control, changes the year, and selects a month
 - **THEN** the month calendar updates to the selected year and month without opening another page
 
+### Requirement: Personal monthly calendar displays official calendar markers
+The personal monthly calendar SHALL display the same configured public-holiday, rest-day, and make-up-workday markers and visual treatment as the company monthly work view. Markers SHALL cover every date in the visible calendar grid, including adjacent-month dates. A named holiday SHALL take precedence over a generic rest-day label; ordinary weekends SHALL NOT be marked, and the app/backend SHALL NOT infer dates for years without configured official schedules.
+
+#### Scenario: User views a configured public holiday
+- **WHEN** the visible personal calendar grid includes a configured public holiday, rest day, or make-up workday
+- **THEN** its date cell shows the same marker as the company month view, including for adjacent-month dates, with a named holiday taking precedence over a generic rest label
+
+#### Scenario: User views an unconfigured year or ordinary weekend
+- **WHEN** the visible grid contains an unconfigured date or an ordinary weekend
+- **THEN** no holiday or make-up-work marker is shown for that date
+
+#### Scenario: User changes the displayed month
+- **WHEN** the user taps the year/month control and selects another year and month
+- **THEN** the personal calendar immediately loads that month's items and configured calendar markers
+
 ### Requirement: Crowded dates open a complete item list
 When a date contains more items than fit in its calendar cell, the calendar SHALL show the visible bars and a “+N项” affordance. Tapping either the date or the “+N项” affordance SHALL open a colored-card list of every owned item whose inclusive date range covers that date.
 
@@ -90,23 +97,21 @@ Tapping a personal item bar or its date-list card SHALL open a floating detail c
 
 #### Scenario: User edits an item from its detail popup
 - **WHEN** the owner selects edit and saves valid changes
-- **THEN** the app closes the editor and refreshes the Home preview, calendar bars, date list, and detail state from the updated item
+- **THEN** the app closes the editor and refreshes the embedded Home calendar, date list, and detail state from the updated item
 
 ### Requirement: Item deletion requires confirmation
-Deleting a personal item SHALL require explicit confirmation. A confirmed deletion SHALL remove it from the owner's Home preview, calendar, and date lists; dismissing the confirmation SHALL preserve it.
+Deleting a personal item SHALL require explicit confirmation. A confirmed deletion SHALL remove it from the owner's embedded Home calendar and date lists; dismissing the confirmation SHALL preserve it.
 
 #### Scenario: Owner confirms deletion
 - **WHEN** the owner confirms deletion in the confirmation dialog
-- **THEN** the item is absent from subsequent personal calendar, date-list, and Home views
+- **THEN** the item is absent from subsequent Home calendar and date-list views
 
 #### Scenario: Owner cancels deletion
 - **WHEN** the owner dismisses or cancels the deletion confirmation
 - **THEN** the item remains unchanged and visible in the owner's views
 
 ### Requirement: Dragging an item bar shifts its entire date range
-The owner SHALL be able to long-press and drag an item bar to another date. While dragging, the bar SHALL visibly lift and follow the pointer; on release it SHALL settle onto the target date with a clear motion cue. The drop date SHALL be computed from the date under the initial touch and the date under release. The app SHALL shift the start and end dates by the same day delta, preserving the inclusive duration; resizing is performed through the edit form.
-
-When the pointer enters the left or right edge zone while dragging, the calendar SHALL advance to the adjacent month in that direction with a smooth horizontal transition while keeping the drag active. Remaining in the edge zone SHALL continue advancing months at a controlled interval; leaving the zone or releasing SHALL stop edge navigation.
+The owner SHALL be able to long-press and drag an item bar to another date. The bar SHALL visibly follow the pointer and settle onto the target date on release. The app SHALL shift both endpoints by the same day delta, preserving the inclusive duration. Resizing SHALL use the edit form.
 
 #### Scenario: Owner moves a multi-day item
 - **WHEN** the owner drags the bar from date A to date B
@@ -116,9 +121,12 @@ When the pointer enters the left or right edge zone while dragging, the calendar
 - **WHEN** the owner needs to shorten or extend an item's date range
 - **THEN** the owner edits its start or end date in the item form instead of resizing the bar
 
-#### Scenario: Owner drags an item across a month boundary
-- **WHEN** the owner drags an item into the calendar's left or right edge zone
-- **THEN** the calendar smoothly switches to the adjacent month and keeps the item under drag so the owner can continue to a date in that month
+### Requirement: Dragging across a calendar edge navigates between months
+While an item is being dragged, entering a calendar edge zone SHALL smoothly advance to the adjacent month and keep the drag active. Remaining in the zone SHALL advance at a controlled interval. Leaving the zone or releasing the item SHALL stop edge navigation.
+
+#### Scenario: Owner continues dragging into an adjacent month
+- **WHEN** the owner keeps an item over the calendar's left or right edge zone while dragging
+- **THEN** the calendar advances month by month and the owner can drop the item on a date in the displayed month
 
 ### Requirement: Personal items do not repeat automatically
 Each created personal item SHALL remain a single item over its selected date range. The app SHALL NOT generate additional items from weekly, monthly, or other recurrence rules.

@@ -26,22 +26,26 @@
 
 ## 4. Production Android App
 
-- [x] 4.1 Replace the new App Home personal-focus panel with API-backed daily-item preview and route “查看全部” to the personal calendar.
-- [x] 4.2 Implement the personal month calendar using the existing company Month view's grid layout and styling conventions, with date-range API loading and quick year/month navigation.
+- [x] 4.1 Replace Home's personal-focus and greeting cards with the API-backed full personal items calendar embedded beneath the company summary cards.
+- [x] 4.2 Implement the embedded personal month calendar using the existing company Month view's grid layout and styling conventions, with date-range API loading and quick year/month navigation.
 - [x] 4.3 Implement date/+N full-day lists, colored item cards, and the detail popup using server item data.
 - [x] 4.4 Implement create/edit forms, ten palette samples, required/optional field validation, and confirmed deletion through the API.
 - [x] 4.5 Persist drag moves through the move endpoint while showing the entire bar following the pointer and retaining its original duration.
 - [x] 4.6 Handle loading, empty, retry, save/delete/move errors, and refresh Home/calendar state after successful mutations.
 - [x] 4.7 Switch months smoothly when a dragged item reaches either calendar edge and keep the drag active across the transition.
-- [x] 4.8 Replace the Home Recent Logs card with a locally rotated, display-only Daily Greeting card containing a kaomoji.
+- [x] 4.8 Remove the temporary Daily Greeting card and embed the complete daily-items experience directly in Home.
+- [x] 4.9 Return configured holiday/rest/make-up-workday markers with the personal calendar date-range response and show them using the company month-view marker style.
+- [x] 4.10 Confirm the personal calendar year/month control opens the shared quick selector and applies the selected year and month.
+- [x] 4.11 Remove the Home greeting, employee position/organization, and date text while retaining the notification action.
 
 ## 5. Integration and review
 
 - [x] 5.1 Verify fresh test-database migrations and backend check/test commands.
 - [x] 5.2 Build Android and run instrumented tests for Home preview/navigation, date list/detail, item creation, and long-press drag.
-- [ ] 5.3 Manually verify month navigation, adjacent-month bars, crowded dates, edit/delete, and multi-day dragging on the emulator.
+- [x] 5.3 Manually verify month navigation, adjacent-month bars, crowded dates, edit/delete, and multi-day dragging on the emulator.
 - [x] 5.4 Verify legacy personal-focus tables/data/routes remain untouched and the new Home flow does not display the old panel or call legacy routes.
 - [x] 5.5 Review the final diff for Web/audit/task/work-view scope leaks and validate this OpenSpec change.
 - [x] 5.6 Add instrumented coverage for dragging into both calendar edges and advancing to the adjacent month.
+- [x] 5.7 Synchronize the personal calendar holiday-marker response contract in the API document, product requirement, and OpenSpec.
 
-> Manual visual verification in 5.3 remains pending; the focused instrumented cases and the build pass on the available emulator.
+> Manual visual verification in 5.3 was completed on the emulator with no issues reported.

@@ -28,7 +28,7 @@ import java.util.TimeZone
 class PersonalDailyItemsUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    @Test fun homeReplacesPersonalFocusWithTodaysDailyItemsAndOpensCalendar() {
+    @Test fun homeEmbedsPersonalCalendarInsteadOfPreviewCards() {
         val api = DailyItemsFakeApi()
         compose.setContent {
             PandoraAppTheme {
@@ -36,9 +36,10 @@ class PersonalDailyItemsUiTest {
             }
         }
         compose.waitUntil(10_000) { compose.onAllNodesWithText("今天整理资料", substring = true).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("dashboard-card-每日事项").assertIsDisplayed().performClick()
         compose.waitUntil(10_000) { api.getRequests.any { it.first.endsWith("personal-items/") } }
         assertTrue(api.getRequests.last { it.first.endsWith("personal-items/") }.second.containsKey("start_date"))
+        compose.onNodeWithTag("personal-items-month-picker").performScrollTo().assertExists()
+        compose.onNodeWithTag("create-personal-daily-item").performScrollTo().assertExists()
         compose.onNodeWithText("个人十大重点工作").assertDoesNotExist()
     }
 

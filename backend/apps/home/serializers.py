@@ -125,8 +125,16 @@ class PersonalDailyItemCalendarRowSerializer(serializers.ModelSerializer):
         fields = ["id", "title", "start_date", "end_date", "color"]
 
 
+class PersonalCalendarDaySerializer(serializers.Serializer):
+    date = serializers.DateField()
+    day_type = serializers.ChoiceField(choices=("holiday", "rest_day", "makeup_workday"))
+    holiday_name = serializers.CharField(allow_null=True)
+    label = serializers.CharField()
+
+
 class PersonalDailyItemListSerializer(serializers.Serializer):
     items = PersonalDailyItemCalendarRowSerializer(many=True)
+    calendar_days = PersonalCalendarDaySerializer(many=True)
 
 
 class PersonalDailyItemDeletedSerializer(serializers.Serializer):

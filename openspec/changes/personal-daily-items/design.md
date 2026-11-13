@@ -30,8 +30,8 @@ Daily items remain separate from `Task`, logs, tag relations, company work-view 
 
 ### Android calendar and navigation
 
-- Replace the new-version Home panel content with API-backed daily-item summaries. Empty state has no create action; “查看全部” opens a separate personal month calendar.
-- Replace the Home “最近日志” card with a display-only “每日寄语”: show one locally bundled message and a kaomoji selected deterministically by date; the card does not respond to taps.
+- Keep two equal-width company summary cards at the top of Home, remove the Home greeting and employee position/date text, and embed the complete personal daily-items month calendar below them.
+- Remove the daily-items preview card and Daily Greeting card. Home's embedded calendar provides the existing create, date-list, detail, edit, delete, month-selection, holiday-marker, and drag interactions without a separate calendar navigation step.
 - Reuse or extract the visual and layout conventions from `feature/views/ViewsScreen.kt`'s month grid: seven weekday columns, date cells, grid spacing, business-date handling, and existing color/type styles. Keep daily-item fetching, colored bars, overflow list, edit/detail state, and drag callbacks specific to daily items; do not route them through company work-view APIs.
 - The calendar queries the visible grid's date bounds. Tapping a date or `+N项` opens all items covering that date as colored cards. Tapping a bar/card opens the detail popup.
 - Create/edit uses title, inclusive start/end dates, optional description, and all ten visible color samples. The selected date defaults both endpoints; otherwise use today.

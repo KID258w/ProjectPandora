@@ -10,10 +10,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
@@ -31,8 +33,8 @@ fun IdentityCard(
     allowAvatarChange: Boolean = false,
     showTenure: Boolean = false,
 ) {
-    val tenureDays = remember(showTenure, user.accountCreatedDate) {
-        if (showTenure) calculateTenureDays(user.accountCreatedDate) else null
+    val tenureLabel = remember(showTenure, user.accountCreatedDate) {
+        if (showTenure) calculateTenureLabel(user.accountCreatedDate) else null
     }
     Row(Modifier.fillMaxWidth().background(C.AmberPale, RoundedCornerShape(24.dp)).padding(20.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -42,28 +44,59 @@ fun IdentityCard(
             Text(user.role, fontSize = 14.sp, color = C.Muted)
             Text(user.organization, fontSize = 12.sp, color = C.Muted)
         }
-        if (tenureDays != null) {
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("任职天数", fontSize = 11.sp, color = C.Muted)
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(tenureDays.toString(), fontSize = 23.sp, fontWeight = FontWeight.Bold, color = C.Ink)
-                    Text("天", Modifier.padding(start = 2.dp, bottom = 3.dp), fontSize = 12.sp, color = C.Muted)
-                }
+        if (tenureLabel != null) {
+            Column(
+                Modifier.widthIn(max = 112.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text("任职时长", fontSize = 11.sp, color = C.Muted)
+                Text(
+                    tenureLabel,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = C.Ink,
+                    textAlign = TextAlign.End,
+                )
             }
         }
     }
 }
 
-private fun calculateTenureDays(accountCreatedDate: String?): Long? {
+private fun calculateTenureLabel(accountCreatedDate: String?): String? {
     if (accountCreatedDate.isNullOrBlank()) return null
+    val timeZone = TimeZone.getTimeZone("Asia/Shanghai")
     val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
         isLenient = false
-        timeZone = TimeZone.getTimeZone("Asia/Shanghai")
+        this.timeZone = timeZone
     }
     val createdDate = runCatching { dateFormat.parse(accountCreatedDate) }.getOrNull() ?: return null
     val today = runCatching { dateFormat.parse(dateFormat.format(Date())) }.getOrNull() ?: return null
-    return (TimeUnit.MILLISECONDS.toDays(today.time - createdDate.time) + 1).coerceAtLeast(1)
+    if (createdDate.after(today)) return null
+
+    val createdCalendar = Calendar.getInstance(timeZone, Locale.US).apply { time = createdDate }
+    val todayCalendar = Calendar.getInstance(timeZone, Locale.US).apply { time = today }
+    val calendarMonthDifference = (todayCalendar.get(Calendar.YEAR) - createdCalendar.get(Calendar.YEAR)) * 12 +
+        todayCalendar.get(Calendar.MONTH) - createdCalendar.get(Calendar.MONTH)
+    var completedMonths = calendarMonthDifference.coerceAtLeast(0)
+    if (calendarAnniversary(createdCalendar, completedMonths).after(todayCalendar)) {
+        completedMonths -= 1
+    }
+
+    val lastAnniversary = calendarAnniversary(createdCalendar, completedMonths)
+    val remainingDays = if (completedMonths == 0) {
+        TimeUnit.MILLISECONDS.toDays(today.time - createdDate.time) + 1
+    } else {
+        TimeUnit.MILLISECONDS.toDays(today.time - lastAnniversary.timeInMillis)
+    }.coerceAtLeast(0)
+    val years = completedMonths / 12
+    val months = completedMonths % 12
+    return "${years}年${months}个月${remainingDays}天"
 }
+
+private fun calendarAnniversary(start: Calendar, monthOffset: Int): Calendar =
+    (start.clone() as Calendar).apply { add(Calendar.MONTH, monthOffset) }
 
 @Composable
 fun PersonalInfoScreen(

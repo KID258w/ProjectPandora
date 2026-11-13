@@ -10,6 +10,7 @@ Issue #1 account-creation and phone-login residuals are complete. The remaining 
 - During any missing-leader interval, the backend denies App access for the affected organization subtree and restores access after rebuilding direct-report links. Require an active parent department before enabling a team, and an active direct leader before ordinary user placement or reactivation.
 - Allow an employee to update their own name, phone, identity number, and password in the App. Name and identity number share one editable profile form and may be saved together, while remaining independent fields; a phone change updates the login identifier stored in `username`.
 - Allow an employee to upload and replace their own profile avatar in the App. Store the image bytes on the account record so the avatar follows the account across devices; keep avatar administration out of Web.
+- Show account tenure in the App profile as a full calendar-based `X年X个月X天` duration using the existing account-creation date; preserve zero-valued units and the Asia/Shanghai date boundary.
 - Define the corresponding backend model, API, validation, authorization, and sensitive-data requirements. Continue to exclude business tasks and employee logs from administrator access.
 - Update the backend API/database/provisioning docs, requirements, Web and Android interface docs, and this OpenSpec change.
 

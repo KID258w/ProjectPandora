@@ -115,6 +115,25 @@ The system SHALL let an authenticated employee update only their own name, phone
 - **WHEN** an employee submits a business role, department, team, manager, or activation change from the App
 - **THEN** the system rejects those fields
 
+### Requirement: App profile displays calendar-based account tenure
+The App profile SHALL show tenure from `account_created_date` as `X年X个月X天`, including zero units. Use `Asia/Shanghai` dates and calendar anniversaries anchored to the account date; clamp a missing target day to month end. Show days elapsed after the latest completed monthly anniversary, except before the first month when the creation date counts as day one. Do not use fixed 30-day months or 365-day years.
+
+#### Scenario: The account creation date is today
+- **WHEN** the App displays the tenure on the account creation date
+- **THEN** it shows `0年0个月1天`
+
+#### Scenario: A month anniversary falls on a shorter month
+- **WHEN** an account was created on January 31 and the current date is the last day of February
+- **THEN** the App shows `0年1个月0天`
+
+#### Scenario: A leap-day annual anniversary falls in a non-leap year
+- **WHEN** an account was created on February 29, 2024 and the current date is February 28, 2025
+- **THEN** the App shows `1年0个月0天`
+
+#### Scenario: All duration units remain visible
+- **WHEN** an account has completed one year, two months, and fifteen additional days
+- **THEN** the App shows `1年2个月15天`
+
 ### Requirement: App employees manage a database-backed profile avatar
 The system SHALL allow an authenticated business user to upload, replace, and read only their own avatar. The system SHALL store the image bytes and detected MIME type on the user's database record, and all devices authenticated as that account SHALL read the same current avatar. Web administrators SHALL NOT manage employee avatars.
 

@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from apps.core.api import BusinessAPIView, StandardPagination, paginated_response
+from apps.tasks.china_calendar import calendar_days_for_range
 
 from .serializers import (HomePayloadSerializer, HomeTaskRowSerializer, PersonalFocusInputSerializer,
                           PersonalDailyItemDeletedSerializer, PersonalDailyItemListSerializer,
@@ -116,7 +117,7 @@ class PersonalDailyItemListCreateView(BusinessAPIView):
         tags=PERSONAL_ITEM_TAGS,
         summary="查询日期范围内的本人每日事项",
         operation_id="personal_daily_items_list",
-        description="返回与查询闭区间相交的全部事项，不分页，仅限当前 App 用户本人。",
+        description="返回与查询闭区间相交的全部本人事项及区间内已配置的法定节假日、调休工作日标记，不分页。",
         parameters=[
             OpenApiParameter("start_date", str, required=True, description="查询起始日，YYYY-MM-DD"),
             OpenApiParameter("end_date", str, required=True, description="查询结束日，YYYY-MM-DD"),
@@ -130,7 +131,10 @@ class PersonalDailyItemListCreateView(BusinessAPIView):
             start_date__lte=query["end_date"],
             end_date__gte=query["start_date"],
         ).order_by("start_date", "end_date", "id")
-        return Response({"items": PersonalDailyItemCalendarRowSerializer(items, many=True).data})
+        return Response({
+            "items": PersonalDailyItemCalendarRowSerializer(items, many=True).data,
+            "calendar_days": calendar_days_for_range(query["start_date"], query["end_date"]),
+        })
 
     @extend_schema(
         tags=PERSONAL_ITEM_TAGS,

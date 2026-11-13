@@ -30,7 +30,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
@@ -46,9 +45,6 @@ import com.projectpandora.app.core.network.*
 import com.projectpandora.app.feature.account.BusinessUser
 import com.projectpandora.app.ui.*
 import com.projectpandora.app.ui.theme.PandoraColors as C
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -98,7 +94,7 @@ fun HomeScreen(user: BusinessUser, api: BusinessApi, onTask: (Long) -> Unit, onL
             }
         }
     }
-    BackHandler(enabled = page in setOf("company-items", "company-top-tasks", "personal-focus", "personal-daily-items")) {
+    BackHandler(enabled = page in setOf("company-items", "company-top-tasks", "personal-focus")) {
         page = "home"
         reload++
     }
@@ -123,36 +119,23 @@ fun HomeScreen(user: BusinessUser, api: BusinessApi, onTask: (Long) -> Unit, onL
         FocusScreen(api, onBack = { page = "home"; reload++ }, onTask = onTask, reloadKey = reload + notificationRefreshKey)
         return
     }
-    if (page == "personal-daily-items") {
-        PersonalDailyItemsScreen(api, onBack = { page = "home"; reload++ })
-        return
-    }
-    val date = remember { SimpleDateFormat("M月d日 EEEE", Locale.SIMPLIFIED_CHINESE).format(Date()) }
     val companyItemRows = homeData?.array("company_items").orEmpty().take(5).map { item ->
         DashboardRow(item.string("title"))
     }
     val companyTaskRows = homeData?.array("company_top_tasks").orEmpty().take(5).map { task ->
         DashboardRow(taskPreview(task)) { onTask(task.long("id")) }
     }
-    val personalDailyItemRows = homeData?.array("personal_daily_items").orEmpty().take(5).map { item ->
-        DashboardRow(item.string("title"))
-    }
-    val dailyGreeting = remember(date) {
-        HOME_DAILY_GREETINGS[Math.floorMod(date.hashCode(), HOME_DAILY_GREETINGS.size)]
-    }
     val previewRowCount = listOf(
         companyItemRows.size,
         companyTaskRows.size,
-        personalDailyItemRows.size,
     ).maxOrNull()?.coerceAtLeast(1) ?: 1
     val contentBasedCardHeight = (70 + previewRowCount * 24).dp
     val cardHeight = contentBasedCardHeight.coerceAtLeast(136.dp)
     val retryHome = { reload++ }
     PageColumn {
-        BrandHeader()
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            PageTitle("你好，${user.name}", small = true)
-            Box(Modifier.size(48.dp)) {
+        Box(Modifier.fillMaxWidth()) {
+            BrandHeader()
+            Box(Modifier.align(androidx.compose.ui.Alignment.CenterEnd).size(48.dp)) {
                 IconButton(
                     onClick = { page = "notifications" },
                     modifier = Modifier.align(androidx.compose.ui.Alignment.Center).testTag("task_notifications").semantics {
@@ -174,7 +157,6 @@ fun HomeScreen(user: BusinessUser, api: BusinessApi, onTask: (Long) -> Unit, onL
                 }
             }
         }
-        Text(user.organization + "  " + date, fontSize = 12.sp, color = C.Muted)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             DashboardCard(
                 title = "事件纪", rows = companyItemRows, loading = homeLoading, error = homeError,
@@ -189,70 +171,7 @@ fun HomeScreen(user: BusinessUser, api: BusinessApi, onTask: (Long) -> Unit, onL
                 onClick = { if (homeError.isNotBlank()) retryHome() else page = "company-top-tasks" },
             )
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            DashboardCard(
-                title = "每日事项", rows = personalDailyItemRows, loading = homeLoading, error = homeError,
-                emptyText = "今天没有安排的事项", pale = C.TealPale, accent = C.Teal,
-                action = "查看全部 ›", modifier = Modifier.weight(1f), cardHeight = cardHeight,
-                onClick = { if (homeError.isNotBlank()) retryHome() else page = "personal-daily-items" },
-            )
-            DailyGreetingCard(
-                greeting = dailyGreeting,
-                dateLabel = date,
-                modifier = Modifier.weight(1f),
-                cardHeight = cardHeight,
-            )
-        }
-    }
-}
-
-private data class HomeDailyGreeting(val sentence: String, val kaomoji: String)
-
-private val HOME_DAILY_GREETINGS = listOf(
-    HomeDailyGreeting("今天也按自己的节奏，一步一步来。", "(ง •̀_•́)ง"),
-    HomeDailyGreeting("忙里偷闲，记得给自己一点奖励。", "(๑•̀ㅂ•́)و✧"),
-    HomeDailyGreeting("小小的进步，也值得为自己鼓掌。", "(｡•̀ᴗ-)✧"),
-    HomeDailyGreeting("先喝口水，再继续发光吧。", "(๑˃̵ᴗ˂̵)و"),
-    HomeDailyGreeting("今天的你，也在认真地前进。", "(｡•́‿•̀｡)"),
-    HomeDailyGreeting("事情一件件做，心情慢慢变好。", "(っ´▽`)っ"),
-    HomeDailyGreeting("累了就歇一会儿，你已经很棒啦。", "(づ｡◕‿‿◕｡)づ"),
-    HomeDailyGreeting("愿今天有好消息，也有好心情。", "(๑´ㅂ`๑)"),
-)
-
-@Composable
-private fun DailyGreetingCard(
-    greeting: HomeDailyGreeting,
-    dateLabel: String,
-    modifier: Modifier,
-    cardHeight: androidx.compose.ui.unit.Dp,
-) {
-    Column(
-        modifier.height(cardHeight)
-            .background(C.VioletPale, RoundedCornerShape(20.dp))
-            .border(1.dp, C.Violet.copy(alpha = 0.13f), RoundedCornerShape(20.dp))
-            .testTag("dashboard-card-每日寄语")
-            .padding(12.dp),
-    ) {
-        Text("每日寄语", fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold, color = C.Violet)
-        Column(
-            Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-        ) {
-            Text(
-                greeting.sentence,
-                Modifier.fillMaxWidth(),
-                fontSize = 12.sp,
-                lineHeight = 17.sp,
-                color = C.Ink,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(3.dp))
-            Text(greeting.kaomoji, fontSize = 16.sp, lineHeight = 20.sp, color = C.Violet)
-        }
-        Text(dateLabel, fontSize = 10.sp, color = C.Muted, maxLines = 1)
+        PersonalDailyItemsScreen(api, onBack = {}, embedded = true)
     }
 }
 

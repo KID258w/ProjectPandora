@@ -10,7 +10,7 @@
 
 > **Issue #21 后端实施更新**：第 3.2、4.4 节所列任务、审批、进展、提交/验收、取消、组织候选人与站内通知接口已实现。任务创建、进展和完成提交返回 `201`，其他写操作返回 `200`。任务摘要和详情增加可空的 `estimated_start_at`，表示预计开始时间；普通及下属任务列表支持按预计开始日期与截止日期的起止范围筛选，日期边界均包含在内。未填写预计开始时间的任务不匹配预计开始日期范围筛选。默认仅返回活动任务。通知列表只读取，不自动标记已读；用户点击单条通知时，客户端将该通知 ID 送至 `mark-read/`；打开或浏览通知列表不会自动标记已读。任务详情返回创建人/负责人、状态、标签、审批历史、进展和提交记录；无权访问的详情返回 `404`。任务定义变更历史不保存密码等身份资料。
 
-> **Issue #8 每日事项后端实施更新**：新增用户隔离的个人每日事项表与 `/api/v1/app/personal-items/` 列表、创建、详情、编辑、删除和拖动接口；首页通过 `GET /api/v1/app/home/` 返回最多五条日期范围覆盖业务时区今天的本人事项。该功能不接入公司任务、标签关联、日志、工作视图或审计。首页旧“个人十大重点”相关字段、接口和数据保留兼容，不会自动转换成每日事项；新 App 使用每日事项面板。
+> **Issue #8 每日事项后端实施更新**：新增用户隔离的个人每日事项表与 `/api/v1/app/personal-items/` 列表、创建、详情、编辑、删除和拖动接口；列表接口同时返回请求日期范围内复用公司工作视图数据源的 `calendar_days`。首页通过 `GET /api/v1/app/home/` 返回最多五条日期范围覆盖业务时区今天的本人事项。该功能不接入公司任务、标签关联、日志或审计。首页旧“个人十大重点”相关字段、接口和数据保留兼容，不会自动转换成每日事项；新 App 使用每日事项面板。
 
 > 维护说明：由项目统筹与后端同学共同维护，作为 API 设计的持续文档。接口路径、字段名和错误格式可随开发协商调整。  
 > 依据：`docs/requirements/01` 至 `09`、`docs/cooperate/swagger-guide.md` 与当前 Django 骨架。需求变化时以最新确认的需求为准。
@@ -38,14 +38,14 @@
 | App 工作视图 | `GET /api/v1/app/work-views/month/`、`GET /api/v1/app/work-views/week/`、`GET /api/v1/app/work-views/day/` |
 | App 每日事项（Issue #8） | `GET, POST /api/v1/app/personal-items/`、`GET, PATCH, DELETE /api/v1/app/personal-items/{id}/`、`POST /api/v1/app/personal-items/{id}/move/` |
 | 公司重要事项管理（管理端） | `GET, POST /api/v1/admin/company-items/`、`GET, PATCH /api/v1/admin/company-items/{id}/`、`POST .../publish/`、`POST .../offline/`、`PUT .../order/`、`POST .../attachments/`、`DELETE .../attachments/{attachment_id}/` |
-| App 首页四面板与公司事项 | `GET /api/v1/app/home/`、`GET /api/v1/app/company-items/`、`GET /api/v1/app/company-items/{id}/`、`GET /api/v1/app/home/company-top-tasks/`、`GET, PUT /api/v1/app/home/personal-focus/`、`GET .../personal-focus/candidates/` |
+| App 首页数据与公司事项 | `GET /api/v1/app/home/`、`GET /api/v1/app/company-items/`、`GET /api/v1/app/company-items/{id}/`、`GET /api/v1/app/home/company-top-tasks/`、`GET, PUT /api/v1/app/home/personal-focus/`、`GET .../personal-focus/candidates/` |
 | OpenAPI Schema / Swagger UI / ReDoc | `/api/schema/`、`/api/docs/`、`/api/redoc/` |
 
 Issue #8 已实现路由：`GET, POST /api/v1/app/personal-items/`、`GET, PATCH, DELETE /api/v1/app/personal-items/{id}/`、`POST /api/v1/app/personal-items/{id}/move/`；现有 `GET /api/v1/app/home/` 响应增加 `personal_daily_items`。旧个人重点字段、路由和数据在兼容期内保留。
 
 下文 `/api/v1/...` 中 Issue #6 的认证、me、部门/团队/用户列表与创建已实现；Issue #15 的部门/团队详情与启停、员工筛选与身份/组织调整、管理概况、Web 管理员操作审计及 App 个人资料与密码已实现（契约见 2.1）；Issue #20 的日志和标签接口、Issue #21 的任务、审批、通知接口、Issue #22 的公司重要事项、首页四面板与个人重点接口，以及 Issue #30 的员工 App 操作审计（见 2.2）均已实现。
 
-需求 09 的每日事项接口与首页预览已由 Issue #8 实现。它替换首页旧个人重点面板的数据用途，但不复用旧表，也不自动迁移旧个人重点数据。
+需求 09 的每日事项接口与首页内嵌月历已由 Issue #8 实现。月历由每日事项日期范围接口读取；`GET /api/v1/app/home/` 中保留的 `personal_daily_items` 是兼容摘要，不是首页完整月历的数据源。每日事项替代首页旧个人重点面板的数据用途，但不复用旧表，也不自动迁移旧个人重点数据。
 
 事项附件后端实现约定（Issue #22）：管理端 `POST .../attachments/` 使用 `multipart/form-data`，字段名 `file`；开发环境文件写入 `MEDIA_ROOT`（默认 `backend/media/`）并由 Django 在 `DEBUG` 下提供 `/media/` 访问，正式部署须改为对象存储或由反向代理提供持久化目录。默认上限 10 MB，类型白名单为 PDF、PNG/JPEG、纯文本、Word、Excel，可用环境变量 `COMPANY_ITEM_ATTACHMENT_MAX_BYTES` 与 `COMPANY_ITEM_ATTACHMENT_MIME_TYPES` 覆盖。该能力及管理端上传/删除 API 保留在后端，但当前 Web 页面和 App 公司事项流程均不提供附件入口；App 正文接口不返回附件元数据或 URL。未来如需增加公司事项详情页及附件上传/下载，另行确认客户端需求和文件访问规则。当前任务模块的材料字段是文字说明，不包含文件附件；如需任务附件，应作为任务模块的独立需求设计上传/下载接口和存储规则。
 | App 组织关系 | `GET /api/v1/app/organization/tree/`、`GET /api/v1/app/organization/members/{id}/`、`GET /api/v1/app/organization/members/{id}/avatar/` |
@@ -119,7 +119,7 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 - 新建、启用或转入一个岗位时，其必需的直属负责人必须已启用；任命负责人填补本级空缺时，也必须满足该候选人自身的直属负责人要求。停用组织前仍有启用下级对象时拒绝停用，并在校验错误中返回阻塞对象类型、数量及最多五个对象名称；Web 应将该错误完整显示给管理员。已停用员工、部门和团队不得作为身份/归属选择器的候选项；管理列表仍可筛选、查看及重新启用。
 - 团队重新启用时所属部门必须启用；团队改名不能与同部门其他团队重名，冲突返回名称字段校验错误。
 - 身份证号在所有业务账号中全局唯一，停用账号仍占用身份证号。创建和 App 修改时，后端去除首尾空格并将字母统一为大写后再保存和计算唯一哈希，因此末位 `x` 与 `X` 视为同一号码。迁移 0008 回填前检查原始历史重复值；迁移 0010 在规范化前检查大小写/空格规范化后重复的历史值，均只报告冲突账号 ID、不输出身份证号明文，解决冲突后方可重跑迁移。回退数据迁移保留哈希数据，避免暂时失去唯一性校验。
-- App `GET /api/v1/app/me/` 不返回完整身份证号，并返回 `account_created_date`（账号创建日期，按 `Asia/Shanghai` 时区序列化），供 App 个人页计算任职天数。`PATCH /api/v1/app/me/` 允许员工本人修改 `display_name`、手机号（请求字段仍为 `username`，成功后更新登录标识）和 `id_number`，不接受身份、组织、直属上级或启用状态。姓名和身份证号可在同一请求中一起提交，也可分别修改；两者作为一个事务保存，任一字段校验失败时均不更新。手机号更新成功后，App 清除本机登录会话并返回登录页，提示员工使用新手机号重新登录。员工本人通过 `POST /api/v1/app/me/password/` 修改密码，提交当前密码、新密码和新密码确认；MVP 不要求短信验证，密码找回流程未定。密码更新成功后，App 清除本机登录会话并要求员工使用新密码重新登录；服务端不主动撤销已签发令牌，它们仍按现有有效期处理。
+- App `GET /api/v1/app/me/` 不返回完整身份证号，并返回 `account_created_date`（账号创建日期，按 `Asia/Shanghai` 时区序列化），供 App 个人页以账号创建日期为起算日，按 Asia/Shanghai 日历周年算法计算并显示完整的“X年X个月X天”任职时长；字段结构保持不变。`PATCH /api/v1/app/me/` 允许员工本人修改 `display_name`、手机号（请求字段仍为 `username`，成功后更新登录标识）和 `id_number`，不接受身份、组织、直属上级或启用状态。姓名和身份证号可在同一请求中一起提交，也可分别修改；两者作为一个事务保存，任一字段校验失败时均不更新。手机号更新成功后，App 清除本机登录会话并返回登录页，提示员工使用新手机号重新登录。员工本人通过 `POST /api/v1/app/me/password/` 修改密码，提交当前密码、新密码和新密码确认；MVP 不要求短信验证，密码找回流程未定。密码更新成功后，App 清除本机登录会话并要求员工使用新密码重新登录；服务端不主动撤销已签发令牌，它们仍按现有有效期处理。
 - App `GET /api/v1/app/me/` 和 `PATCH /api/v1/app/me/` 响应还包含当前账号的 `avatar_url`（未设置时为 `null`）。头像接口 `GET, PUT /api/v1/app/me/avatar/` 仅允许业务账号操作令牌所属账号；头像由 App 上传到用户数据库行，读取返回原始图片二进制，PUT 为 multipart 上传并替换头像。它不是 JSON envelope 响应；格式和大小限制见下方契约。Web 管理员不获得头像读写能力。
 
 ### 2.2 员工 App 操作审计契约（Issue #30 已实现）
@@ -185,8 +185,8 @@ Issue #1 的账号创建对齐已实现：`POST /api/v1/admin/users/` 使用 `us
 | `PATCH /api/v1/app/me/` | 员工本人修改姓名、手机号、身份证号；手机号更新现有 `username` 登录标识 |
 | `GET, PUT /api/v1/app/me/avatar/` | 读取、上传或替换当前业务用户自己的头像；图片二进制存入账号数据库记录 |
 | `POST /api/v1/app/me/password/` | 员工本人验证当前密码后修改密码；不提供 Web 重置入口 |
-| `GET /api/v1/app/home/` | 返回首页四大面板摘要（每卡最多 5 条）及任务通知未读数；`personal_daily_items` 只含日期范围覆盖今天的本人事项摘要 |
-| `GET /api/v1/app/personal-items/?start_date=&end_date=` | 返回当前账号在闭区间日期范围内的每日事项；按范围相交筛选，返回全部结果供月历完整绘制，不分页 |
+| `GET /api/v1/app/home/` | 返回首页公司事项、任务及兼容摘要字段与任务通知未读数；最新 App 使用 `company_items`、`company_top_tasks` 展示上方概览卡片，并通过每日事项列表接口加载完整月历 |
+| `GET /api/v1/app/personal-items/?start_date=&end_date=` | 返回当前账号在闭区间日期范围内的每日事项，以及该区间内已配置的法定节假日、休息日和调休上班标记；事项按范围相交筛选，返回全部结果供月历完整绘制，不分页 |
 | `POST /api/v1/app/personal-items/` | 创建本人每日事项；归属人从令牌确定，不接受客户端传入 `owner_id` |
 | `GET /api/v1/app/personal-items/{id}/` | 查看本人每日事项详情；返回说明及完整事项字段 |
 | `PATCH /api/v1/app/personal-items/{id}/` | 部分更新本人事项标题、日期范围、说明或预设颜色；校验更新后的完整日期范围 |
@@ -1404,7 +1404,7 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 }
 ```
 
-最新 App 的四个面板分别使用 `company_items`、`company_top_tasks`、`personal_daily_items` 和 `recent_logs`，每个面板最多返回 5 条摘要。`personal_daily_items` 仅含当前账号、且其闭区间日期范围覆盖服务端业务时区今天的事项，按开始日、结束日、ID 升序排列，只返回 `id` 和 `title`；没有符合事项时返回空数组。`recent_logs` 只含当前用户已提交日志，按日期倒序，不含草稿。公司重要事项对所有 App 用户相同；任务和日志字段按当前用户权限返回。`unread_notification_count` 供任务铃铛显示红点，通知列表仍通过独立通知接口读取。`personal_focus_tasks` 是旧版兼容字段，保留期间只供旧客户端使用，新 App 不显示该旧面板。
+`GET /api/v1/app/home/` 返回首页公司事项、任务、个人事项摘要及通知未读数。最新 App 上方只使用 `company_items` 和 `company_top_tasks` 显示两个概览卡片；首页下方的每日事项月历通过 `GET /api/v1/app/personal-items/?start_date=&end_date=` 加载完整可见日期范围。`personal_daily_items` 仍作为兼容摘要字段，仅含当前账号且日期范围覆盖服务端业务时区今天的事项，按开始日、结束日、ID 升序排列，只返回 `id` 和 `title`。`recent_logs` 只含当前用户已提交日志，按日期倒序，不含草稿；它们不再组成最新 App 首页卡片。公司重要事项对所有 App 用户相同；任务和日志字段按当前用户权限返回。`unread_notification_count` 供任务铃铛显示红点，通知列表仍通过独立通知接口读取。`personal_focus_tasks` 是旧版兼容字段，保留期间只供旧客户端使用。
 
 `GET /api/v1/app/home/` 不创建每日事项，也不对每日事项执行首次初始化。旧 `personal_focus_tasks` 的首次预填仅属于弃用的兼容功能，不影响 `personal_daily_items`。
 
@@ -1434,6 +1434,11 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
         "end_date": "2026-10-31",
         "color": "#FFE59E"
       }
+    ],
+    "calendar_days": [
+      {"date": "2026-10-01", "day_type": "holiday", "holiday_name": "国庆节", "label": "国庆"},
+      {"date": "2026-10-02", "day_type": "rest_day", "holiday_name": "国庆节", "label": "休"},
+      {"date": "2026-10-10", "day_type": "makeup_workday", "holiday_name": null, "label": "班"}
     ]
   },
   "requestId": "<uuid>"
@@ -1441,6 +1446,8 @@ Issue2 不提供 `POST /api/v1/admin/users/{id}/reset-password/`。员工密码�
 ```
 
 返回满足 `start_date <= 查询 end_date AND end_date >= 查询 start_date` 的本人事项；返回该日期区间内所有相交事项，不分页，以免月历无法准确计算“+N项”和完整绘制跨周任务条。结果按 `start_date`、`end_date`、`id` 升序排列；列表响应不含说明正文，点击事项后由详情接口读取。
+
+`calendar_days` 使用与公司工作视图相同的版本化节假日安排，覆盖请求闭区间；月历客户端应以完整可见周网格的首尾日期发起请求，从而也能标注相邻月份日期。字段结构与工作视图相同；不在普通周末生成标记，也不推算未配置年份的日期。
 
 #### POST /api/v1/app/personal-items/
 

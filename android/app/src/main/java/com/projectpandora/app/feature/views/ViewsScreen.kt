@@ -402,7 +402,7 @@ internal fun weekSegments(cells: List<JsonObject?>): List<MonthSegment> {
 }
 
 @Composable
-private fun HolidayMarker(marker: JsonObject) {
+internal fun HolidayMarker(marker: JsonObject) {
     val type = marker.string("day_type")
     val (backgroundColor, textColor, description) = when (type) {
         "holiday" -> Triple(Color(0xffFDECE8), Color(0xffA95E50), "法定节假日")

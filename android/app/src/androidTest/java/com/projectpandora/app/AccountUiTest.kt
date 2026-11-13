@@ -38,7 +38,7 @@ class AccountUiTest {
         compose.onNodeWithTag("password").performTextInput(TestUsers.PASSWORD)
         compose.onNodeWithText("登录", useUnmergedTree = true).performScrollTo().performClick()
         compose.waitUntil(10000) {
-            compose.onAllNodesWithText("你好，${TestUsers.byAccount(account).name}").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithTag("task_notifications").fetchSemanticsNodes().isNotEmpty()
         }
     }
 
@@ -94,7 +94,7 @@ class AccountUiTest {
         compose.onNodeWithTag("retry_session_validation").assertIsDisplayed().performClick()
         compose.onNodeWithText(AccountMessages.SESSION_CHECK).assertIsDisplayed()
         compose.onNodeWithTag("retry_session_validation").assertIsDisplayed().performClick()
-        compose.onNodeWithText("你好，陈宁").assertIsDisplayed()
+        compose.onNodeWithTag("task_notifications").assertExists()
         assertTrue(repository.hasStoredSession())
     }
 
@@ -133,9 +133,9 @@ class AccountUiTest {
     @Test fun savedSessionStartsAtHomeAndAllTabsNavigate() {
         repository.seed(TestUsers.EMPLOYEE)
         start()
-        compose.onNodeWithText("你好，陈宁").assertExists()
+        compose.onNodeWithTag("task_notifications").assertExists()
         listOf("公司", "日志", "AI地图", "我的", "首页").forEach { compose.onNodeWithText(it).performClick() }
-        compose.onNodeWithText("你好，陈宁").assertIsDisplayed()
+        compose.onNodeWithTag("task_notifications").assertExists()
         compose.onNodeWithText("公司").performClick()
         compose.onNodeWithTag("task-center-entry").performClick()
         compose.onNodeWithText("‹ 返回").performClick()

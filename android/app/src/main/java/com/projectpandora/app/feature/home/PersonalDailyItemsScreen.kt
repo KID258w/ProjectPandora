@@ -57,6 +57,7 @@ import com.projectpandora.app.core.network.string
 import com.projectpandora.app.feature.tags.TagColorPalette
 import com.projectpandora.app.feature.tags.tagColor
 import com.projectpandora.app.feature.views.MONTH_WEEKDAYS
+import com.projectpandora.app.feature.views.HolidayMarker
 import com.projectpandora.app.feature.views.MonthPicker
 import com.projectpandora.app.feature.views.PeriodArrow
 import com.projectpandora.app.feature.views.businessCalendar
@@ -76,10 +77,11 @@ private const val PERSONAL_ITEMS_API = "api/v1/app/personal-items/"
 private const val DAILY_ITEM_VISIBLE_BARS = 3
 private const val DAY_MILLIS = 86_400_000L
 @Composable
-internal fun PersonalDailyItemsScreen(api: BusinessApi, onBack: () -> Unit) {
+internal fun PersonalDailyItemsScreen(api: BusinessApi, onBack: () -> Unit, embedded: Boolean = false) {
     var selectedMonth by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var reload by remember { mutableIntStateOf(0) }
     var items by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    var calendarDays by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
@@ -112,7 +114,7 @@ internal fun PersonalDailyItemsScreen(api: BusinessApi, onBack: () -> Unit) {
         }
     }
 
-    BackHandler { onBack() }
+    if (!embedded) BackHandler { onBack() }
 
     LaunchedEffect(visibleStart, visibleEnd, reload) {
         loading = true
@@ -123,6 +125,7 @@ internal fun PersonalDailyItemsScreen(api: BusinessApi, onBack: () -> Unit) {
                 mapOf("start_date" to visibleStart, "end_date" to visibleEnd),
             ).data()
             items = payload.array("items")
+            calendarDays = payload.array("calendar_days")
         } catch (failure: Exception) {
             error = failure.businessMessage()
         } finally {
@@ -226,15 +229,27 @@ internal fun PersonalDailyItemsScreen(api: BusinessApi, onBack: () -> Unit) {
         )
     }
 
-    Column(Modifier.fillMaxSize().background(Color.White)) {
-        Row(
-            Modifier.fillMaxWidth().padding(start = 8.dp, end = 20.dp, top = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BackButton(onBack)
-            Column(Modifier.weight(1f).padding(start = 8.dp)) {
-                Text("每日事项", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = C.Ink)
-                Text("只属于你的备忘日历", fontSize = 12.sp, color = C.Muted)
+    Column(
+        (if (embedded) Modifier.fillMaxWidth() else Modifier.fillMaxSize()).background(Color.White),
+    ) {
+        if (embedded) {
+            Text(
+                "每日事项",
+                Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = C.Ink,
+            )
+        } else {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 8.dp, end = 20.dp, top = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BackButton(onBack)
+                Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                    Text("每日事项", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = C.Ink)
+                    Text("只属于你的备忘日历", fontSize = 12.sp, color = C.Muted)
+                }
             }
         }
         Row(
@@ -306,7 +321,12 @@ internal fun PersonalDailyItemsScreen(api: BusinessApi, onBack: () -> Unit) {
                 TextButton(onClick = { reload++ }) { Text("重试") }
             }
         }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        val calendarModifier = if (embedded) {
+            Modifier.fillMaxWidth().height(470.dp)
+        } else {
+            Modifier.weight(1f).fillMaxWidth()
+        }
+        Box(calendarModifier) {
             Image(
                 painterResource(R.drawable.pandora_footer_art),
                 contentDescription = null,
@@ -316,6 +336,7 @@ internal fun PersonalDailyItemsScreen(api: BusinessApi, onBack: () -> Unit) {
                 current = current,
                 weeks = weeks,
                 items = items,
+                calendarDays = calendarDays,
                 loading = loading,
                 onDate = { selectedDate = it },
                 onOpenItem = ::openItem,
@@ -415,6 +436,7 @@ private fun PersonalDailyItemsMonthGrid(
     current: Calendar,
     weeks: List<List<Calendar>>,
     items: List<JsonObject>,
+    calendarDays: List<JsonObject>,
     loading: Boolean,
     onDate: (String) -> Unit,
     onOpenItem: (JsonObject) -> Unit,
@@ -441,6 +463,7 @@ private fun PersonalDailyItemsMonthGrid(
     val scope = rememberCoroutineScope()
     val selectedMonth = current.get(Calendar.MONTH)
     val selectedYear = current.get(Calendar.YEAR)
+    val holidaysByDate = remember(calendarDays) { calendarDays.associateBy { it.string("date") } }
     val monthKey = current.get(Calendar.YEAR) * 12 + current.get(Calendar.MONTH)
     var previousMonthKey by remember { mutableIntStateOf(monthKey) }
     val monthSlideOffset = remember { Animatable(0f) }
@@ -627,6 +650,17 @@ private fun PersonalDailyItemsMonthGrid(
                                         color = if (inMonth || today) C.Ink else Color(0xffB6BBC4),
                                     )
                                 }
+                            }
+                        }
+                    }
+                    week.forEachIndexed { column, day ->
+                        holidaysByDate[date(day)]?.let { marker ->
+                            Box(
+                                Modifier.offset(x = cellWidth * column + 2.dp, y = 3.dp)
+                                    .width(cellWidth - 6.dp),
+                                contentAlignment = Alignment.CenterEnd,
+                            ) {
+                                HolidayMarker(marker)
                             }
                         }
                     }

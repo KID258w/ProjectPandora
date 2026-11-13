@@ -39,6 +39,7 @@
 - [x] 3.5 Update `docs/android/account-login-ui.md`; verify profile edits, atomic name/identity updates, password validation, and phone login behavior.
 - [x] 3.6 After a successful phone-number or password change, clear the local App session and require the employee to sign in again with the updated credential.
 - [x] 3.7 Replace device-local avatar storage with authenticated upload and retrieval; show the account's server-stored avatar on profile screens across devices.
+- [x] 3.8 Display App tenure as `X年X个月X天` using calendar anniversaries and the existing account-created date; synchronize the requirement and OpenSpec contract without changing the API or database schema.
 
 ## Acceptance across the three PRs
 
