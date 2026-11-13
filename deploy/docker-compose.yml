@@ -1,0 +1,60 @@
+# Pandora 生产编排：后端（Gunicorn）+ Web（Nginx 静态与反代）
+# 用法：在服务器 ${DEPLOY_PATH}（默认 /opt/pandora）下执行
+#   IMAGE_TAG=<tag> docker compose pull && IMAGE_TAG=<tag> docker compose up -d
+# 自动部署由 .github/workflows/cd-deploy.yml → deploy/remote-deploy.sh 调用。
+# 同目录的 .env 由运维一次性创建（参考 deploy/.env.example），不进 Git。
+name: pandora
+
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/kid258w/projectpandora/backend}:${IMAGE_TAG:-latest}
+    env_file:
+      - .env
+    volumes:
+      # SQLite（/data/db.sqlite3）、附件（/data/media）、迁移备份（/data/backups）
+      - pandora-data:/data
+      # collectstatic 产物，共享给 web 容器的 /static/
+      - pandora-static:/srv/static
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health/',timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/kid258w/projectpandora/web}:${IMAGE_TAG:-latest}
+    ports:
+      - "${WEB_PORT:-80}:80"
+    volumes:
+      - pandora-static:/srv/static:ro
+      - pandora-data:/data:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pandora-data:
+  pandora-static:

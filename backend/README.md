@@ -35,6 +35,11 @@ Linux/Docker 生产运行入口预留为 Gunicorn：
 gunicorn config.wsgi:application --bind 0.0.0.0:8000
 ```
 
+容器化部署（推荐）由 `backend/Dockerfile` + `backend/docker-entrypoint.sh` 完成：
+启动时先备份 `/data/db.sqlite3`（保留 7 份），再执行 `migrate`、`collectstatic`，最后启动 Gunicorn。
+相关环境变量（`SQLITE_PATH`、`DJANGO_MEDIA_ROOT`、`DJANGO_STATIC_ROOT`、`GUNICORN_WORKERS`）见 `../deploy/.env.example`，
+完整部署流程见 `../docs/cicd/server-deploy.md`。
+
 部署前需设置正式 `DJANGO_SECRET_KEY`、关闭 `DJANGO_DEBUG`，并为 SQLite 数据文件配置持久化存储；正式环境再按部署方案切换到 MySQL。
 
 ## 当前骨架包含

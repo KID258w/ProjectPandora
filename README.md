@@ -10,7 +10,7 @@ Project Pandora 旨在为企业内部工作提供任务创建与派发、上级�
 | Android UI 原型 | Kotlin、Jetpack Compose | `demo/` | 用于与甲方沟通和验证界面，不等同于正式 App |
 | Web 管理端 | Vue 3、Vite、Element Plus、Axios | `web/` | 管理端骨架和占位页面已建立，业务功能待开发 |
 | 后端 API | Django、Django REST Framework、SQLite | `backend/` | 服务、认证基础和 Swagger 文档已建立，业务 API 尚未实现 |
-| CI/CD 与部署 | GitHub Actions、Docker Buildx、GHCR、Docker Compose | `deploy/` | 技术栈已确定，当前为占位目录，尚无可运行的 CI/CD 或部署配置 |
+| CI/CD 与部署 | GitHub Actions、Docker Buildx、GHCR、Docker Compose | `deploy/` | 已配置：PR 检查、镜像构建推送、合并 `main` 自动部署到服务器（含健康检查与回滚）；HTTPS 与域名待确认 |
 
 当前阶段以需求确认和基础工程搭建为主，`demo/` 用于界面沟通，正式业务功能尚未实现。产品需求与实施计划主要记录在 `docs/requirements/` 和 `openspec/changes/`；文档中的规划功能不代表相应生产代码已经实现。SQLite 用于本地开发。
 
@@ -82,6 +82,10 @@ bash scripts/connect-android-backend.sh
 
 用于甲方演示的原型是单独的 `demo/` 项目；运行方式见 [`Demo 指南`](docs/demo/guide.md)。
 
+### 5. 部署到服务器（CI/CD）
+
+合并到 `main` 后自动构建镜像并部署到服务器，无需手工操作。完整的服务器准备、GitHub Secrets 配置、回滚与备份说明见 [`docs/cicd/server-deploy.md`](docs/cicd/server-deploy.md)。
+
 ## 文档导航
 
 - [`docs/requirements/`](docs/requirements/)：产品需求文档
@@ -94,6 +98,7 @@ bash scripts/connect-android-backend.sh
 - [`docs/git/git-workflow.md`](docs/git/git-workflow.md)：Issue、分支、提交与 PR 流程
 - [`docs/openspec/openspec-summary.md`](docs/openspec/openspec-summary.md)：OpenSpec 变更范围总览
 - [`docs/cicd/cicd-guide.md`](docs/cicd/cicd-guide.md)：CI/CD 模块协作引导与待办范围
+- [`docs/cicd/server-deploy.md`](docs/cicd/server-deploy.md)：服务器部署手册（首次部署、更新、回滚、备份、排障）
 
 ## 项目协作约定
 

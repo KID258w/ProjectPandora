@@ -105,10 +105,12 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
+# 容器部署时指向与 Nginx 共享的卷（DJANGO_STATIC_ROOT=/srv/static）
+STATIC_ROOT = Path(os.getenv("DJANGO_STATIC_ROOT", str(BASE_DIR / "staticfiles")))
 # 公司重要事项附件：开发期存本地磁盘；正式部署需改为对象存储并配置持久化卷。
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+# 容器部署时指向持久化卷（DJANGO_MEDIA_ROOT=/data/media）
+MEDIA_ROOT = Path(os.getenv("DJANGO_MEDIA_ROOT", str(BASE_DIR / "media")))
 # 附件大小与类型白名单；如需调整通过 .env 覆盖，避免改代码。
 COMPANY_ITEM_ATTACHMENT_MAX_BYTES = int(os.getenv("COMPANY_ITEM_ATTACHMENT_MAX_BYTES", str(10 * 1024 * 1024)))
 COMPANY_ITEM_ATTACHMENT_MIME_TYPES = [
@@ -133,6 +135,18 @@ CORS_ALLOWED_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
+
+# 反向代理部署（Nginx/Caddy 终止 HTTPS）时，Django Admin 的 CSRF 校验需要
+# 完整的公网来源，例如 https://pandora.example.com
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
+if not DEBUG:
+    # 由反向代理传入 X-Forwarded-Proto，让 Django 正确识别 https
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
