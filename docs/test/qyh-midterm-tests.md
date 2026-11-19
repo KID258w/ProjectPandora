@@ -6,7 +6,7 @@
 | --- | --- |
 | 测试人员 | 曲懿涵（@AsuBTTS）。Codex 辅助实现与执行，人工逐条复核待完成。 |
 | 关联 Issue | [测试10（#42）](https://github.com/KID258w/ProjectPandora/issues/42) |
-| 对应 PR | [个人测试分支与 dev 的差异](https://github.com/KID258w/ProjectPandora/compare/dev...test/10-midterm-logs-tags-personal-items) |
+| 对应 PR | [PR #45](https://github.com/KID258w/ProjectPandora/pull/45) |
 | 测试日期 | 2026-11-19，Asia/Taipei |
 | 测试分支 | `test/10-midterm-logs-tags-personal-items` |
 | 被测基准 | `dev` 的 `bdff2dba6984042d64bf0f2ef99130ba3552a1b9`。开始时核对该 SHA 与远端一致，团队共同验收版本待统一。 |
