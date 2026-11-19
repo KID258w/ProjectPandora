@@ -1,0 +1,88 @@
+2026-11-19 Asia/Taipei
+Completed: 16:50:21
+Baseline: bdff2dba6984042d64bf0f2ef99130ba3552a1b9; Android sources and tests unchanged.
+
+adb -s emulator-5554 shell am instrument -w -r -e class com.projectpandora.app.BusinessUiTest#homeLoadsAndDisplaysDashboardDataFromApi,com.projectpandora.app.BusinessUiTest#selectedLogPersonIncludesDepartmentAndTeam com.projectpandora.app.test/androidx.test.runner.AndroidJUnitRunner
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=2
+INSTRUMENTATION_STATUS: stream=
+com.projectpandora.app.BusinessUiTest:
+INSTRUMENTATION_STATUS: test=selectedLogPersonIncludesDepartmentAndTeam
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=2
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Action performScrollTo() failed.
+Reason: Expected exactly '1' node but could not find any node that satisfies: (Text + InputText + EditableText contains '选择查看对象' (ignoreCase: false))
+
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+	at androidx.compose.ui.test.ActionsKt.performScrollTo(Actions.kt:80)
+	at com.projectpandora.app.BusinessUiTest.selectedLogPersonIncludesDepartmentAndTeam(BusinessUiTest.kt:197)
+
+INSTRUMENTATION_STATUS: stream=
+Error in selectedLogPersonIncludesDepartmentAndTeam(com.projectpandora.app.BusinessUiTest):
+java.lang.AssertionError: Action performScrollTo() failed.
+Reason: Expected exactly '1' node but could not find any node that satisfies: (Text + InputText + EditableText contains '选择查看对象' (ignoreCase: false))
+
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+	at androidx.compose.ui.test.ActionsKt.performScrollTo(Actions.kt:80)
+	at com.projectpandora.app.BusinessUiTest.selectedLogPersonIncludesDepartmentAndTeam(BusinessUiTest.kt:197)
+
+INSTRUMENTATION_STATUS: test=selectedLogPersonIncludesDepartmentAndTeam
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=2
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=homeLoadsAndDisplaysDashboardDataFromApi
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=2
+INSTRUMENTATION_STATUS: stack=androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms
+	at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:887)
+	at androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:482)
+	at com.projectpandora.app.BusinessUiTest.homeLoadsAndDisplaysDashboardDataFromApi(BusinessUiTest.kt:49)
+
+INSTRUMENTATION_STATUS: stream=
+Error in homeLoadsAndDisplaysDashboardDataFromApi(com.projectpandora.app.BusinessUiTest):
+androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms
+	at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:887)
+	at androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:482)
+	at com.projectpandora.app.BusinessUiTest.homeLoadsAndDisplaysDashboardDataFromApi(BusinessUiTest.kt:49)
+
+INSTRUMENTATION_STATUS: test=homeLoadsAndDisplaysDashboardDataFromApi
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 27.402
+There were 2 failures:
+1) selectedLogPersonIncludesDepartmentAndTeam(com.projectpandora.app.BusinessUiTest)
+java.lang.AssertionError: Action performScrollTo() failed.
+Reason: Expected exactly '1' node but could not find any node that satisfies: (Text + InputText + EditableText contains '选择查看对象' (ignoreCase: false))
+
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+	at androidx.compose.ui.test.ActionsKt.performScrollTo(Actions.kt:80)
+	at com.projectpandora.app.BusinessUiTest.selectedLogPersonIncludesDepartmentAndTeam(BusinessUiTest.kt:197)
+2) homeLoadsAndDisplaysDashboardDataFromApi(com.projectpandora.app.BusinessUiTest)
+androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms
+	at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:887)
+	at androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:482)
+	at com.projectpandora.app.BusinessUiTest.homeLoadsAndDisplaysDashboardDataFromApi(BusinessUiTest.kt:49)
+
+FAILURES!!!
+Tests run: 2,  Failures: 2
+
+
+INSTRUMENTATION_CODE: -1

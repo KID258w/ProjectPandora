@@ -1,0 +1,16 @@
+2026-11-19 Asia/Taipei
+Completed: 16:43:34
+Base: bdff2dba6984042d64bf0f2ef99130ba3552a1b9
+First run. Two test fixture setup errors. Corrected in da96a8f.
+Command (from backend): python manage.py test apps.home.test_midterm_qyh_home apps.home.test_midterm_qyh_personal_items apps.logs.test_midterm_qyh_logs apps.tags.test_midterm_qyh_tags --noinput --verbosity 2
+
+Found 90 test(s).
+ERROR: setUpClass (apps.home.test_midterm_qyh_home.HomeMidtermTests)
+sqlite3.IntegrityError: UNIQUE constraint failed: accounts_user.business_role
+django.db.utils.IntegrityError: UNIQUE constraint failed: accounts_user.business_role
+ERROR: setUpClass (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests)
+sqlite3.IntegrityError: UNIQUE constraint failed: accounts_user.business_role
+django.db.utils.IntegrityError: UNIQUE constraint failed: accounts_user.business_role
+Ran 54 tests in 0.672s
+FAILED (errors=2)
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
