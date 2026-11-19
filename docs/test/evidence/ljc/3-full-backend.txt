@@ -1,0 +1,20 @@
+Creating test database for alias 'default'...
+
+....E:\软件开发\ProjectPandora-backend\backend\apps\tasks\work_views.py: Warning [DayWorkView > DayViewSerializer > CalendarDaySerializer]: Encountered 2 components with identical names "CalendarDay" and different identities <class 'apps.tasks.work_views.CalendarDaySerializer'> and <class 'apps.logs.serializers.CalendarDaySerializer'>. This will very likely result in an incorrect schema. Try renaming one.
+E:\软件开发\ProjectPandora-backend\backend\apps\tasks\work_views.py: Warning [MonthWorkView > MonthViewSerializer > CalendarDaySerializer]: Encountered 2 components with identical names "CalendarDay" and different identities <class 'apps.tasks.work_views.CalendarDaySerializer'> and <class 'apps.logs.serializers.CalendarDaySerializer'>. This will very likely result in an incorrect schema. Try renaming one.
+E:\软件开发\ProjectPandora-backend\backend\apps\tasks\work_views.py: Warning [WeekWorkView > WeekViewSerializer > CalendarDaySerializer]: Encountered 2 components with identical names "CalendarDay" and different identities <class 'apps.tasks.work_views.CalendarDaySerializer'> and <class 'apps.logs.serializers.CalendarDaySerializer'>. This will very likely result in an incorrect schema. Try renaming one.
+.............................E:\软件开发\ProjectPandora-backend\backend\apps\tasks\work_views.py: Warning [DayWorkView > DayViewSerializer > CalendarDaySerializer]: Encountered 2 components with identical names "CalendarDay" and different identities <class 'apps.tasks.work_views.CalendarDaySerializer'> and <class 'apps.logs.serializers.CalendarDaySerializer'>. This will very likely result in an incorrect schema. Try renaming one.
+E:\软件开发\ProjectPandora-backend\backend\apps\tasks\work_views.py: Warning [MonthWorkView > MonthViewSerializer > CalendarDaySerializer]: Encountered 2 components with identical names "CalendarDay" and different identities <class 'apps.tasks.work_views.CalendarDaySerializer'> and <class 'apps.logs.serializers.CalendarDaySerializer'>. This will very likely result in an incorrect schema. Try renaming one.
+E:\软件开发\ProjectPandora-backend\backend\apps\tasks\work_views.py: Warning [WeekWorkView > WeekViewSerializer > CalendarDaySerializer]: Encountered 2 components with identical names "CalendarDay" and different identities <class 'apps.tasks.work_views.CalendarDaySerializer'> and <class 'apps.logs.serializers.CalendarDaySerializer'>. This will very likely result in an incorrect schema. Try renaming one.
+.........................E:\软件开发\ProjectPandora-backend\backend\apps\tasks\work_views.py: Warning [DayWorkView > DayViewSerializer > CalendarDaySerializer]: Encountered 2 components with identical names "CalendarDay" and different identities <class 'apps.tasks.work_views.CalendarDaySerializer'> and <class 'apps.logs.serializers.CalendarDaySerializer'>. This will very likely result in an incorrect schema. Try renaming one.
+E:\软件开发\ProjectPandora-backend\backend\apps\tasks\work_views.py: Warning [MonthWorkView > MonthViewSerializer > CalendarDaySerializer]: Encountered 2 components with identical names "CalendarDay" and different identities <class 'apps.tasks.work_views.CalendarDaySerializer'> and <class 'apps.logs.serializers.CalendarDaySerializer'>. This will very likely result in an incorrect schema. Try renaming one.
+E:\软件开发\ProjectPandora-backend\backend\apps\tasks\work_views.py: Warning [WeekWorkView > WeekViewSerializer > CalendarDaySerializer]: Encountered 2 components with identical names "CalendarDay" and different identities <class 'apps.tasks.work_views.CalendarDaySerializer'> and <class 'apps.logs.serializers.CalendarDaySerializer'>. This will very likely result in an incorrect schema. Try renaming one.
+.................................................................................................................................
+----------------------------------------------------------------------
+Ran 187 tests in 8.032s
+
+OK
+Destroying test database for alias 'default'...
+
+Found 187 test(s).
+System check identified no issues (0 silenced).

@@ -1,0 +1,156 @@
+Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+
+Found 90 test(s).
+Operations to perform:
+  Synchronize unmigrated apps: core, corsheaders, drf_spectacular, drf_spectacular_sidecar, messages, rest_framework, rest_framework_simplejwt, staticfiles
+  Apply all migrations: accounts, admin, auth, content, contenttypes, home, logs, sessions, tags, tasks
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0001_initial... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying accounts.0001_initial... OK
+  Applying accounts.0002_department_alter_user_options_alter_user_managers_and_more... OK
+  Applying accounts.0003_remove_user_one_founder_and_more... OK
+  Applying accounts.0004_user_id_number... OK
+  Applying accounts.0005_department_is_active_team_is_active_adminauditlog... OK
+  Applying accounts.0006_user_id_number_hash... OK
+  Applying accounts.0007_remove_user_valid_account_placement_and_more... OK
+  Applying accounts.0008_backfill_id_number_hash... OK
+  Applying accounts.0009_user_cannot_manage_self... OK
+  Applying accounts.0010_normalize_id_number_hash... OK
+  Applying accounts.0011_user_profile_avatar... OK
+  Applying accounts.0011_alter_adminauditlog_module... OK
+  Applying accounts.0012_merge_20261102_1936... OK
+  Applying accounts.0013_appoperationauditlog... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying content.0001_initial... OK
+  Applying content.0002_companyimportantitem_offline_reason... OK
+  Applying tasks.0001_initial... OK
+  Applying tasks.0002_task_notification_lifecycle... OK
+  Applying tasks.0003_remove_task_started_at... OK
+  Applying home.0001_initial... OK
+  Applying home.0002_homepersonaldailyitem... OK
+  Applying tags.0001_initial... OK
+  Applying logs.0001_initial... OK
+  Applying logs.0002_dailylogcomment... OK
+  Applying sessions.0001_initial... OK
+  Applying tags.0002_tasktag... OK
+  Applying tags.0003_tasktag_task_tasktag_unique_task_tag... OK
+  Applying tags.0004_update_tag_color_palette... OK
+  Applying tasks.0004_task_estimated_start_at_and_more... OK
+  Applying tasks.0005_alter_tasknotification_notification_type... OK
+test_approval_accepts_and_dispatches (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_approval_accepts_and_dispatches) ... ok
+test_approval_denies_wrong_actor_and_repeat (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_approval_denies_wrong_actor_and_repeat) ... ok
+test_approval_returns_with_reason (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_approval_returns_with_reason) ... ok
+test_cancel_approved_notifies_assignee (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_cancel_approved_notifies_assignee) ... ok
+test_cancel_denies_non_creator_closed_and_repeat (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_cancel_denies_non_creator_closed_and_repeat) ... ok
+test_cancel_pending_notifies_approver (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_cancel_pending_notifies_approver) ... ok
+test_edit_denies_assignee_and_closed (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_edit_denies_assignee_and_closed) ... ok
+test_edit_key_field_reopens_approval (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_edit_key_field_reopens_approval) ... ok
+test_edit_tag_only_preserves_approval (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_edit_tag_only_preserves_approval) ... ok
+test_executable_approved_active (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_executable_approved_active) ... ok
+test_executable_closed_or_pending (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_executable_closed_or_pending) ... ok
+test_executable_denies_non_owner (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_executable_denies_non_owner) ... ok
+test_history_preserves_recorded_names (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_history_preserves_recorded_names) ... ok
+test_history_rejects_outsider (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_history_rejects_outsider) ... ok
+test_history_resolves_legacy_ids (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_history_resolves_legacy_ids) ... ok
+test_inbox_current_approver_only (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_inbox_current_approver_only) ... ok
+test_inbox_excludes_cancelled_and_handled (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_inbox_excludes_cancelled_and_handled) ... ok
+test_inbox_rejects_anonymous (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_inbox_rejects_anonymous) ... ok
+test_outbox_excludes_approved_and_cancelled (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_outbox_excludes_approved_and_cancelled) ... ok
+test_outbox_own_pending_returned (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_outbox_own_pending_returned) ... ok
+test_outbox_rejects_anonymous (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_outbox_rejects_anonymous) ... ok
+test_progress_appends_without_completing (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_progress_appends_without_completing) ... ok
+test_progress_one_char_trimmed (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_progress_one_char_trimmed) ... ok
+test_progress_rejects_blank_and_non_owner (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_progress_rejects_blank_and_non_owner) ... ok
+test_resubmit_after_edit (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_resubmit_after_edit) ... ok
+test_resubmit_before_edit (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_resubmit_before_edit) ... ok
+test_resubmit_rejects_non_creator (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_resubmit_rejects_non_creator) ... ok
+test_review_accepts_and_resolves_notice (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_review_accepts_and_resolves_notice) ... ok
+test_review_denies_manager_and_second_decision (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_review_denies_manager_and_second_decision) ... ok
+test_review_returns_then_allows_new_submission (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_review_returns_then_allows_new_submission) ... ok
+test_round_increments_and_notifies (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_round_increments_and_notifies) ... ok
+test_round_starts_at_one (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_round_starts_at_one) ... ok
+test_round_unavailable_manager (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_round_unavailable_manager) ... ok
+test_submit_rejects_missing_material_and_duplicate (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_submit_rejects_missing_material_and_duplicate) ... ok
+test_submit_self_completes (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_submit_self_completes) ... ok
+test_submit_waits_and_notifies_creator (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskLifecycleTests.test_submit_waits_and_notifies_creator) ... ok
+test_dispatch_default_and_repeat (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_dispatch_default_and_repeat) ... ok
+test_dispatch_notifies_assignee (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_dispatch_notifies_assignee) ... ok
+test_dispatch_suppresses_self_assignment (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_dispatch_suppresses_self_assignment) ... ok
+test_home_count_excludes_foreign_and_resolved (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_home_count_excludes_foreign_and_resolved) ... ok
+test_home_count_matches_notification_endpoint (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_home_count_matches_notification_endpoint) ... ok
+test_home_count_zero_for_empty_account (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_home_count_zero_for_empty_account) ... ok
+test_mark_read_changes_only_requested_owned (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_mark_read_changes_only_requested_owned) ... ok
+test_mark_read_empty_duplicate_and_repeat (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_mark_read_empty_duplicate_and_repeat) ... ok
+test_mark_read_rejects_invalid_id_atomically (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_mark_read_rejects_invalid_id_atomically) ... ok
+test_notice_count_counts_only_active_unread (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_notice_count_counts_only_active_unread) ... ok
+test_notice_count_rejects_anonymous (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_notice_count_rejects_anonymous) ... ok
+test_notice_count_zero_after_resolving (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_notice_count_zero_after_resolving) ... ok
+test_notice_creation_deduplicates (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_notice_creation_deduplicates) ... ok
+test_notice_creation_links_submission (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_notice_creation_links_submission) ... ok
+test_notice_data_keeps_original_round (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_notice_data_keeps_original_round) ... ok
+test_notice_data_tolerates_bad_round (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_notice_data_tolerates_bad_round) ... ok
+test_notice_data_without_approval_context (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_notice_data_without_approval_context) ... ok
+test_notice_without_recipient (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_notice_without_recipient) ... ok
+test_notices_history_read_has_no_side_effects (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_notices_history_read_has_no_side_effects) ... ok
+test_notices_reject_invalid_unread_filter (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_notices_reject_invalid_unread_filter) ... ok
+test_notices_unread_filters_resolved_and_read (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_notices_unread_filters_resolved_and_read) ... ok
+test_resolve_does_not_touch_other_task (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_resolve_does_not_touch_other_task) ... ok
+test_resolve_keeps_existing_timestamp (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_resolve_keeps_existing_timestamp) ... ok
+test_resolve_scopes_type_and_submission (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskNotificationTests.test_resolve_scopes_type_and_submission) ... ok
+test_assignable_employee_self (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_assignable_employee_self) ... ok
+test_assignable_excludes_disabled (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_assignable_excludes_disabled) ... ok
+test_assignable_manager (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_assignable_manager) ... ok
+test_assignee_denied (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_assignee_denied) ... ok
+test_assignee_same_team (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_assignee_same_team) ... ok
+test_assignee_self (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_assignee_self) ... ok
+test_create_founder_max_title (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_create_founder_max_title) ... ok
+test_create_pending_audit (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_create_pending_audit) ... ok
+test_create_rejects_inactive_tag (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_create_rejects_inactive_tag) ... ok
+test_filter_inclusive_local_day (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_filter_inclusive_local_day) ... ok
+test_filter_rejects_reversed_dates (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_filter_rejects_reversed_dates) ... ok
+test_filter_statuses (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_filter_statuses) ... ok
+test_list_mine_only (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_list_mine_only) ... ok
+test_list_rejects_invalid_scope (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_list_rejects_invalid_scope) ... ok
+test_list_union_deduplicates (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_list_union_deduplicates) ... ok
+test_pin_creates_no_side_effects (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_pin_creates_no_side_effects) ... ok
+test_pin_rejects_readonly_pending (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_pin_rejects_readonly_pending) ... ok
+test_pin_repeat_and_cancelled (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_pin_repeat_and_cancelled) ... ok
+test_pinned_empty_other_account (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_pinned_empty_other_account) ... ok
+test_pinned_hides_stale (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_pinned_hides_stale) ... ok
+test_pinned_ignores_normal_filters (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_pinned_ignores_normal_filters) ... ok
+test_schedule_after_due (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_schedule_after_due) ... ok
+test_schedule_before_due (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_schedule_before_due) ... ok
+test_schedule_equal_due (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_schedule_equal_due) ... ok
+test_unpin_absent_is_idempotent (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_unpin_absent_is_idempotent) ... ok
+test_unpin_keeps_other_account (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_unpin_keeps_other_account) ... ok
+test_unpin_rejects_body (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_unpin_rejects_body) ... ok
+test_visible_approved_assignee (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_visible_approved_assignee) ... ok
+test_visible_denies_pending_and_unrelated (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_visible_denies_pending_and_unrelated) ... ok
+test_visible_pending_approver (apps.tasks.test_midterm_ljc_tasks_notifications.MidtermTaskQueryTests.test_visible_pending_approver) ... ok
+
+----------------------------------------------------------------------
+Ran 90 tests in 1.248s
+
+OK
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+
+  Applying tasks.0006_taskpin... OK
+System check identified no issues (0 silenced).
