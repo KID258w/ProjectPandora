@@ -197,6 +197,17 @@
 | MAN-QYH-003 | 每日事项长按拖动 | 本人月历有跨日事项 | 将事项拖到换月区域，松手，刷新并进入详情 | 拖动期间能翻月，松手后日期持久化，跨度不变 | 未进行端到端手工联调 | 未执行 | 无 |
 | MAN-QYH-004 | 日历点击和月切换 | 本人有重叠事项，区间含节假日标记 | 翻月并点击重叠日期，从列表打开一条详情 | 节假日与事项正常显示，日期列表及详情匹配 | 未进行端到端手工联调 | 未执行 | 无 |
 
+### 3.5 Android 当前入口端到端复核
+
+Debug App 通过 `adb reverse tcp:8000 tcp:8000` 连接本机 Django 服务，使用独立 SQLite 库和合成数据，以授权创始人登录。在模拟器使用 ADB 点击实际界面，通过 UI 树读取显示结果，并核对后端响应。此次两项补测单独统计，§3.4 中的原手工验收场景按各自的条件和步骤记录。
+
+| 用例 | 当前界面路径 | 实际结果 | 状态 |
+| --- | --- | --- | --- |
+| E2E-QYH-001 | 登录 → 首页 → 事件纪 | 真实首页接口返回 200，卡片显示 `• 首页回归事项`。圆点是列表符号。 | 通过 |
+| E2E-QYH-002 | 公司 → 组织关系 → 展开部门和团队 → 成员资料 → 查看日志 → 点击查看详情 | 显示授权成员姓名、身份、部门、团队及日志正文。详情显示只读，UI 树中无修改操作。 | 通过 |
+
+[当前入口执行证据](evidence/qyh/07-android-current-flow.txt)
+
 ## 4. 测试执行过程
 
 ### 4.1 准备与执行命令
@@ -225,6 +236,8 @@ $env:DJANGO_SECRET_KEY = 'qyh-midterm-local-test-only-key-32chars'
 Django 三轮最终测试分别报告 `Ran 90 tests`、`Ran 115 tests`、`Ran 187 tests`，均返回 `OK`。每轮使用 `file:memorydb_default?mode=memory&cache=shared` 独立测试库。
 
 Android 使用 `./gradlew.bat :app:assembleDebug :app:assembleDebugAndroidTest --console=plain` 构建，随后在 Medium_Phone 模拟器上以 `adb shell am instrument` 运行现有用例。测试替身提供接口数据，六条每日事项 UI 用例全部通过。11 条中有 9 条通过、2 条失败；单独复跑两条仍失败。见 [Android 界面回归](evidence/qyh/05-android-ui.txt)和[失败复跑](evidence/qyh/06-android-ui-retry.txt)。
+
+随后用 `python manage.py runserver 127.0.0.1:8000 --noreload` 启动独立本地服务，执行 §3.5 的当前路径。两项端到端复核均通过。[实际界面和 API 响应证据](evidence/qyh/07-android-current-flow.txt)
 
 ## 5. 测试结果统计
 
@@ -289,14 +302,14 @@ Issue 分工表将汇总写在闵世宇名下，正文「汇总与验收材料�
 - **复现**　运行 `BusinessUiTest.homeLoadsAndDisplaysDashboardDataFromApi`。替身返回标题 `Home item alpha`，等待首页出现事项。
 - **预期**　首页可展示接口提供的事项标题。
 - **实际**　等待精确文本 10 秒超时。当前卡片代码将标题显示为带 `• ` 前缀的文本，旧断言只匹配裸标题。
-- **影响与状态**　现有 UI 回归红灯，当前证据指向断言与显示格式不一致。Android 代码及用例与基准一致。本轮登记。[复跑输出](evidence/qyh/06-android-ui-retry.txt)
+- **影响与状态**　旧断言仍报红。E2E-QYH-001 确认当前首页可以显示真实接口返回的标题和列表符号，业务显示通过。[复跑输出](evidence/qyh/06-android-ui-retry.txt) · [当前路径结果](evidence/qyh/07-android-current-flow.txt)
 
 ### UI-QYH-002　日志旧测试找不到查看对象选择入口
 
 - **复现**　运行 `BusinessUiTest.selectedLogPersonIncludesDepartmentAndTeam`，用默认参数加载 `LogsScreen` 并查找「选择查看对象」。
 - **预期**　能打开授权成员日志，并展示成员部门和团队。
 - **实际**　未找到该控件。当前导航从组织关系的成员详情进入下属日志，并传入 `initialPersonId`。
-- **影响与状态**　旧测试覆盖的入口与当前导航不同。现有自动化结果无法确认新入口的成员资料显示，仍需按当前导航复核。[复跑输出](evidence/qyh/06-android-ui-retry.txt)
+- **影响与状态**　旧入口断言仍报红。E2E-QYH-002 确认授权创始人可从当前入口读取成员部门、团队和只读日志详情。[复跑输出](evidence/qyh/06-android-ui-retry.txt) · [当前路径结果](evidence/qyh/07-android-current-flow.txt)
 
 本次后端已执行范围内未发现业务缺陷。
 
@@ -306,7 +319,7 @@ Issue 分工表将汇总写在闵世宇名下，正文「汇总与验收材料�
 
 ## 8. 测试结论与汇总交接
 
-个人范围的 30 个函数均有 3 条新增用例并通过，涉及排序、输入校验、权限、幂等、标签历史及失败回滚。相关模块 115 条和个人版本完整后端 187 条均通过。团队汇总需要其余三个测试分支齐备，并在统一版本重跑完整后端；§3.4 仍需客户端手工联调。交接材料为本报告、个人分支 PR 和 [qyh 执行证据](evidence/qyh/)。
+个人范围的 30 个函数均有 3 条新增用例并通过，涉及排序、输入校验、权限、幂等、标签历史及失败回滚。相关模块 115 条和个人版本完整后端 187 条均通过。两条 Android 旧断言对应的当前业务路径已用真实本地后端端到端复核通过。团队汇总需要其余三个测试分支齐备，并在统一版本重跑完整后端。§3.4 中列出的独立手工验收场景待执行。交接材料为本报告、个人分支 PR 和 [qyh 执行证据](evidence/qyh/)。
 
 ## 附录 A：AI 辅助记录与人工复核
 

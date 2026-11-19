@@ -1,0 +1,19 @@
+2026-11-19 Asia/Taipei
+Medium_Phone, Android SDK 37, ProjectPandora debug APK.
+Django 5.2.19 at localhost:8000 via adb reverse. Dedicated SQLite DB with synthetic fixtures.
+UI evidence captured with adb shell uiautomator dump. Navigation via adb shell input tap.
+
+Home PASS - 事件纪 / • 首页回归事项
+Company PASS - 组织关系
+Organization PASS - 组织关系 / 回归产品部
+Member profile PASS - 回归日志成员 / 查看日志
+Subordinate log via current route PASS - 查看对象：回归日志成员 · 员工 · 回归产品部 · 回归客户端组 · 只读 / 当前导航日志回归正文
+Subordinate log detail PASS - 当前导航日志回归正文; no edit action in UI tree.
+
+Django server responses captured during the same run:
+200 GET /api/v1/app/home/
+200 GET /api/v1/app/organization/tree/?keyword=
+200 GET /api/v1/app/organization/members/4/
+200 GET /api/v1/app/logs/calendar/?year=2026&month=11&user_id=4
+200 GET /api/v1/app/logs/?start_date=2026-11-01&end_date=2026-11-30&user_id=4&page=1&page_size=100
+200 GET /api/v1/app/logs/1/
