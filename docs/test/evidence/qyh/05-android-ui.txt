@@ -1,0 +1,222 @@
+2026-11-19 Asia/Taipei
+Completed: 16:49:33
+Baseline: bdff2dba6984042d64bf0f2ef99130ba3552a1b9; Android sources and tests unchanged.
+
+Medium_Phone emulator, Android SDK 37
+adb -s emulator-5554 install -r -t android/app/build/outputs/apk/debug/app-debug.apk
+Performing Streamed Install
+Success
+adb -s emulator-5554 install -r -t android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+Performing Streamed Install
+Success
+adb -s emulator-5554 shell am instrument -w -r -e class com.projectpandora.app.PersonalDailyItemsUiTest,com.projectpandora.app.BusinessUiTest#logRequiresCompletedWorkBeforeSubmissionAndSavesDraft,com.projectpandora.app.BusinessUiTest#homeLoadsAndDisplaysDashboardDataFromApi,com.projectpandora.app.BusinessUiTest#failedTagCreationKeepsNameAndShowsError,com.projectpandora.app.BusinessUiTest#failedRenameKeepsInputAndDeleteExplainsHistoricalLinks,com.projectpandora.app.BusinessUiTest#selectedLogPersonIncludesDepartmentAndTeam com.projectpandora.app.test/androidx.test.runner.AndroidJUnitRunner
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.PersonalDailyItemsUiTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=
+com.projectpandora.app.PersonalDailyItemsUiTest:
+INSTRUMENTATION_STATUS: test=draggingAtTheRightEdgeAdvancesMonthAndKeepsTheDragActive
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.PersonalDailyItemsUiTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=draggingAtTheRightEdgeAdvancesMonthAndKeepsTheDragActive
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.PersonalDailyItemsUiTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=longPressDragMovesTheEntireDateRangeThroughTheMoveEndpoint
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.PersonalDailyItemsUiTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=longPressDragMovesTheEntireDateRangeThroughTheMoveEndpoint
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.PersonalDailyItemsUiTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=draggingAtTheLeftEdgeMovesToPreviousMonthAndKeepsTheDragActive
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.PersonalDailyItemsUiTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=draggingAtTheLeftEdgeMovesToPreviousMonthAndKeepsTheDragActive
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.PersonalDailyItemsUiTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=calendarDateListOpensDetailUsingFullItemResponse
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.PersonalDailyItemsUiTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=calendarDateListOpensDetailUsingFullItemResponse
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.PersonalDailyItemsUiTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=createFormSendsRequiredDatesAndPresetColor
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.PersonalDailyItemsUiTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=createFormSendsRequiredDatesAndPresetColor
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.PersonalDailyItemsUiTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=homeEmbedsPersonalCalendarInsteadOfPreviewCards
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.PersonalDailyItemsUiTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=homeEmbedsPersonalCalendarInsteadOfPreviewCards
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=
+com.projectpandora.app.BusinessUiTest:
+INSTRUMENTATION_STATUS: test=failedRenameKeepsInputAndDeleteExplainsHistoricalLinks
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=failedRenameKeepsInputAndDeleteExplainsHistoricalLinks
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=failedTagCreationKeepsNameAndShowsError
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=failedTagCreationKeepsNameAndShowsError
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=selectedLogPersonIncludesDepartmentAndTeam
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Action performScrollTo() failed.
+Reason: Expected exactly '1' node but could not find any node that satisfies: (Text + InputText + EditableText contains '选择查看对象' (ignoreCase: false))
+
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+	at androidx.compose.ui.test.ActionsKt.performScrollTo(Actions.kt:80)
+	at com.projectpandora.app.BusinessUiTest.selectedLogPersonIncludesDepartmentAndTeam(BusinessUiTest.kt:197)
+
+INSTRUMENTATION_STATUS: stream=
+Error in selectedLogPersonIncludesDepartmentAndTeam(com.projectpandora.app.BusinessUiTest):
+java.lang.AssertionError: Action performScrollTo() failed.
+Reason: Expected exactly '1' node but could not find any node that satisfies: (Text + InputText + EditableText contains '选择查看对象' (ignoreCase: false))
+
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+	at androidx.compose.ui.test.ActionsKt.performScrollTo(Actions.kt:80)
+	at com.projectpandora.app.BusinessUiTest.selectedLogPersonIncludesDepartmentAndTeam(BusinessUiTest.kt:197)
+
+INSTRUMENTATION_STATUS: test=selectedLogPersonIncludesDepartmentAndTeam
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=10
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=logRequiresCompletedWorkBeforeSubmissionAndSavesDraft
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=10
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=logRequiresCompletedWorkBeforeSubmissionAndSavesDraft
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=11
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=homeLoadsAndDisplaysDashboardDataFromApi
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.projectpandora.app.BusinessUiTest
+INSTRUMENTATION_STATUS: current=11
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=11
+INSTRUMENTATION_STATUS: stack=androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms
+	at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:887)
+	at androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:482)
+	at com.projectpandora.app.BusinessUiTest.homeLoadsAndDisplaysDashboardDataFromApi(BusinessUiTest.kt:49)
+
+INSTRUMENTATION_STATUS: stream=
+Error in homeLoadsAndDisplaysDashboardDataFromApi(com.projectpandora.app.BusinessUiTest):
+androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms
+	at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:887)
+	at androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:482)
+	at com.projectpandora.app.BusinessUiTest.homeLoadsAndDisplaysDashboardDataFromApi(BusinessUiTest.kt:49)
+
+INSTRUMENTATION_STATUS: test=homeLoadsAndDisplaysDashboardDataFromApi
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 131.079
+There were 2 failures:
+1) selectedLogPersonIncludesDepartmentAndTeam(com.projectpandora.app.BusinessUiTest)
+java.lang.AssertionError: Action performScrollTo() failed.
+Reason: Expected exactly '1' node but could not find any node that satisfies: (Text + InputText + EditableText contains '选择查看对象' (ignoreCase: false))
+
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+	at androidx.compose.ui.test.ActionsKt.performScrollTo(Actions.kt:80)
+	at com.projectpandora.app.BusinessUiTest.selectedLogPersonIncludesDepartmentAndTeam(BusinessUiTest.kt:197)
+2) homeLoadsAndDisplaysDashboardDataFromApi(com.projectpandora.app.BusinessUiTest)
+androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms
+	at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:887)
+	at androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:482)
+	at com.projectpandora.app.BusinessUiTest.homeLoadsAndDisplaysDashboardDataFromApi(BusinessUiTest.kt:49)
+
+FAILURES!!!
+Tests run: 11,  Failures: 2
+
+
+INSTRUMENTATION_CODE: -1

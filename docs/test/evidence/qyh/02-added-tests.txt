@@ -1,0 +1,162 @@
+2026-11-19 Asia/Taipei
+Completed: 16:44:08
+Base: bdff2dba6984042d64bf0f2ef99130ba3552a1b9
+Validated test sources later committed unchanged in da96a8f.
+Command (from backend): python manage.py test apps.home.test_midterm_qyh_home apps.home.test_midterm_qyh_personal_items apps.logs.test_midterm_qyh_logs apps.tags.test_midterm_qyh_tags --noinput --verbosity 2
+
+Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+
+Found 90 test(s).
+Operations to perform:
+  Synchronize unmigrated apps: core, corsheaders, drf_spectacular, drf_spectacular_sidecar, messages, rest_framework, rest_framework_simplejwt, staticfiles
+  Apply all migrations: accounts, admin, auth, content, contenttypes, home, logs, sessions, tags, tasks
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0001_initial... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying accounts.0001_initial... OK
+  Applying accounts.0002_department_alter_user_options_alter_user_managers_and_more... OK
+  Applying accounts.0003_remove_user_one_founder_and_more... OK
+  Applying accounts.0004_user_id_number... OK
+  Applying accounts.0005_department_is_active_team_is_active_adminauditlog... OK
+  Applying accounts.0006_user_id_number_hash... OK
+  Applying accounts.0007_remove_user_valid_account_placement_and_more... OK
+  Applying accounts.0008_backfill_id_number_hash... OK
+  Applying accounts.0009_user_cannot_manage_self... OK
+  Applying accounts.0010_normalize_id_number_hash... OK
+  Applying accounts.0011_user_profile_avatar... OK
+  Applying accounts.0011_alter_adminauditlog_module... OK
+  Applying accounts.0012_merge_20261102_1936... OK
+  Applying accounts.0013_appoperationauditlog... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying content.0001_initial... OK
+  Applying content.0002_companyimportantitem_offline_reason... OK
+  Applying tasks.0001_initial... OK
+  Applying tasks.0002_task_notification_lifecycle... OK
+  Applying tasks.0003_remove_task_started_at... OK
+  Applying home.0001_initial... OK
+  Applying home.0002_homepersonaldailyitem... OK
+  Applying tags.0001_initial... OK
+  Applying logs.0001_initial... OK
+  Applying logs.0002_dailylogcomment... OK
+  Applying sessions.0001_initial... OK
+  Applying tags.0002_tasktag... OK
+  Applying tags.0003_tasktag_task_tasktag_unique_task_tag... OK
+  Applying tags.0004_update_tag_color_palette... OK
+  Applying tasks.0004_task_estimated_start_at_and_more... OK
+  Applying tasks.0005_alter_tasknotification_notification_type... OK
+test_candidate_order_ignores_better_ranked_ineligible_rows (apps.home.test_midterm_qyh_home.HomeMidtermTests.test_candidate_order_ignores_better_ranked_ineligible_rows) ... ok
+test_candidate_order_source_then_due (apps.home.test_midterm_qyh_home.HomeMidtermTests.test_candidate_order_source_then_due) ... ok
+test_candidate_order_uses_creation_time_on_equal_due (apps.home.test_midterm_qyh_home.HomeMidtermTests.test_candidate_order_uses_creation_time_on_equal_due) ... ok
+test_candidates_exclude_other_and_invalid_states (apps.home.test_midterm_qyh_home.HomeMidtermTests.test_candidates_exclude_other_and_invalid_states) ... ok
+test_candidates_include_both_origins (apps.home.test_midterm_qyh_home.HomeMidtermTests.test_candidates_include_both_origins) ... ok
+test_candidates_only_one_eligible (apps.home.test_midterm_qyh_home.HomeMidtermTests.test_candidates_only_one_eligible) ... ok
+test_home_payload_caps_board_and_today_items_at_five (apps.home.test_midterm_qyh_home.HomeMidtermTests.test_home_payload_caps_board_and_today_items_at_five) ... ok
+test_home_payload_excludes_private_sources_and_matches_unread_endpoint (apps.home.test_midterm_qyh_home.HomeMidtermTests.test_home_payload_excludes_private_sources_and_matches_unread_endpoint) ... ok
+test_home_payload_uses_authoritative_sources (apps.home.test_midterm_qyh_home.HomeMidtermTests.test_home_payload_uses_authoritative_sources) ... ok
+test_top_tasks_exact_and_over_default_limit (apps.home.test_midterm_qyh_home.HomeMidtermTests.test_top_tasks_exact_and_over_default_limit) ... ok
+test_top_tasks_excludes_ineligible_only_data (apps.home.test_midterm_qyh_home.HomeMidtermTests.test_top_tasks_excludes_ineligible_only_data) ... ok
+test_top_tasks_keeps_order_below_limit (apps.home.test_midterm_qyh_home.HomeMidtermTests.test_top_tasks_keeps_order_below_limit) ... ok
+test_item_create_accepts_200_characters_and_single_day (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_create_accepts_200_characters_and_single_day) ... ok
+test_item_create_rejects_bad_fields_and_owner_override (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_create_rejects_bad_fields_and_owner_override) ... ok
+test_item_create_saves_trimmed_payload_without_audit (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_create_saves_trimmed_payload_without_audit) ... ok
+test_item_delete_cannot_touch_other_account (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_delete_cannot_touch_other_account) ... ok
+test_item_delete_removes_only_requested_owned_item (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_delete_removes_only_requested_owned_item) ... ok
+test_item_delete_repeated_id_returns_not_found (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_delete_repeated_id_returns_not_found) ... ok
+test_item_detail_foreign_and_missing_share_404_contract (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_detail_foreign_and_missing_share_404_contract) ... ok
+test_item_detail_returns_owned_item_full_fields (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_detail_returns_owned_item_full_fields) ... ok
+test_item_detail_tracks_current_authenticated_owner (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_detail_tracks_current_authenticated_owner) ... ok
+test_item_list_includes_each_closed_interval_endpoint (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_list_includes_each_closed_interval_endpoint) ... ok
+test_item_list_rejects_missing_bad_or_reversed_dates (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_list_rejects_missing_bad_or_reversed_dates) ... ok
+test_item_list_returns_own_overlap_and_holiday_annotation (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_list_returns_own_overlap_and_holiday_annotation) ... ok
+test_item_move_across_month_and_year_preserves_duration (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_move_across_month_and_year_preserves_duration) ... ok
+test_item_move_rejects_invalid_date_and_foreign_item (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_move_rejects_invalid_date_and_foreign_item) ... ok
+test_item_move_single_day_and_repeated_target_are_idempotent (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_move_single_day_and_repeated_target_are_idempotent) ... ok
+test_item_patch_can_shrink_to_one_day (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_patch_can_shrink_to_one_day) ... ok
+test_item_patch_rejects_reversed_and_foreign_updates (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_patch_rejects_reversed_and_foreign_updates) ... ok
+test_item_patch_updates_only_sent_fields_without_audit (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_patch_updates_only_sent_fields_without_audit) ... ok
+test_item_validation_accepts_equal_dates (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_validation_accepts_equal_dates) ... ok
+test_item_validation_accepts_multi_year_range (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_validation_accepts_multi_year_range) ... ok
+test_item_validation_compares_partial_patch_to_saved_date (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_item_validation_compares_partial_patch_to_saved_date) ... ok
+test_range_validation_accepts_cross_year (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_range_validation_accepts_cross_year) ... ok
+test_range_validation_accepts_single_day (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_range_validation_accepts_single_day) ... ok
+test_range_validation_rejects_inverted_range (apps.home.test_midterm_qyh_personal_items.PersonalItemsMidtermTests.test_range_validation_rejects_inverted_range) ... ok
+test_comment_data_does_not_classify_same_display_name_as_author (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_comment_data_does_not_classify_same_display_name_as_author) ... ok
+test_comment_data_falls_back_without_org_or_display_name (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_comment_data_falls_back_without_org_or_display_name) ... ok
+test_comment_data_marks_author_and_includes_role_and_team (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_comment_data_marks_author_and_includes_role_and_team) ... ok
+test_comment_list_empty_for_visible_draft (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_comment_list_empty_for_visible_draft) ... ok
+test_comment_list_hides_report_draft_and_peer_log (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_comment_list_hides_report_draft_and_peer_log) ... ok
+test_comment_list_preserves_creation_order_and_parent_scope (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_comment_list_preserves_creation_order_and_parent_scope) ... ok
+test_comment_post_accepts_one_and_2000_chars_on_own_draft (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_comment_post_accepts_one_and_2000_chars_on_own_draft) ... ok
+test_comment_post_manager_can_write_on_old_submitted_log (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_comment_post_manager_can_write_on_old_submitted_log) ... ok
+test_comment_post_rejects_blank_overlong_and_hidden_log (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_comment_post_rejects_blank_overlong_and_hidden_log) ... ok
+test_editable_accepts_yesterday (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_editable_accepts_yesterday) ... ok
+test_editable_excludes_day_before_window_and_tomorrow (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_editable_excludes_day_before_window_and_tomorrow) ... ok
+test_editable_includes_both_window_edges (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_editable_includes_both_window_edges) ... ok
+test_log_calendar_defaults_to_business_month_even_with_adjacent_results (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_log_calendar_defaults_to_business_month_even_with_adjacent_results) ... ok
+test_log_calendar_marks_only_submitted_report_days (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_log_calendar_marks_only_submitted_report_days) ... ok
+test_log_calendar_rejects_invalid_month_or_unauthorized_target (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_log_calendar_rejects_invalid_month_or_unauthorized_target) ... ok
+test_log_list_manager_gets_submitted_on_closed_range (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_log_list_manager_gets_submitted_on_closed_range) ... ok
+test_log_list_rejects_bad_date_or_outside_scope (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_log_list_rejects_bad_date_or_outside_scope) ... ok
+test_log_list_returns_author_draft_and_newest_first (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_log_list_returns_author_draft_and_newest_first) ... ok
+test_log_put_creates_draft_with_association_and_audit (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_log_put_creates_draft_with_association_and_audit) ... ok
+test_log_put_reuses_earliest_day_row_and_preserves_omitted_tags (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_log_put_reuses_earliest_day_row_and_preserves_omitted_tags) ... ok
+test_log_put_rolls_back_body_and_links_when_link_write_fails (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_log_put_rolls_back_body_and_links_when_link_write_fails) ... ok
+test_log_submit_earliest_day_repeated_call_is_idempotent (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_log_submit_earliest_day_repeated_call_is_idempotent) ... ok
+test_log_submit_persists_transition_and_audit (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_log_submit_persists_transition_and_audit) ... ok
+test_log_submit_rejects_blank_missing_and_out_of_window (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_log_submit_rejects_blank_missing_and_out_of_window) ... ok
+test_parse_date_accepts_real_leap_day (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_parse_date_accepts_real_leap_day) ... ok
+test_parse_date_rejects_invalid_shape_and_day (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_parse_date_rejects_invalid_shape_and_day) ... ok
+test_parse_date_valid_iso_day (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_parse_date_valid_iso_day) ... ok
+test_require_editable_allows_earliest_day (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_require_editable_allows_earliest_day) ... ok
+test_require_editable_allows_yesterday (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_require_editable_allows_yesterday) ... ok
+test_require_editable_rejects_outside_window (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_require_editable_rejects_outside_window) ... ok
+test_target_user_allows_indirect_active_report (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_target_user_allows_indirect_active_report) ... ok
+test_target_user_defaults_or_explicitly_selects_self (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_target_user_defaults_or_explicitly_selects_self) ... ok
+test_target_user_rejects_peer_inactive_or_bad_identifier (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_target_user_rejects_peer_inactive_or_bad_identifier) ... ok
+test_visible_log_allows_author_historical_draft (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_visible_log_allows_author_historical_draft) ... ok
+test_visible_log_allows_submitted_report (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_visible_log_allows_submitted_report) ... ok
+test_visible_log_conceals_foreign_draft_and_missing_id (apps.logs.test_midterm_qyh_logs.LogsMidtermTests.test_visible_log_conceals_foreign_draft_and_missing_id) ... ok
+test_founder_gate_accepts_founder (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_founder_gate_accepts_founder) ... ok
+test_founder_gate_blocks_employee_mutations_without_side_effects (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_founder_gate_blocks_employee_mutations_without_side_effects) ... ok
+test_founder_gate_denies_each_managerial_role (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_founder_gate_denies_each_managerial_role) ... ok
+test_tag_create_accepts_100_chars_and_reuses_inactive_name (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_create_accepts_100_chars_and_reuses_inactive_name) ... ok
+test_tag_create_rejects_duplicate_bad_color_empty_and_oversize_name (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_create_rejects_duplicate_bad_color_empty_and_oversize_name) ... ok
+test_tag_create_trims_name_and_records_selected_color (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_create_trims_name_and_records_selected_color) ... ok
+test_tag_delete_disables_but_keeps_historical_links (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_delete_disables_but_keeps_historical_links) ... ok
+test_tag_delete_rejects_unknown_id_without_writes (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_delete_rejects_unknown_id_without_writes) ... ok
+test_tag_delete_repeated_request_does_not_write_twice (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_delete_repeated_request_does_not_write_twice) ... ok
+test_tag_ids_allow_empty_and_retention_of_existing_inactive (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_ids_allow_empty_and_retention_of_existing_inactive) ... ok
+test_tag_ids_preserve_input_order_for_active_tags (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_ids_preserve_input_order_for_active_tags) ... ok
+test_tag_ids_reject_duplicates_missing_and_readding_inactive (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_ids_reject_duplicates_missing_and_readding_inactive) ... ok
+test_tag_list_employee_searches_only_active_tags (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_list_employee_searches_only_active_tags) ... ok
+test_tag_list_founder_switch_includes_inactive_with_status (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_list_founder_switch_includes_inactive_with_status) ... ok
+test_tag_list_rejects_bad_flag_and_employee_management_query (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_list_rejects_bad_flag_and_employee_management_query) ... ok
+test_tag_patch_leaves_data_intact_on_conflict_or_audit_failure (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_patch_leaves_data_intact_on_conflict_or_audit_failure) ... ok
+test_tag_patch_same_normalized_value_is_noop (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_patch_same_normalized_value_is_noop) ... ok
+test_tag_patch_updates_existing_links_without_replacing_tag (apps.tags.test_midterm_qyh_tags.TagsMidtermTests.test_tag_patch_updates_existing_links_without_replacing_tag) ... ok
+
+----------------------------------------------------------------------
+Ran 90 tests in 0.769s
+
+OK
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+
+  Applying tasks.0006_taskpin... OK
+System check identified no issues (0 silenced).
