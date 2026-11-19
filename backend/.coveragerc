@@ -1,0 +1,11 @@
+# coverage.py 配置：只统计生产代码，排除测试、迁移、包初始化与 App 配置。
+# 报告中出现的百分比因此反映业务代码的真实覆盖情况。
+
+[run]
+source = apps
+omit = */migrations/*, */__init__.py, */test_*.py, */tests.py, */apps.py
+
+[report]
+exclude_lines = pragma: no cover, raise NotImplementedError, if TYPE_CHECKING:
+show_missing = True
+skip_covered = False
