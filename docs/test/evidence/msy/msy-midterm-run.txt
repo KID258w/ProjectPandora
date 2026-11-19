@@ -1,0 +1,21 @@
+Date: 2026-11-19
+Branch: test/10-midterm-content-audit-views
+Base commit under test: bdff2db
+Python: 3.13.5
+Django: 5.2.19
+Database: Django-created in-memory SQLite test database
+
+Command 1:
+cd backend
+.venv313\Scripts\python.exe manage.py test apps.tasks.test_midterm_msy_calendar --noinput --verbosity 2
+Result: Ran 3 tests in 0.000s; OK. System check: no issues.
+
+Command 2:
+.venv313\Scripts\python.exe manage.py test apps.content apps.accounts.tests apps.accounts.test_app_operation_audit apps.tasks.test_work_views apps.tasks.test_midterm_msy_calendar --noinput --verbosity 2
+Result: Found 65 test(s); Ran 65 tests in 3.510s; OK. System check: no issues.
+Note: drf-spectacular schema test emitted duplicate CalendarDay component-name warnings; test itself passed.
+
+Command 3:
+.venv313\Scripts\python.exe manage.py test --noinput --verbosity 1
+Result: Found 100 test(s); Ran 100 tests in 6.574s; OK. System check: no issues.
+Note: the same duplicate CalendarDay OpenAPI component-name warnings were emitted by schema tests.
