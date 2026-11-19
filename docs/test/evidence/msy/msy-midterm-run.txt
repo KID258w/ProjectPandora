@@ -1,29 +1,29 @@
-Date: 2026-11-19
-Branch: test/10-midterm-content-audit-views
-Base commit under test: bdff2db
-Python: 3.13.5
-Django: 5.2.19
-Database: Django-created in-memory SQLite test database
+闵世宇 / Issue #42 中期测试执行记录
+日期：2026-11-19
+分支：test/10-midterm-content-audit-views
+基准提交：bdff2db（准备进行初发布版本测试）
+环境：Windows 11；Python 3.13.5；Django 5.2.19；Django 独立内存 SQLite 测试库
 
-Command 1:
+环境说明
+旧 backend/.venv/pyvenv.cfg 指向不存在的 D:\python.exe，无法启动。使用独立 backend/.venv313 安装 requirements.txt 后执行；虚拟环境被 Git 忽略，不纳入提交。
+
+命令 1：节假日新增测试
 cd backend
-.venv313\Scripts\python.exe manage.py test apps.tasks.test_midterm_msy_calendar --noinput --verbosity 2
-Result: Ran 3 tests in 0.000s; OK. System check: no issues.
+.\.venv313\Scripts\python.exe manage.py test apps.tasks.test_midterm_msy_calendar --noinput --verbosity 2
+结果：3 tests，3 passed，0 failures，0 errors，0 skipped；system check clean。
 
-Command 2:
-.venv313\Scripts\python.exe manage.py test apps.content apps.accounts.tests apps.accounts.test_app_operation_audit apps.tasks.test_work_views apps.tasks.test_midterm_msy_calendar --noinput --verbosity 2
-Result: Found 65 test(s); Ran 65 tests in 3.510s; OK. System check: no issues.
-Note: drf-spectacular schema test emitted duplicate CalendarDay component-name warnings; test itself passed.
+命令 2：本轮新增专项测试
+.\.venv313\Scripts\python.exe manage.py test apps.content.test_midterm_msy_services apps.content.test_midterm_msy_app_items apps.accounts.test_midterm_msy_audit_helpers apps.accounts.test_midterm_msy_audit_snapshots apps.tasks.test_midterm_msy_calendar --noinput --verbosity 1
+结果：56 tests，56 passed，0 failures，0 errors，0 skipped；system check clean。
 
-Command 3:
-.venv313\Scripts\python.exe manage.py test --noinput --verbosity 1
-Result: Found 100 test(s); Ran 100 tests in 6.574s; OK. System check: no issues.
-Note: the same duplicate CalendarDay OpenAPI component-name warnings were emitted by schema tests.
+命令 3：完整后端测试套件
+.\.venv313\Scripts\python.exe manage.py test --noinput --verbosity 1
+结果：Found 153 tests；Ran 153 tests in 30.269s；OK；0 failures，0 errors，0 skipped；system check clean。
 
-Additional tests added:
-- apps.content.test_midterm_msy_services: 9 passed.
-- apps.accounts.test_midterm_msy_audit_helpers: 9 passed.
+已知告警
+drf-spectacular 在 schema 生成时多次报告组件名 CalendarDay 重复，分别指向 apps.tasks.work_views.CalendarDaySerializer 与 apps.logs.serializers.CalendarDaySerializer。相关测试通过；本次只登记文档/schema 风险，没有改动业务代码。
 
-Latest complete suite:
-Command: .venv313\Scripts\python.exe manage.py test --noinput --verbosity 1
-Result: Found 118 test(s); Ran 118 tests in 7.652s; OK. System check: no issues.
+测试准备问题及重跑
+新增审计快照测试最初使用无组织关系的普通业务账号作为 actor，数据库 valid_account_placement 约束拒绝 fixture。改为创建合法 superuser 后重新执行；审计专项和完整测试均通过。此问题属于测试数据准备错误，不是产品缺陷。
+
+没有对部署环境或业务数据库执行写入；没有人工 App/浏览器操作。
