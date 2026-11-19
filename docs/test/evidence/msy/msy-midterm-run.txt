@@ -18,7 +18,11 @@ cd backend
 
 命令 3：完整后端测试套件
 .\.venv313\Scripts\python.exe manage.py test --noinput --verbosity 1
-结果：Found 153 tests；Ran 153 tests in 30.269s；OK；0 failures，0 errors，0 skipped；system check clean。
+结果：Found 153 tests；Ran 153 tests in 32.352s；OK；0 failures，0 errors，0 skipped；system check clean。
+
+提交后复核（测试代码提交 445f79203e334f2ce2cdd1f0560b9a6babf0725c）：
+命令 2 重跑结果：56 tests in 23.028s；OK；0 failures，0 errors，0 skipped；system check clean。
+命令 3 完整套件最终结果：153 tests in 32.352s；OK；0 failures，0 errors，0 skipped；system check clean。
 
 已知告警
 drf-spectacular 在 schema 生成时多次报告组件名 CalendarDay 重复，分别指向 apps.tasks.work_views.CalendarDaySerializer 与 apps.logs.serializers.CalendarDaySerializer。相关测试通过；本次只登记文档/schema 风险，没有改动业务代码。
