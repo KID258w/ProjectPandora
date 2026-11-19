@@ -19,3 +19,11 @@ Command 3:
 .venv313\Scripts\python.exe manage.py test --noinput --verbosity 1
 Result: Found 100 test(s); Ran 100 tests in 6.574s; OK. System check: no issues.
 Note: the same duplicate CalendarDay OpenAPI component-name warnings were emitted by schema tests.
+
+Additional tests added:
+- apps.content.test_midterm_msy_services: 9 passed.
+- apps.accounts.test_midterm_msy_audit_helpers: 9 passed.
+
+Latest complete suite:
+Command: .venv313\Scripts\python.exe manage.py test --noinput --verbosity 1
+Result: Found 118 test(s); Ran 118 tests in 7.652s; OK. System check: no issues.

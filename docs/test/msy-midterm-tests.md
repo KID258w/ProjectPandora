@@ -29,6 +29,10 @@
 | App 操作审计 | `app_audit` 快照、白名单、脱敏、事务；管理员列表/详情 | 接口集成：`backend/apps/accounts/test_app_operation_audit.py` | 登录成功/失败、资料脱敏、任务/日志/标签审计、事务回滚、只读和管理员权限、分页与 no-store |
 | 月/周/日工作视图 | `work_views.target_user/month_data/all_day_tasks/events/bar/color_for` | 接口集成：`backend/apps/tasks/test_work_views.py` | 日期范围相交、跨 UTC 午夜、溢出、颜色、动态归属/可见性、无权访问 |
 | 节假日与调休 | `china_calendar.calendar_days_for_range` | 单元测试：`backend/apps/tasks/test_midterm_msy_calendar.py` | TC-MSY-001 至 TC-MSY-003 |
+| 发布必填校验 | `content.services.missing_publish_fields` | 单元测试：`backend/apps/content/test_midterm_msy_services.py` | 完整内容、单字段缺失、空白多字段 |
+| 已发布列表 | `content.services.published_items` | 同上 | 空列表、状态过滤/排序、limit 0/1 |
+| 事项排序 | `content.services.reorder_items` | 同上 | 正常重排、遗漏项顺延、重复/无效 ID |
+| 审计辅助函数 | `accounts.audit.redact`、`app_audit.is_sensitive_field`、`_changed_keys`、`_sanitized_values` | 单元测试：`backend/apps/accounts/test_midterm_msy_audit_helpers.py` | 每函数包含正常与边界/敏感输入断言 |
 
 ### 2.1 等价类与边界设计
 
@@ -60,19 +64,19 @@ cd backend
 
 执行摘要：[msy-midterm-run.txt](evidence/msy/msy-midterm-run.txt)
 
-自动化统计：本人范围相关测试发现并执行 65 条，65 通过，0 失败，0 错误，0 跳过。新增设计用例 3 条，均通过。随后运行完整后端套件：100 条通过，0 失败，0 错误，0 跳过。
+自动化统计：本人范围相关测试发现并执行 65 条，65 通过，0 失败，0 错误，0 跳过。新增设计用例 21 条（节假日 3、内容服务 9、审计辅助 9），均通过。随后运行完整后端套件：118 条通过，0 失败，0 错误，0 跳过。
 
 ## 5. 结果与问题
 
 - 本次执行范围内，公司事项状态/发布上限/排序/权限、审计敏感信息与事务、工作视图日期和权限等已有集成测试通过；完整后端测试套件也通过。
 - Swagger schema 检查测试通过，但输出 `CalendarDay` serializer 名称冲突警告（与 `apps.logs.serializers.CalendarDaySerializer` 重名）。这是测试发现的文档风险，尚未登记为业务缺陷，也未修改业务代码。
-- 测试函数数量未能满足 Issue 对分工表中每个核心函数/方法分别至少 3 条正常、边界、异常用例的要求。现有接口测试横跨多个函数，但尚未逐函数建立映射和计数；这是本报告的未完成项，不能视为验收通过。
+- 尚未为分工表中每个 API view 方法、工作视图 helper 和全部 App 事项/审计入口逐一映射 3 条独立正常、边界、异常测试；现有接口集成测试覆盖其中多项，但尚未完成逐函数计数。这是剩余验收缺口，不能视为全部通过。
 - 手动客户端用例未执行；没有可用的统一部署版本/测试账号流程记录供本次复现。
 - App 操作审计/工作视图的专项测试由已有模块测试覆盖，但未对所有列出的共享纯函数逐项进行 3 场景直测。
 
 ## 6. 结论与交接
 
-本轮复用的 65 条后端范围测试、新增 3 条节假日范围测试和完整后端 100 条测试均通过。所有核心函数逐项 3 场景映射、手动客户端验证和 Swagger 告警处理仍待补充。业务代码未修改，发现的问题按 Issue 要求记录，未擅自修复。
+本轮复用的 65 条后端范围测试、新增 21 条 helper 用例和完整后端 118 条测试均通过。剩余 API/helper 的逐函数场景映射、手动客户端验证和 Swagger 告警处理仍待补充。业务代码未修改，发现的问题按 Issue 要求记录，未擅自修复。
 
 ### AI 辅助与人工复核
 
