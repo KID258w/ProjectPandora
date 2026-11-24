@@ -4,15 +4,16 @@ The task workflow has been simplified after product-owner review. Work decomposi
 
 ## What Changes
 
-- Define task creation for Founder, Department Manager, Team Leader, and Employee with role-bounded assignees; Founder may select any member of the company, and a Department Manager may also select a Department Manager from another department.
+- Define task creation with one required primary assignee and optional multiple secondary assignees; apply the existing role-bounded candidate rules to all assigned people.
+- Give Founder primary/secondary assignee selectors both a searchable organization tree and a name/role search; retain a searchable flat candidate list for other roles and keep its text readable.
 - Require approval from the creator's direct supervisor for every task they create; Founder-created tasks bypass approval.
-- Define task notifications for direct-subordinate approvals, approval results sent to creators, and newly approved work assigned to another user; keep notification read state separate from task workflow state.
+- Define task notifications for direct-subordinate approvals, approval results sent to creators, and newly approved work sent separately to all assignees; send acceptance outcomes only to the primary assignee and keep notification read state separate from task workflow state.
 - Add a dedicated Approval Center for creator/approver queues; keep only approved tasks in `Created by Me` and `My Tasks`.
 - Use one filter form for ordinary task scope, estimated-start and deadline ranges, and completion state; subordinate inspection adds a task scope toggle (`承担的任务` / `创建的任务`, default assigned) and employee-name selection restricted to authorized descendants. Keep approval queues outside ordinary task filters.
 - Mark approved, active, unfinished tasks past their deadline with a small red “逾期” tag in ordinary and authorized subordinate task lists; compute the tag in the App without adding a persisted task status.
 - Add an optional estimated start date/time to task definitions. Use date and time wheels with minute precision for estimated start and deadline; use day-only date wheels for task-list estimated-start and deadline filters.
 - Place Approval Center and subordinate-inspection shortcuts in the task-center top-right area, with a fixed bottom-right plus button for task creation on ordinary lists.
-- Replace task percentage progress with timestamped text updates; keep completion status binary.
+- Replace task percentage progress with timestamped text updates; primary and secondary assignees can update progress, while only the primary assignee can submit or resubmit completion results.
 - Present task details according to the viewer's relationship to the task; remove the standalone start-time action because task execution has no separate start state in the MVP.
 - Keep association to prior work as optional explanatory text, not a task relationship.
 - Retain direct-dispatcher completion acceptance/return, required return reasons, and non-cascading cancellation.
@@ -25,11 +26,11 @@ The task workflow has been simplified after product-owner review. Work decomposi
 - `task-dispatch-and-acceptance`: Unified task creation, approval, assignment, execution updates, completion submission, acceptance, and cancellation.
 
 ### Modified Capabilities
-- None.
+- `task-dispatch-and-acceptance`: extend assignment, task-list visibility, progress permissions, notification recipients, and task-history snapshots for secondary assignees.
 
 ## Impact
 
 - Source requirement: `docs/requirements/01-task-creation-and-acceptance.md`.
-- Affects Django task and approval APIs, authorization, task history, notification read state, and Android task-center/Home notification screens.
+- Affects Django task and approval APIs, task-assignee relation storage, authorization, task history, notification fan-out, work-view task queries, and Android task-center/Home notification screens.
 - Depends on identity and organization relationships to resolve the creator's direct supervisor and permitted assignees.
 - Department Manager assignments to another department's manager use the same endpoint, form, approval lifecycle, task lists, and completion handling; see `cross-department-coordination`.

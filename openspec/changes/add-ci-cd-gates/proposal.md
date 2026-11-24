@@ -35,9 +35,18 @@
 - `docs/cicd/ci-gates.md`：门禁清单、ruleset 配置步骤、本地命令、欠债与验收清单
 - `docs/cicd/pr-check-workflow.md`：**本次交付** —— 触发条件、检查内容、PR 页面查看方式、失败排查方式、本地复现命令
 
+### 5. Issue 11 后续：`main` 自动部署
+
+- `main` 更新后由 GitHub Actions 自动启动生产部署；`dev` 更新不部署到生产。
+- Actions 使用 Docker Buildx 构建 Web 和 Django 后端镜像，推送到 GHCR，再通过 SSH 在服务器上用 Docker Compose 更新服务。
+- 部署前备份服务器上的 SQLite 数据库；数据库和上传文件保存在持久化存储中，不打入镜像。
+- 部署后执行健康检查；失败时停止发布并尝试回滚到上一个健康版本。
+- 使用 GitHub Secrets/Environment 管理镜像和服务器凭据；不自动构建或发布 Android APK。
+
 ## Non-goals
 
-- **本次不配置 Docker、镜像构建/发布或服务器部署**（属于 `docs/cicd/cicd-guide.md` 的待办 3–6，另行安排）
+- 不在 `dev` 更新时直接部署生产环境；生产部署只由 `main` 更新触发。
+- 不自动签名、构建或发布 Android APK。
 - 不引入 MySQL service（后端当前使用 SQLite，切换时再补）
 - 不启用 openspec `--strict` 阻断（存量 WARNING 先以欠债报告形式跟踪）
 - 不配置 Android 签名发布与 instrumentation/UI 测试
@@ -45,5 +54,6 @@
 
 ## Impact
 
-- 受影响模块：仓库级 CI/CD 与协作流程，不涉及业务代码逻辑
+- 受影响模块：仓库级 CI/CD 与协作流程、Web/后端云端部署；不涉及应用内业务流程
 - 需要的人工配置：`Settings → Rules` 为 `dev`/`main` 各建一条 ruleset（必需批准 + 必需状态检查）；`Settings → Code security` 开启 Secret scanning；补齐协作者 write 权限
+- 自动部署另需配置 GHCR 与服务器连接所需的 GitHub Secrets/Environment，并确认服务器 Docker Compose、SQLite/上传文件持久化路径和健康检查地址

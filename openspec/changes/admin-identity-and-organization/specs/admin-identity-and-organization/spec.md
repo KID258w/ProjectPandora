@@ -93,7 +93,7 @@ The system SHALL let administrators search and view employees and update only bu
 - **THEN** disabled employees, departments, and teams are excluded from candidate choices
 
 ### Requirement: App employees update their own profile atomically
-The system SHALL let an authenticated employee update only their own name, phone, and identity number in the App. Name and identity number SHALL be editable in one profile form, may be submitted together or separately, and SHALL not be automatically synchronized. A failed multi-field update SHALL leave all submitted values unchanged.
+The system SHALL let an authenticated employee update only their own name, phone, and identity number in the App. Name and identity number SHALL be editable in one profile form, may be submitted together or separately, and SHALL not be automatically synchronized. The client SHALL validate submitted fields before sending; the backend SHALL repeat validation and save the request atomically so a failed multi-field update leaves all submitted values unchanged.
 
 #### Scenario: Employee updates name and identity number together
 - **WHEN** an employee submits a valid `display_name` and `id_number` in one profile update
@@ -108,7 +108,7 @@ The system SHALL let an authenticated employee update only their own name, phone
 - **THEN** the system rejects the update and saves none of the submitted changes
 
 #### Scenario: Employee changes phone number
-- **WHEN** an employee submits an unused valid phone number
+- **WHEN** an employee submits an unused phone number containing exactly 11 ASCII digits
 - **THEN** the system atomically updates the unique `username` login identifier, and the App clears its local session, returns to login, and tells the employee to sign in with the new phone number
 
 #### Scenario: Employee attempts to change administrator-managed fields
@@ -175,6 +175,21 @@ The system SHALL ensure each employee national ID is unique across accounts, inc
 #### Scenario: Disabled account retains its national ID reservation
 - **WHEN** an administrator tries to create or update another account with an ID number held by a disabled account
 - **THEN** the system rejects the duplicate and preserves global uniqueness
+
+### Requirement: Employee creation and profile edits share personal-field validation
+Web employee creation and App profile editing SHALL apply the same name, phone, and mainland national-ID format rules before submission. The backend SHALL enforce those rules again before writing. Employee creation requires all three fields; profile updates validate the submitted subset. Phone must be 11 ASCII digits, and phone and national ID SHALL remain unique across active and disabled business accounts.
+
+#### Scenario: User submits valid personal fields
+- **WHEN** Web creates an employee or an employee edits their App profile with a 1–50 character name containing only Unicode letters and common name separators, an 11-ASCII-digit phone, and a valid 18-character mainland national ID
+- **THEN** the client allows submission and the backend validates and saves the fields; `x` in the ID is normalized to `X`
+
+#### Scenario: User submits an invalid personal field
+- **WHEN** a name contains digits or unsupported symbols, a phone is not exactly 11 digits, or the ID has an invalid length, birth date, or checksum
+- **THEN** the client reports the corresponding field and blocks the request; if client validation is bypassed, the backend rejects the write and leaves persisted values unchanged
+
+#### Scenario: User submits a duplicate phone or national ID
+- **WHEN** a phone or normalized national ID is already held by another active or disabled business account
+- **THEN** the backend rejects creation or profile update and preserves the existing account data
 
 #### Scenario: National ID case and surrounding whitespace are normalized
 - **WHEN** an account submits an ID number that differs from an existing ID only by surrounding whitespace or letter case

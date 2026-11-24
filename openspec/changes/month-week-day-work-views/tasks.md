@@ -63,6 +63,12 @@
 - OpenSpec strict validation and `git diff --check` passed.
 - Automated holiday-specific test coverage remains in H3.
 
+## Issue 11 follow-up: secondary-assignee task bars
+
+- [ ] S1 Include tasks where the selected person is either the primary or a secondary assignee in month/week/day task-bar queries; return each task only once.
+- [ ] S2 Keep work-view dynamics scoped to the actual actor when a secondary assignee updates progress; do not copy that event to the primary assignee's view.
+- [ ] S3 Verify primary and secondary assignee views show the same approved task bar while submission and acceptance dynamics retain their existing actual-actor rules.
+
 ## Month grid and named holiday follow-up
 
 - [x] M1 Return a complete Monday–Sunday month grid, its visible date bounds, adjacent-month task bars, and holiday metadata for all visible dates.

@@ -1,11 +1,11 @@
 ## ADDED Requirements
 
 ### Requirement: Work views are responsibility-scoped and read-only
-Month, week, and day views SHALL show task bars for one responsible person and task dynamics for one action actor. Users SHALL default to their own view. To view a descendant, an authorized manager SHALL open that member's profile through Organization Relationships and use its “查看视图” action; the Views page SHALL NOT provide a separate subordinate selector. Views SHALL be read-only, subordinate details SHALL remain read-only, and no DailyLog data SHALL be shown.
+Month, week, and day bars SHALL include tasks assigned to the selected person as primary or secondary, and show each task once. Dynamics belong to the action actor. Users default to their own view; managers select authorized descendants through the member profile in Organization Relationships. Views and subordinate details are read-only and SHALL NOT show DailyLog data.
 
 #### Scenario: Manager drills down to a subordinate's views
 - **WHEN** a manager opens an authorized subordinate's profile through Organization Relationships, taps “查看视图”, and switches between month, week, and day
-- **THEN** each view shows only tasks for that responsible person, preserves that person across view changes, provides a route back to their profile, and remains read-only
+- **THEN** each view shows tasks where that person is the primary or a secondary assignee, preserves that person across view changes, provides a route back to their profile, and remains read-only
 
 #### Scenario: Views do not provide a subordinate selector
 - **WHEN** a manager is viewing their own or an authorized subordinate's work view
@@ -92,6 +92,10 @@ Week/day views SHALL place task creation/submission, edits/resubmission, approva
 - **WHEN** a member creates or edits a task, submits or resubmits it for approval, approves or returns a task, cancels a task, adds progress, submits completion, or accepts/returns completion
 - **THEN** the event appears in the view of the member who performed the action, at its actual recorded time, and does not appear in another member's view merely because that member is assigned the task
 
+#### Scenario: Secondary assignee progress belongs to the updater
+- **WHEN** a secondary assignee adds progress to a task
+- **THEN** the progress event appears in that secondary assignee's view as the actual operator and is not copied to the primary assignee's view; only the primary's own submission appears in the primary's view
+
 #### Scenario: Pending task actions appear without creating task bars
 - **WHEN** a task is awaiting approval
 - **THEN** its creation/submission event may appear in the creator's view and the approval event may appear in the approver's view, while the task itself remains absent from all task-bar areas until approved
@@ -120,7 +124,7 @@ Week and day event cards SHALL use the task's first associated tag color, or neu
 - **THEN** the day hour row expands to show every compact event card without clipping or crossing the neighboring hour boundary
 
 ### Requirement: Task bars are selected by date span regardless of completion or overdue status
-Month, week, and day views SHALL include the selected person's approved, non-cancelled tasks whose inclusive business-local date spans overlap the selected period. Completion and overdue status SHALL NOT independently filter task bars. Pending and cancelled tasks SHALL remain absent. Events SHALL remain limited to the selected period; future events SHALL NOT be fabricated.
+Month, week, and day views SHALL include approved, non-cancelled tasks where the selected person is the primary or a secondary assignee and whose inclusive business-local date spans overlap the selected period. Each task SHALL appear once even when other view relationships also apply. Completion and overdue status SHALL NOT independently filter task bars. Pending and cancelled tasks SHALL remain absent. Events SHALL remain limited to the selected period; future events SHALL NOT be fabricated.
 
 #### Scenario: Completed and unfinished tasks appear when dates overlap
 - **WHEN** approved, non-cancelled tasks with completed and unfinished statuses have date spans overlapping the selected month, week, or day
@@ -137,6 +141,10 @@ Month, week, and day views SHALL include the selected person's approved, non-can
 #### Scenario: Day task bars appear only inside their inclusive task span
 - **WHEN** a task starts on November 10 and has a November 12 deadline
 - **THEN** its all-day bar appears on November 10, 11, and 12 and does not appear on November 9 or 13, provided it is approved and not cancelled
+
+#### Scenario: Secondary assignee sees the task bar
+- **WHEN** an approved, non-cancelled task overlaps the selected period and the selected person is a secondary assignee
+- **THEN** the task appears as one normal task bar for that person, using the existing title, date-span, and tag-color rules
 
 ### Requirement: All-day task bars use the selected period for their span
 Week bars SHALL use the intersection of the task's date span and the selected Monday–Sunday week. Their left position SHALL match the clipped start date and their width SHALL end at the clipped deadline date. Non-overlapping tasks SHALL be omitted. Eligible day bars SHALL span the selected day's full width. The date span SHALL NOT imply actual execution time or work hours.

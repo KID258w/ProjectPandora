@@ -42,3 +42,12 @@
 - [ ] `git rm -r --cached demo/.idea` 停止跟踪 IDE 配置
 - [ ] 存量 10 条「Requirement text is very long (>500 characters)」拆分后启用 `--strict`
 - [ ] `web/package.json` 补 lint / test 脚本（补齐后 `ci-web.yml` 会自动执行）
+
+## 7. Issue 11 后续：`main` 自动部署
+
+- [ ] 配置仅由 `main` 更新触发的生产部署工作流；`dev` 更新不触发服务器部署。
+- [ ] 使用 Docker Buildx 构建 Web 与 Django 后端镜像并推送 GHCR。
+- [ ] 配置 SSH 与 Docker Compose 更新服务器服务，敏感凭据只存储在 GitHub Secrets/Environment。
+- [ ] 在迁移前备份 SQLite；将数据库及上传文件配置为持久化存储，并确认部署镜像不包含运行数据。
+- [ ] 增加部署后健康检查与失败停止/回滚步骤，记录上一个可用镜像版本。
+- [ ] 验证从 `main` 更新到部署成功的完整流程，并演练健康检查失败时的回滚与数据恢复办法；Android APK 发布不在本工作流范围内。

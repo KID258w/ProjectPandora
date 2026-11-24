@@ -11,12 +11,13 @@ Issue #1 account-creation and phone-login residuals are complete. The remaining 
 - Allow an employee to update their own name, phone, identity number, and password in the App. Name and identity number share one editable profile form and may be saved together, while remaining independent fields; a phone change updates the login identifier stored in `username`.
 - Allow an employee to upload and replace their own profile avatar in the App. Store the image bytes on the account record so the avatar follows the account across devices; keep avatar administration out of Web.
 - Show account tenure in the App profile as a full calendar-based `X年X个月X天` duration using the existing account-creation date; preserve zero-valued units and the Asia/Shanghai date boundary.
+- Apply one shared format-validation rule to name, phone, and national ID when Web creates an employee and when an employee edits their own App profile. Web and App validate before sending; the backend repeats validation before saving.
 - Define the corresponding backend model, API, validation, authorization, and sensitive-data requirements. Continue to exclude business tasks and employee logs from administrator access.
 - Update the backend API/database/provisioning docs, requirements, Web and Android interface docs, and this OpenSpec change.
 
 ## Non-Goals
 
-- Reworking Issue #1 account creation, initial-password generation, Android login wording, or the Web organization navigation control.
+- Changing the Issue #1 account-creation flow or initial-password generation; this follow-up only adds shared name/phone/national-ID format validation. Android login wording and Web organization navigation are unchanged.
 - Web edits to employee name, phone, identity number, or password; Web password reset; SMS verification; or password recovery.
 - Changing a team's parent department, automatic leader succession, organization-transfer history, or administrative access to business tasks and employee logs.
 - Company-important-item workflows, which remain in their separate change.

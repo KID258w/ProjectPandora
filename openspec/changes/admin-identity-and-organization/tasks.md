@@ -48,3 +48,10 @@
 - [ ] 4.3 Verify a combined name/identity update either saves both values or neither; verify single-field updates preserve the other value.
 - [ ] 4.4 Verify password values and full identity numbers never appear in prohibited responses, application logs, or audit records.
 - [ ] 4.5 Run strict OpenSpec validation, synchronize the main spec after implementation, and archive the change when all three PRs and acceptance checks are complete.
+
+## Issue 11 follow-up: shared employee-field validation
+
+- [ ] 5.1 Add matching Web and Android pre-submit validation for employee name, phone, and mainland national ID; retain the agreed field boundaries and user-readable per-field errors.
+- [ ] 5.2 Enforce the same field formats and global phone/ID uniqueness on backend account creation and App profile updates, including disabled accounts; normalize ID whitespace and `x/X` before checking uniqueness.
+- [ ] 5.3 Preserve atomic profile updates when multiple fields are submitted; reject invalid direct API requests without partial writes.
+- [ ] 5.4 Add backend and client validation coverage and synchronize the API, database, requirements, and this OpenSpec change.

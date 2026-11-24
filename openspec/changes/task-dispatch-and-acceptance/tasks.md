@@ -1,6 +1,6 @@
 ## 1. Task domain and authorization
 
-- [x] 1.1 Implement standalone task records with one creator/assignee, required title/details/deadline, optional expected-deliverable text, and optional non-relational association note.
+- [x] 1.1 Implement standalone task records with one creator and required primary assignee, required title/details/deadline, optional expected-deliverable text, and optional non-relational association note.
 - [x] 1.2 Implement server-side assignment validation for Founder, Department Manager (self, same-department Team Leaders, or other-department Department Managers), Team Leader, and Employee scopes.
 - [x] 1.3 Implement direct-supervisor lookup and approval records, including pending queues, required return reason, edit/resubmit, and reapproval for key changes.
 - [x] 1.4 Enforce creator, assignee, direct-supervisor, direct-dispatcher, and read-only hierarchical visibility for task APIs.
@@ -21,7 +21,7 @@
 ## 3. Android task workflows
 
 - [ ] 3.1 Build ordinary task-center lists for approved “我的任务” and “我创建的”; keep approval queues out of these lists.
-- [ ] 3.2 Build unified creation form with role-bounded single assignee (including Department Manager-to-other-department-Manager assignment) and optional association note; allow employees to create self-assigned work.
+- [ ] 3.2 Build unified creation form with one role-bounded primary assignee and optional multiple role-bounded secondary assignees (including Department Manager-to-other-Department-Manager assignment) and optional association note; allow employees to create self-assigned work.
 - [ ] 3.3 Build a separate Approval Center with role-appropriate queues, reasoned return, edit/resubmit, and key-change reapproval interactions.
 - [ ] 3.4 Build task detail, text-update history, completion submission, direct-dispatcher acceptance/return, and self-completion flows.
 - [ ] 3.5 Build read-only subordinate-task inspection without granting workflow actions; limit selectable objects to authorized descendants.
@@ -47,3 +47,13 @@
 - [x] 5.4 Update the Android prototype so Founder can select any company member as a task assignee while other roles retain their existing assignment scopes. This prototype item does not count as production implementation of sections 1–4.
 - [x] 5.5 Update the Android prototype with a fixed bottom-right task-creation plus button, top-right Approval Center/subordinate shortcuts, and consolidated ordinary/subordinate filter forms while preserving the assignment and visibility permission scopes. This prototype item does not count as production implementation of sections 1–4.
 - [x] 5.6 Add an assigned/created task-scope option to the subordinate filter form, defaulting to assigned tasks; show only approved tasks and retain the existing authorized-descendant, deadline, and completion filters. This prototype item does not count as production implementation of sections 1–4.
+
+## Issue 11 follow-up: secondary assignees and Founder selector
+
+- [ ] 6.1 Add a secondary-assignee many-to-many relation while retaining `tasks_task.assignee_id` as the required primary assignee; enforce unique task/user pairs and prevent overlap with the primary assignee.
+- [ ] 6.2 Extend task create/edit/detail/list APIs and history snapshots for `secondary_assignee_ids`; apply the same role eligibility, enabled-account, reapproval, and authorized-subordinate rules to all assignees.
+- [ ] 6.3 Allow primary and secondary assignees to append progress updates; restrict result submission/resubmission and acceptance outcome notifications to the primary assignee.
+- [ ] 6.4 Fan out post-approval assignment notifications to each assignee and cancellation notifications to all assignees; preserve per-recipient read/resolved state and suppress the creator's own assignment notice when they are the primary assignee.
+- [ ] 6.5 Build the Founder selector with a searchable, expandable organization tree and readable text/selection contrast; keep other roles on searchable flat candidate lists.
+- [ ] 6.6 Include tasks in each primary or secondary assignee's “我的任务” and work-view bars; keep view dynamics attributed to the actual operator and avoid duplicate task bars.
+- [ ] 6.7 Add backend and Android coverage for assignment scope, duplicate/inactive candidates, notifications, progress/submission permissions, history names, task lists, and work views; synchronize API/database/requirements and the related work-view OpenSpec change.
