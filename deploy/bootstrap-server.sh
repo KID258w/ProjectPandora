@@ -53,8 +53,12 @@ cat <<EOF
 完成。后续步骤：
 1. 在 $DEPLOY_PATH/.env 填入 DJANGO_SECRET_KEY、IDENTITY_NUMBER_ENCRYPTION_KEY、
    DJANGO_ALLOWED_HOSTS 等（参考 deploy/.env.example）。
-   若机器上已有旧的手动部署配置，建议软链复用，避免两份 .env 漂移：
-     ln -sfn /opt/pandora/shared/.env $DEPLOY_PATH/.env
+   若机器上已有旧的手动部署配置（如 /opt/pandora/shared/.env），请派生一份给容器用，
+   并改写为容器内路径（宿主机路径在容器里不存在）：
+     cp -a /opt/pandora/shared/.env $DEPLOY_PATH/.env && chmod 600 $DEPLOY_PATH/.env
+     sed -i "s|^SQLITE_PATH=.*|SQLITE_PATH=/data/db.sqlite3|" $DEPLOY_PATH/.env
+     sed -i "s|^DJANGO_MEDIA_ROOT=.*|DJANGO_MEDIA_ROOT=/data/media|" $DEPLOY_PATH/.env
+     echo "DJANGO_STATIC_ROOT=/srv/static" >> $DEPLOY_PATH/.env
 2. 在 GitHub 仓库 Settings → Secrets and variables → Actions 配置
    SSH_HOST / SSH_USER / SSH_KEY
    Variables：DEPLOY_PATH、PANDORA_DATA_DIR(默认 /var/lib/pandora)、

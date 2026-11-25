@@ -130,23 +130,38 @@ Environment `production` 用于部署 job，可在 Settings → Environments 里
 
    如果实际路径不是 `/var/lib/pandora`，把 GitHub Variable `PANDORA_DATA_DIR` 改成真实路径。
 
-2. **复用同一份 `.env`，避免两份配置漂移**
+2. **从旧配置派生容器用的 `.env`（不要软链）**
+
+   ⚠️ 旧的手动部署把路径写成**宿主机视角**（`SQLITE_PATH=/var/lib/pandora/db.sqlite3`），
+   而容器里只挂载了 `/data`，**不存在 `/var/lib/pandora`**。直接软链会让后端启动失败或
+   把数据库建到容器内部（表现为"数据丢了"）。必须先派生再改写：
 
    ```bash
-   # 旧配置在 /opt/pandora/shared/.env，容器读 /opt/pandora/.env
-   ln -sfn /opt/pandora/shared/.env /opt/pandora/.env
-   chmod 600 /opt/pandora/shared/.env
+   cp -a /opt/pandora/shared/.env /opt/pandora/.env
+   chmod 600 /opt/pandora/.env
+
+   # 改写为容器内路径
+   sed -i 's|^SQLITE_PATH=.*|SQLITE_PATH=/data/db.sqlite3|' /opt/pandora/.env
+   sed -i 's|^DJANGO_MEDIA_ROOT=.*|DJANGO_MEDIA_ROOT=/data/media|' /opt/pandora/.env
+   grep -q '^DJANGO_STATIC_ROOT=' /opt/pandora/.env || echo 'DJANGO_STATIC_ROOT=/srv/static' >> /opt/pandora/.env
+   grep -q '^GUNICORN_WORKERS=' /opt/pandora/.env || echo 'GUNICORN_WORKERS=3' >> /opt/pandora/.env
+
+   # 只校验路径类键，不打印密钥
+   grep -E '^(SQLITE_PATH|DJANGO_MEDIA_ROOT|DJANGO_STATIC_ROOT|GUNICORN_WORKERS)=' /opt/pandora/.env
    ```
 
-   注意容器内的路径是 `/data/...`，所以 `.env` 里应保持：
+   路径对应关系：
 
-   ```dotenv
-   SQLITE_PATH=/data/db.sqlite3
-   DJANGO_MEDIA_ROOT=/data/media
-   DJANGO_STATIC_ROOT=/srv/static
-   ```
+   | `.env` 中的值（容器视角） | 宿主机实际位置 | 由谁决定 |
+   | --- | --- | --- |
+   | `SQLITE_PATH=/data/db.sqlite3` | `/var/lib/pandora/db.sqlite3` | compose 的 `${PANDORA_DATA_DIR}:/data` |
+   | `DJANGO_MEDIA_ROOT=/data/media` | `/var/lib/pandora/media` | 同上 |
+   | `DJANGO_STATIC_ROOT=/srv/static` | 命名卷 `pandora-static` | compose |
 
-   而宿主机真实目录由 `PANDORA_DATA_DIR` 通过 compose 挂载决定，不要写进 `SQLITE_PATH`。
+   因此 `PANDORA_DATA_DIR` 只影响宿主机侧，**不要**把它拼进 `SQLITE_PATH`。
+
+   完成后的 `/opt/pandora/.env` 与 `/opt/pandora/shared/.env` 是**两份独立文件**：
+   前者给容器，后者留给旧的 systemd 部署作回退。改密钥时两处都要同步。
 
 3. **补两个新变量**（旧配置里没有，缺了会导致 Admin 登录 403）
 
@@ -255,7 +270,7 @@ ls -lt /var/lib/pandora/backups | head
 | --- | --- |
 | Actions 在「上传 Compose 与部署脚本」失败 | `SSH_HOST/USER/KEY` 是否正确；安全组是否放行 22；私钥是否含完整 `BEGIN/END` |
 | `拉取镜像` 报 `unauthorized` | 包为私有：配置 `GHCR_PULL_USER/GHCR_PULL_TOKEN`（`read:packages`） |
-| 报 `.env 缺少` | 按 2.3 创建 `/opt/pandora/.env`，或软链到 `/opt/pandora/shared/.env` |
+| 报 `.env 缺少` | 按第 3 节第 2 步从 `shared/.env` 派生并改写路径；不要软链（宿主机路径在容器内不存在） |
 | 报「数据目录不存在」 | `PANDORA_DATA_DIR` 写错，或新服务器未跑 `bootstrap-server.sh` |
 | `Bind for 0.0.0.0:80 failed: port is already allocated` | compose 端口没改成 `127.0.0.1:8080`，与宿主 Nginx 抢 80 |
 | 健康检查一直失败 | `docker compose logs --tail=200 backend`；常见：`.env` 缺密钥（`ImproperlyConfigured`）、`DJANGO_ALLOWED_HOSTS` 不含访问用的 Host |

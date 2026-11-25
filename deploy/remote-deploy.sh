@@ -20,8 +20,12 @@ export PANDORA_DATA_DIR="${PANDORA_DATA_DIR:-/var/lib/pandora}"
 # 压缩后的旧镜像会占满磁盘，保留最近几个 tag 由 docker image prune 处理
 if [ ! -f .env ]; then
   echo "错误：当前目录缺少 .env，请按 deploy/.env.example 创建并填写" >&2
-  echo "提示：为避免与旧的手动部署配置不一致，建议直接软链到共享配置：" >&2
-  echo "  ln -sfn /opt/pandora/shared/.env /opt/pandora/.env" >&2
+  echo "提示：容器需要容器内路径（/data/...），不能直接软链旧的手动部署配置。" >&2
+  echo "  从旧配置派生并改写路径：" >&2
+  echo "    cp -a /opt/pandora/shared/.env /opt/pandora/.env && chmod 600 /opt/pandora/.env" >&2
+  echo "    sed -i 's|^SQLITE_PATH=.*|SQLITE_PATH=/data/db.sqlite3|' /opt/pandora/.env" >&2
+  echo "    sed -i 's|^DJANGO_MEDIA_ROOT=.*|DJANGO_MEDIA_ROOT=/data/media|' /opt/pandora/.env" >&2
+  echo "    echo 'DJANGO_STATIC_ROOT=/srv/static' >> /opt/pandora/.env" >&2
   exit 1
 fi
 
