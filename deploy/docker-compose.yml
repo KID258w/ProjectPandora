@@ -1,0 +1,68 @@
+# Pandora 生产编排：后端（Gunicorn）+ Web（Nginx 静态与反代）
+# 用法：在服务器 ${DEPLOY_PATH}（默认 /opt/pandora）下执行
+#   IMAGE_TAG=<tag> docker compose pull && IMAGE_TAG=<tag> docker compose up -d
+# 自动部署由 .github/workflows/cd-deploy.yml → deploy/remote-deploy.sh 调用。
+# 同目录的 .env 由运维一次性创建（参考 deploy/.env.example），不进 Git。
+#
+# 本项目部署选型（详见 docs/cicd/server-deploy.md）：
+# 1) 宿主 Nginx 继续占用 80/443 并终止 HTTPS，本编排的 web 容器只绑定
+#    127.0.0.1:${WEB_PORT}，由宿主 Nginx 反向代理过来。
+# 2) 数据用 bind mount 直接挂宿主机 ${PANDORA_DATA_DIR}（默认 /var/lib/pandora），
+#    不从命名卷启动，避免容器看到空数据库。
+name: pandora
+
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/kid258w/projectpandora/backend}:${IMAGE_TAG:-latest}
+    env_file:
+      - .env
+    volumes:
+      # 直接挂宿主机数据目录：SQLite（/data/db.sqlite3）、附件（/data/media）、
+      # 迁移备份（/data/backups）。容器与旧的 systemd 部署共用同一份数据。
+      - ${PANDORA_DATA_DIR:-/var/lib/pandora}:/data
+      # collectstatic 产物，共享给 web 容器的 /static/（每次启动重新生成，用命名卷即可）
+      - pandora-static:/srv/static
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health/',timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/kid258w/projectpandora/web}:${IMAGE_TAG:-latest}
+    ports:
+      # 只绑回环地址：公网必须经宿主 Nginx（443/TLS）转发，
+      # 否则会绕过 HTTPS 直接暴露明文入口。
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+    volumes:
+      - pandora-static:/srv/static:ro
+      - ${PANDORA_DATA_DIR:-/var/lib/pandora}:/data:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pandora-static:

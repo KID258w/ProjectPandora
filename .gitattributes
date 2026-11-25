@@ -1,0 +1,6 @@
+# Shell 脚本必须以 LF 换行入库，否则在 Linux 容器/服务器里会报
+# "bad interpreter: /bin/sh^M"。Windows 开发者 core.autocrlf=true 时尤其重要。
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+docker-compose.yml text eol=lf
+nginx.conf      text eol=lf

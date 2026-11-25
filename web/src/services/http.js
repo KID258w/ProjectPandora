@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+// 生产部署与后端同域：VITE_API_BASE_URL 为空字符串，请求直接走相对路径 /api/v1/...，
+// 由 Nginx 反代到 Django。本地开发不设置该变量时仍回落到 127.0.0.1:8000。
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 export const ACCESS_TOKEN_KEY = 'pandora_admin_access_token'
 export const REFRESH_TOKEN_KEY = 'pandora_admin_refresh_token'
 
