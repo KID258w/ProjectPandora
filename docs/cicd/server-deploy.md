@@ -175,22 +175,51 @@ Environment `production` 用于部署 job，可在 Settings → Environments 里
    > `Stored identity-number data cannot be decrypted`）。迁移时原样沿用旧值，
    > 并把这个 key 与 `DJANGO_SECRET_KEY` 另存到密码管理器，不要写进仓库或 Issue。
 
-4. **停掉旧的 systemd 服务，释放 8002 端口**
+4. **第一次部署（零停机，先不动线上）**
+
+   容器绑的是 `127.0.0.1:8080`，与旧服务的 8002 互不干扰，所以**先并行起来验证**：
+
+   ```
+   Actions → CD Deploy → Run workflow
+   ```
+
+   > 此时宿主 Nginx 仍指向 8002，线上用户无感知。容器写入的是同一份
+   > `/var/lib/pandora/db.sqlite3`，迁移会在容器 entrypoint 里执行。
+
+5. **容器侧自检（仍未切流量）**
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}
+' http://127.0.0.1:8080/api/health/     # 期望 200
+   curl -s -o /dev/null -w '%{http_code}
+' http://127.0.0.1:8080/                # 期望 200
+   cd /opt/pandora && docker compose ps                                           # 两个 service healthy
+   docker compose exec backend python manage.py shell -c      "from apps.accounts.models import User;print(User.objects.count())"          # 账号数应与旧库一致
+   ```
+
+   再加验一次加密密钥（见第 4 节 5.1）：身份证号能解密才继续，否则回滚。
+
+6. **切换宿主 Nginx 到 8080**（第 2.2 节）
+
+   ```bash
+   nginx -t && systemctl reload nginx      # 用 reload，不要 restart（同机还有其他站点）
+   curl -s -o /dev/null -w '%{http_code}
+' https://pandora.xinphotoshare.click/api/health/   # 期望 200
+   ```
+
+7. **停掉旧的 systemd 服务**
 
    ```bash
    systemctl stop pandora-backend
    systemctl disable pandora-backend
    ```
 
-   宿主 Nginx 此时还指向 8002，站点会短暂不可用，属于预期。
+   服务代码与 `venv` 都保留不删，用于回退。
 
-5. **第一次部署**（Actions → CD Deploy → Run workflow，或合一次 `main`）
-
-6. **切换宿主 Nginx 到 8080**（第 2.2 节），`nginx -t && systemctl reload nginx`
-
-7. **回退预案**：保留 `/opt/pandora/app` 与 `venv` 不删。若容器版持续异常，
-   `nginx` 配置还原 `.bak` + `systemctl enable --now pandora-backend` 即可切回，
-   数据因为共用 `/var/lib/pandora` 不受影响（除非新版本做过不可逆迁移，见第 6 节）。
+8. **回退预案**：若容器版持续异常，
+   还原 `/etc/nginx/sites-available/pandora.bak` + `nginx -t && systemctl reload nginx`
+   + `systemctl enable --now pandora-backend` 即可切回。数据共用 `/var/lib/pandora`
+   不受影响（除非新版本做过不可逆迁移，见第 6 节）。
 
 ## 4. 首次部署验证（对应 Issue 验收项）
 
