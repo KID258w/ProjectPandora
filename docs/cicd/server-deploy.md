@@ -155,6 +155,11 @@ Environment `production` 用于部署 job，可在 Settings → Environments 里
    DJANGO_ALLOWED_HOSTS=pandora.xinphotoshare.click,127.0.0.1,localhost
    ```
 
+   > 🔴 **`IDENTITY_NUMBER_ENCRYPTION_KEY` 绝对不要重新生成**。它用于加密员工身份证号，
+   > 一旦换成新值，库里已有身份证号将**永久无法解密**（代码会报
+   > `Stored identity-number data cannot be decrypted`）。迁移时原样沿用旧值，
+   > 并把这个 key 与 `DJANGO_SECRET_KEY` 另存到密码管理器，不要写进仓库或 Issue。
+
 4. **停掉旧的 systemd 服务，释放 8002 端口**
 
    ```bash
@@ -180,7 +185,8 @@ Environment `production` 用于部署 job，可在 Settings → Environments 里
 | 2 | `main` 更新触发并部署对应提交 | 合入 `main` 后看 run 摘要里的镜像标签 = 该提交 sha 前 12 位 |
 | 3 | 健康检查通过、云端可访问 | `curl -i https://<域名>/api/health/` 返回 200；Web 能登录、App 能登录 |
 | 4 | 数据与附件保留 | 部署前后各记一次 `docker compose exec backend python manage.py shell -c "from django.contrib.auth import get_user_model;print(get_user_model().objects.count())"` 与 `ls /var/lib/pandora/media \| wc -l`，数值不变 |
-| 5 | 备份文件已生成 | `ls -lt /var/lib/pandora/backups \| head`，有本次时间戳的 `db-*.sqlite3` |
+| 5 | 备份文件已生成 | `ls -lt /var/lib/pandora/backups \| head`，有本次时间戳的 `db-predeploy-*.sqlite3` |
+| 5.1 | **身份证号仍能解密** | 登入 App 或查库：`docker compose exec backend python manage.py shell -c "from apps.accounts.models import User;u=User.objects.exclude(id_number_hash=None).first();print(u.id_number[:3]+'***', len(u.id_number))"`。能打印出明文长度说明 `IDENTITY_NUMBER_ENCRYPTION_KEY` 正确；报 `Stored identity-number data cannot be decrypted` 就是密钥错了，**立即回滚，不要继续迁移** |
 | 6 | 失败回退已记录 | 见第 6 节；可故意把健康检查路径改错跑一次，确认自动回滚生效后还原 |
 
 ## 5. 日常更新
