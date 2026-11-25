@@ -45,9 +45,23 @@
 
 ## 7. Issue 11 后续：`main` 自动部署
 
-- [ ] 配置仅由 `main` 更新触发的生产部署工作流；`dev` 更新不触发服务器部署。
-- [ ] 使用 Docker Buildx 构建 Web 与 Django 后端镜像并推送 GHCR。
-- [ ] 配置 SSH 与 Docker Compose 更新服务器服务，敏感凭据只存储在 GitHub Secrets/Environment。
-- [ ] 在迁移前备份 SQLite；将数据库及上传文件配置为持久化存储，并确认部署镜像不包含运行数据。
-- [ ] 增加部署后健康检查与失败停止/回滚步骤，记录上一个可用镜像版本。
+- [x] 配置仅由 `main` 更新触发的生产部署工作流；`dev` 更新不触发服务器部署。
+      实现：`.github/workflows/cd-deploy.yml`（`on.push.branches: [main]`，不设 `paths` 过滤，`main` 任意提交都部署）
+- [x] 使用 Docker Buildx 构建 Web 与 Django 后端镜像并推送 GHCR。
+      实现：`cd-deploy.yml` 的 `build` job；镜像 `ghcr.io/<repo>/backend:<sha12>` 与 `:latest`
+- [x] 配置 SSH 与 Docker Compose 更新服务器服务，敏感凭据只存储在 GitHub Secrets/Environment。
+      实现：`deploy` job（`environment: production`）+ `deploy/remote-deploy.sh`；凭据只走 Secrets
+- [x] 在迁移前备份 SQLite；将数据库及上传文件配置为持久化存储，并确认部署镜像不包含运行数据。
+      实现：`remote-deploy.sh` 部署前快照（`db-predeploy-*.sqlite3`）+ 容器 entrypoint 迁移前备份；
+      数据 bind mount `${PANDORA_DATA_DIR:-/var/lib/pandora}`；`backend/.dockerignore` 排除 `*.sqlite3`/`media/`
+- [x] 增加部署后健康检查与失败停止/回滚步骤，记录上一个可用镜像版本。
+      实现：`remote-deploy.sh` 健康探活（最多 30 次）+ 失败调用 `remote-rollback.sh`；`.last-good-tag` 记录可用版本
 - [ ] 验证从 `main` 更新到部署成功的完整流程，并演练健康检查失败时的回滚与数据恢复办法；Android APK 发布不在本工作流范围内。
+      验证清单与判据见 `docs/cicd/server-deploy.md` 第 4 节（6 项）。**未完成端到端验证前不得勾选。**
+
+## 8. 部署选型与依赖（本项目实际情况）
+
+- [x] 宿主 Nginx 保留 80/443 并终止 HTTPS，web 容器仅绑 `127.0.0.1:${WEB_PORT:-8080}`
+- [x] 数据用 bind mount 挂宿主机 `/var/lib/pandora`，不用命名卷（避免容器看到空库）
+- [x] 容器内 Nginx 透传上游 `X-Forwarded-Proto`（否则两层反代下 Admin CSRF 403）
+- [ ] 在服务器配置 GitHub Secrets/Variables 并完成首次部署（需仓库管理员与服务器权限）

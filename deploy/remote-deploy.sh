@@ -35,6 +35,19 @@ if [ -n "${GHCR_TOKEN:-}" ]; then
   echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:?GHCR_USER 未设置}" --password-stdin
 fi
 
+# 部署前备份（Issue 要求）：在新镜像启动、迁移之前先留一份快照。
+# 容器 entrypoint 也会在启动时备份一次，两层叠加，这里的是“上一次可用状态”。
+if [ -f "$PANDORA_DATA_DIR/db.sqlite3" ] && [ "${PANDORA_DB_BACKUP:-1}" != "0" ]; then
+  mkdir -p "$PANDORA_DATA_DIR/backups"
+  snapshot="$PANDORA_DATA_DIR/backups/db-predeploy-$(date +%Y%m%d-%H%M%S).sqlite3"
+  cp "$PANDORA_DATA_DIR/db.sqlite3" "$snapshot"
+  echo "==> 部署前已备份数据库：$snapshot"
+  # 只保留最近 30 份部署前快照
+  ls -1t "$PANDORA_DATA_DIR"/backups/db-predeploy-*.sqlite3 2>/dev/null | tail -n +31 | xargs -r rm -f
+else
+  echo "==> 跳过部署前备份（数据库尚未创建，或 PANDORA_DB_BACKUP=0）"
+fi
+
 echo "==> 拉取镜像 $IMAGE_TAG"
 docker compose pull backend web
 
