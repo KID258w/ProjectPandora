@@ -180,6 +180,23 @@ class AccountUiTest {
         assertTrue(ordinaryPreferences.none { it.contains("110101199001011234") })
     }
 
+    @Test fun profileRejectsInvalidFieldsBeforeCallingRepository() {
+        repository.seed(TestUsers.EMPLOYEE)
+        start()
+        compose.onNodeWithText("我的").performClick()
+        compose.onNodeWithText("个人资料").performScrollTo().performClick()
+        compose.onNodeWithText("编辑个人资料").performScrollTo().performClick()
+        compose.onNodeWithTag("profile_name").performTextReplacement("陈宁123")
+        compose.onNodeWithTag("profile_phone").performTextReplacement("1381234567")
+        compose.onNodeWithTag("profile_id_number").performTextInput("11010119900230123X")
+        compose.onNodeWithTag("save_personal_info").performScrollTo().performClick()
+
+        compose.onNodeWithText("姓名须为 1–50 个字符，仅允许 Unicode 字母及常见姓名分隔符。", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("手机号须为 11 位数字。", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("身份证号格式、出生日期或校验码不正确。", useUnmergedTree = true).assertExists()
+        assertNull("Invalid data must be rejected before the repository/API call", repository.lastProfileUpdate)
+    }
+
     @Test fun passwordFormShowsBackendErrorAndDoesNotPersistPlaintext() {
         repository.seed(TestUsers.EMPLOYEE)
         repository.passwordFailure = AccountException(AccountFailureKind.VALIDATION, "当前密码不正确。")

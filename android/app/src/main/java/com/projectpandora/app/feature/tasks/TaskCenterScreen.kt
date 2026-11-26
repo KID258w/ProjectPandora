@@ -727,23 +727,42 @@ private fun TaskForm(api: BusinessApi, existing: JsonObject?, currentUserId: Lon
     var due by remember(existing) { mutableStateOf(existing?.string("due_at") ?: "") }
     var estimatedStart by remember(existing) { mutableStateOf(existing?.string("estimated_start_at") ?: "") }
     var assignee by remember(existing) { mutableLongStateOf(existing?.obj("assignee")?.long("id") ?: 0L) }
+    var secondaryAssignees by remember(existing) {
+        mutableStateOf(existing?.array("secondary_assignees")?.map { it.long("id") }?.filter { it != assignee }?.toSet().orEmpty())
+    }
     var people by remember { mutableStateOf<List<JsonObject>>(emptyList()) }; var tags by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
-    var assigneeSearch by remember { mutableStateOf("") }
+    var organizationTree by remember { mutableStateOf<JsonObject?>(null) }
     var showAssigneePicker by remember { mutableStateOf(false) }
+    var showSecondaryPicker by remember { mutableStateOf(false) }
     var showTagPicker by remember { mutableStateOf(false) }
     var showEstimatedStartWheel by remember { mutableStateOf(false) }
     var showDueWheel by remember { mutableStateOf(false) }
     var selectedTags by remember(existing) { mutableStateOf(existing?.array("tags") ?: emptyList()) }
     var error by remember { mutableStateOf("") }; var busy by remember { mutableStateOf(false) }; val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { try { people = api.all(ROOT + "organization/assignable-users/"); tags = api.all(ROOT + "tags/") } catch (e: Exception) { error = e.businessMessage() } }
+    LaunchedEffect(Unit) {
+        try {
+            people = api.all(ROOT + "organization/assignable-users/")
+            tags = api.all(ROOT + "tags/")
+            if (currentUserRole == "founder") organizationTree = api.get(ROOT + "organization/tree/").data()
+        } catch (e: Exception) { error = e.businessMessage() }
+    }
     PageColumn {
         BackButton(onBack); PageTitle(if (existing == null) "创建任务" else "编辑任务", small = true)
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("标题 *") })
         OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(), label = { Text("任务说明 *") }, minLines = 3)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { assigneeSearch = ""; showAssigneePicker = true }) { Text("选择负责人 *") }
+            OutlinedButton(onClick = { showAssigneePicker = true }) { Text("选择主要负责人 *") }
             val chosen = people.firstOrNull { it.long("id") == assignee } ?: existing?.obj("assignee")
             Text(chosen?.let { assigneeOptionLabel(it, currentUserId, currentUserRole) } ?: "未选择", Modifier.weight(1f).padding(start = 12.dp))
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { showSecondaryPicker = true }) { Text("选择次要负责人") }
+            Text("可多选", Modifier.padding(start = 10.dp), color = C.Muted, fontSize = 12.sp)
+        }
+        if (secondaryAssignees.isEmpty()) Text("未选择次要负责人", color = C.Muted, fontSize = 13.sp)
+        else Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            secondaryAssignees.mapNotNull { id -> people.firstOrNull { it.long("id") == id } ?: existing?.array("secondary_assignees")?.firstOrNull { it.long("id") == id } }
+                .forEach { person -> Text("• ${assigneeOptionLabel(person, currentUserId, currentUserRole)}", color = C.Ink, fontSize = 13.sp) }
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             WheelDateTimeField("预计开始时间（选填）", estimatedStart, Modifier.weight(1f)) { showEstimatedStartWheel = true }
@@ -762,38 +781,27 @@ private fun TaskForm(api: BusinessApi, existing: JsonObject?, currentUserId: Lon
             TagChipList(selectedTags, emptyText = "未选择")
         }
         if (error.isNotEmpty()) Note(error)
-        PrimaryButton("保存", { if (title.isBlank() || description.isBlank() || due.isBlank() || assignee == 0L) error = "请填写标题、说明、负责人和截止时间。" else if (estimatedStart.isNotBlank() && parseTaskDateTime(estimatedStart).timeInMillis > parseTaskDateTime(due).timeInMillis) error = "预计开始时间不能晚于截止时间。" else scope.launch {
-            busy = true; try { val body = json { addProperty("title", title.trim()); addProperty("description", description.trim()); addProperty("assignee_id", assignee); if (estimatedStart.isBlank()) add("estimated_start_at", JsonNull.INSTANCE) else addProperty("estimated_start_at", estimatedStart.trim()); addProperty("due_at", due.trim()); addProperty("required_materials", materials); addProperty("association_note", association); add("tag_ids", ids(selectedTags.map { it.long("id") })) }; if (existing == null) api.post(ROOT + "tasks/", body) else api.patch(ROOT + "tasks/${existing.long("id")}/", body); onSaved() } catch (e: Exception) { error = e.businessMessage() } finally { busy = false }
+        PrimaryButton("保存", { if (title.isBlank() || description.isBlank() || due.isBlank() || assignee == 0L) error = "请填写标题、说明、主要负责人和截止时间。" else if (assignee in secondaryAssignees || secondaryAssignees.size != secondaryAssignees.distinct().size) error = "主要负责人不能同时作为次要负责人。" else if (estimatedStart.isNotBlank() && parseTaskDateTime(estimatedStart).timeInMillis > parseTaskDateTime(due).timeInMillis) error = "预计开始时间不能晚于截止时间。" else scope.launch {
+            busy = true; try { val body = json { addProperty("title", title.trim()); addProperty("description", description.trim()); addProperty("assignee_id", assignee); add("secondary_assignee_ids", ids(secondaryAssignees.toList())); if (estimatedStart.isBlank()) add("estimated_start_at", JsonNull.INSTANCE) else addProperty("estimated_start_at", estimatedStart.trim()); addProperty("due_at", due.trim()); addProperty("required_materials", materials); addProperty("association_note", association); add("tag_ids", ids(selectedTags.map { it.long("id") })) }; if (existing == null) api.post(ROOT + "tasks/", body) else api.patch(ROOT + "tasks/${existing.long("id")}/", body); onSaved() } catch (e: Exception) { error = e.businessMessage() } finally { busy = false }
         } }, enabled = !busy)
     }
     if (showAssigneePicker) {
-        AlertDialog(
-            onDismissRequest = { showAssigneePicker = false },
-            title = { Text("选择负责人") },
-            text = {
-                Column {
-                    OutlinedTextField(assigneeSearch, { assigneeSearch = it }, Modifier.fillMaxWidth(), label = { Text("搜索姓名、部门或团队") })
-                    Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
-                        val matches = people.filter { person ->
-                            listOf(person.string("display_name"), person.string("department_name"), person.string("team_name"), businessRoleLabel(person.string("business_role")))
-                                .any { it.contains(assigneeSearch, ignoreCase = true) }
-                        }
-                        if (matches.isEmpty()) Text("没有找到符合条件的负责人。", Modifier.padding(vertical = 12.dp))
-                        matches.forEach { person ->
-                            TextButton(
-                                onClick = { assignee = person.long("id"); showAssigneePicker = false },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    (if (assignee == person.long("id")) "✓ " else "") + assigneeOptionLabel(person, currentUserId, currentUserRole),
-                                    Modifier.fillMaxWidth(),
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { showAssigneePicker = false }) { Text("关闭") } },
+        AssigneePickerDialog(
+            title = "选择主要负责人", people = people, organizationTree = organizationTree,
+            currentUserId = currentUserId, currentUserRole = currentUserRole,
+            selectedIds = setOf(assignee).filter { it > 0 }.toSet(), multiple = false,
+            excludedIds = secondaryAssignees,
+            onDismiss = { showAssigneePicker = false },
+            onConfirm = { selected -> assignee = selected.firstOrNull() ?: 0L; showAssigneePicker = false },
+        )
+    }
+    if (showSecondaryPicker) {
+        AssigneePickerDialog(
+            title = "选择次要负责人", people = people, organizationTree = organizationTree,
+            currentUserId = currentUserId, currentUserRole = currentUserRole,
+            selectedIds = secondaryAssignees, multiple = true, excludedIds = setOf(assignee),
+            onDismiss = { showSecondaryPicker = false },
+            onConfirm = { selected -> secondaryAssignees = selected - assignee; showSecondaryPicker = false },
         )
     }
     if (showTagPicker) {
@@ -823,9 +831,140 @@ private fun TaskForm(api: BusinessApi, existing: JsonObject?, currentUserId: Lon
 }
 
 @Composable
+private fun AssigneePickerDialog(
+    title: String,
+    people: List<JsonObject>,
+    organizationTree: JsonObject?,
+    currentUserId: Long,
+    currentUserRole: String,
+    selectedIds: Set<Long>,
+    multiple: Boolean,
+    excludedIds: Set<Long>,
+    onDismiss: () -> Unit,
+    onConfirm: (Set<Long>) -> Unit,
+) {
+    var keyword by remember(title) { mutableStateOf("") }
+    var pending by remember(title) { mutableStateOf(selectedIds) }
+    var expanded by remember(title) { mutableStateOf(emptySet<String>()) }
+    val eligiblePeople = people.filter { it.long("id") !in excludedIds }
+    val eligibleIds = eligiblePeople.map { it.long("id") }.toSet()
+    val byId = eligiblePeople.associateBy { it.long("id") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, color = C.Ink) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    keyword, { keyword = it }, Modifier.fillMaxWidth().testTag(if (multiple) "secondary_assignee_search" else "primary_assignee_search"),
+                    label = { Text("搜索姓名或职位") }, singleLine = true,
+                )
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    if (keyword.isNotBlank()) {
+                        val matches = eligiblePeople.filter { person ->
+                            listOf(person.string("display_name"), businessRoleLabel(person.string("business_role")))
+                                .any { it.contains(keyword.trim(), ignoreCase = true) }
+                        }
+                        if (matches.isEmpty()) Text("没有找到符合条件的负责人。", Modifier.padding(vertical = 12.dp), color = C.Muted)
+                        matches.forEach { person -> AssigneeChoiceRow(person, currentUserId, currentUserRole, person.long("id") in pending) {
+                            pending = toggleAssignee(pending, person.long("id"), multiple)
+                        } }
+                    } else if (currentUserRole == "founder" && organizationTree != null) {
+                        val roots = organizationTree.array("roots")
+                        if (roots.isEmpty()) Text("当前没有可显示的组织成员。", color = C.Muted)
+                        roots.forEach { node ->
+                            AssigneeTreeNode(
+                                node = node, depth = 0, eligibleIds = eligibleIds, byId = byId,
+                                currentUserId = currentUserId, currentUserRole = currentUserRole,
+                                selectedIds = pending, expanded = expanded,
+                                onToggleNode = { key -> expanded = if (key in expanded) expanded - key else expanded + key },
+                                onTogglePerson = { id -> pending = toggleAssignee(pending, id, multiple) },
+                            )
+                        }
+                    } else {
+                        eligiblePeople.forEach { person -> AssigneeChoiceRow(person, currentUserId, currentUserRole, person.long("id") in pending) {
+                            pending = toggleAssignee(pending, person.long("id"), multiple)
+                        } }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(pending) }) { Text("完成") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+private fun toggleAssignee(current: Set<Long>, id: Long, multiple: Boolean): Set<Long> =
+    if (!multiple) setOf(id) else if (id in current) current - id else current + id
+
+@Composable
+private fun AssigneeChoiceRow(person: JsonObject, currentUserId: Long, currentUserRole: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 2.dp).background(if (selected) C.BluePale else Color.White, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = selected, onCheckedChange = null, colors = CheckboxDefaults.colors(checkedColor = C.Blue))
+        Column(Modifier.weight(1f)) {
+            Text(assigneeOptionLabel(person, currentUserId, currentUserRole), color = C.Ink, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+            Text(businessRoleLabel(person.string("business_role")), color = C.Muted, fontSize = 12.sp)
+        }
+        if (selected) Text("已选", color = C.Blue, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun AssigneeTreeNode(
+    node: JsonObject,
+    depth: Int,
+    eligibleIds: Set<Long>,
+    byId: Map<Long, JsonObject>,
+    currentUserId: Long,
+    currentUserRole: String,
+    selectedIds: Set<Long>,
+    expanded: Set<String>,
+    onToggleNode: (String) -> Unit,
+    onTogglePerson: (Long) -> Unit,
+) {
+    val type = node.string("node_type")
+    val id = node.long("id")
+    val isPerson = type == "person"
+    val children = node.array("children").filter { child ->
+        child.string("node_type") != "person" || child.long("id") in eligibleIds || child.array("children").isNotEmpty()
+    }
+    fun containsEligiblePerson(item: JsonObject): Boolean =
+        (item.string("node_type") == "person" && item.long("id") in eligibleIds) || item.array("children").any(::containsEligiblePerson)
+    val visibleChildren = children.filter(::containsEligiblePerson)
+    if (isPerson) {
+        val person = byId[id] ?: return
+        AssigneeChoiceRow(person, currentUserId, currentUserRole, id in selectedIds) { onTogglePerson(id) }
+        return
+    }
+    if (visibleChildren.isEmpty()) return
+    val key = "${type}_${id}_${node.string("name")}"
+    val isExpanded = key in expanded
+    Row(
+        Modifier.fillMaxWidth().padding(start = (depth * 14).dp, top = 2.dp, bottom = 2.dp)
+            .background(Color(0xFFF3F6FA), RoundedCornerShape(10.dp)).clickable { onToggleNode(key) }
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(if (isExpanded) "⌄" else "›", color = C.Blue, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
+        Text(node.string("name"), color = C.Ink, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        Text(if (type == "department") "部门" else "团队", color = C.Muted, fontSize = 12.sp)
+    }
+    if (isExpanded) visibleChildren.forEach { child ->
+        AssigneeTreeNode(child, depth + 1, eligibleIds, byId, currentUserId, currentUserRole, selectedIds, expanded, onToggleNode, onTogglePerson)
+    }
+}
+
+@Composable
 private fun TaskDetail(api: BusinessApi, task: JsonObject?, history: List<JsonObject>, me: Long, inInbox: Boolean, readOnly: Boolean, busy: Boolean, error: String, onBack: () -> Unit, onEdit: () -> Unit, onRefresh: () -> Unit, onApprovalReturned: () -> Unit) {
     val scope = rememberCoroutineScope(); var operation by remember { mutableStateOf("") }; var message by remember { mutableStateOf("") }; var materials by remember { mutableStateOf("") }; var actionError by remember { mutableStateOf("") }; var running by remember { mutableStateOf(false) }
-    val id = task?.long("id") ?: 0L; val creator = me != 0L && task?.obj("creator")?.long("id") == me; val assignee = me != 0L && task?.obj("assignee")?.long("id") == me
+    val id = task?.long("id") ?: 0L
+    val creator = me != 0L && task?.obj("creator")?.long("id") == me
+    val primaryAssignee = me != 0L && task?.obj("assignee")?.long("id") == me
+    val secondaryAssignee = me != 0L && task?.array("secondary_assignees")?.any { it.long("id") == me } == true
+    val assignee = primaryAssignee || secondaryAssignee
     val active = task?.string("lifecycle_status") == "active" && task.string("completion_status") == "unfinished"
     val approved = task?.string("approval_status") == "approved"
     val submission = task?.array("submissions")?.lastOrNull { it.string("review_status") == "waiting" }
@@ -848,7 +987,9 @@ private fun TaskDetail(api: BusinessApi, task: JsonObject?, history: List<JsonOb
                 Text(t.string("description"), color = C.Ink, lineHeight = 22.sp)
                 HorizontalDivider(color = C.Line)
                 TaskMetadata("创建人", t.obj("creator")?.string("display_name") ?: "未知")
-                TaskMetadata("负责人", t.obj("assignee")?.string("display_name") ?: "未知")
+                TaskMetadata("主要负责人", t.obj("assignee")?.string("display_name") ?: "未知")
+                val secondaryNames = t.array("secondary_assignees").map { it.string("display_name") }.filter(String::isNotBlank)
+                if (secondaryNames.isNotEmpty()) TaskMetadata("次要负责人", secondaryNames.joinToString("、"))
                 if (t.string("estimated_start_at").isNotBlank()) TaskMetadata("预计开始时间", displayTimestamp(t.string("estimated_start_at")))
                 TaskMetadata("截止时间", displayTimestamp(t.string("due_at")))
                 if (t.string("required_materials").isNotBlank()) TaskMetadata("预期提交材料", t.string("required_materials"))
@@ -930,10 +1071,12 @@ private fun TaskDetail(api: BusinessApi, task: JsonObject?, history: List<JsonOb
                     }
                 if (assignee && approved) {
                     OutlinedButton(onClick = { operation = "update" }, modifier = Modifier.fillMaxWidth()) { Text("追加执行进展") }
-                    if (submission == null) Button(onClick = { operation = "submit" }, modifier = Modifier.fillMaxWidth()) { Text("提交完成结果") }
-                    else Note("完成结果已提交，等待派发者验收。", background = C.BluePale, color = C.Blue)
+                    if (primaryAssignee) {
+                        if (submission == null) Button(onClick = { operation = "submit" }, modifier = Modifier.fillMaxWidth()) { Text("提交完成结果") }
+                        else Note("完成结果已提交，等待派发者验收。", background = C.BluePale, color = C.Blue)
+                    } else Note("次要负责人可以更新进展，完成结果由主要负责人提交。", background = C.BluePale, color = C.Blue)
                 }
-                    if (creator && approved && submission != null && !assignee) {
+                    if (creator && approved && submission != null && !primaryAssignee) {
                         Button(onClick = { action("submissions/${submission.long("id")}/review/", json { addProperty("decision", "accepted"); addProperty("comment", "") }) }, modifier = Modifier.fillMaxWidth()) { Text("验收通过") }
                         OutlinedButton(onClick = { operation = "review-return" }, modifier = Modifier.fillMaxWidth()) { Text("退回并填写原因") }
                     }
