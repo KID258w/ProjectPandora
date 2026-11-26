@@ -231,7 +231,7 @@ class BusinessUiTest {
         compose.onNodeWithText("完成").performClick()
 
         compose.onNodeWithText("组员甲（员工 · 客户端组）").assertExists()
-        compose.onNodeWithText("组员乙（员工 · 客户端组）").assertExists()
+        compose.onNodeWithText("组员乙（员工 · 客户端组）", substring = true).assertExists()
     }
 
     @Test fun founderAssigneePickerExpandsOrganizationTreeAndSearchesMembers() {
@@ -252,7 +252,7 @@ class BusinessUiTest {
     @Test fun secondaryAssigneeCanUpdateProgressButCannotSubmitCompletion() {
         val api = FakeBusinessApi(role = "employee", secondaryDetail = true)
         compose.setContent { PandoraAppTheme { TaskCenterScreen(api, {}, initialTaskId = 9) } }
-        compose.waitUntil(10000) { compose.onAllNodesWithText("次要负责人可以更新进展").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10000) { compose.onAllNodesWithText("次要负责人可以更新进展", substring = true).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("追加执行进展").performScrollTo().assertExists()
         compose.onNodeWithText("提交完成结果").assertDoesNotExist()
         compose.onNodeWithText("追加执行进展").performScrollTo().performClick()
