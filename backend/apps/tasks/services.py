@@ -10,7 +10,7 @@ from apps.logs.views import descendants
 from apps.tags.models import TaskTag
 from apps.tags.services import validate_tag_ids
 
-from .models import Task, TaskApprovalRecord, TaskNotification
+from .models import Task, TaskApprovalRecord, TaskNotification, TaskSecondaryAssignee
 
 
 def assignable_users(user):
@@ -31,11 +31,38 @@ def assignable_users(user):
             if has_complete_supervisor_chain(candidate)]
 
 
-def validate_assignee(creator, assignee_id):
-    for candidate in assignable_users(creator):
-        if candidate.pk == assignee_id:
-            return candidate
-    raise ValidationError({"assignee_id": "负责人不在可指派范围内或已停用。"})
+def validate_assignee(creator, assignee_id, *, eligible=None):
+    if eligible is None:
+        eligible = {user.pk: user for user in assignable_users(creator)}
+    if assignee_id not in eligible:
+        raise ValidationError({"assignee_id": "负责人不在可指派范围内或已停用。"})
+    return eligible[assignee_id]
+
+
+def validate_task_assignees(creator, primary_id, secondary_ids):
+    if len(secondary_ids) != len(set(secondary_ids)):
+        raise ValidationError({"secondary_assignee_ids": "次要负责人不能重复。"})
+    if primary_id in secondary_ids:
+        raise ValidationError({"secondary_assignee_ids": "主要负责人不能同时是次要负责人。"})
+    eligible = {user.pk: user for user in assignable_users(creator)}
+    primary = validate_assignee(creator, primary_id, eligible=eligible)
+    if any(user_id not in eligible for user_id in secondary_ids):
+        raise ValidationError({"secondary_assignee_ids": "次要负责人不在可指派范围内或已停用。"})
+    return primary, [eligible[user_id] for user_id in sorted(secondary_ids)]
+
+
+def assigned_to(user_ids):
+    """Match either assignment role without multiplying task rows."""
+    secondary = TaskSecondaryAssignee.objects.filter(user_id__in=user_ids)
+    return Q(assignee_id__in=user_ids) | Q(pk__in=secondary.values("task_id"))
+
+
+def responsible_for(task, user):
+    return task.assignee_id == user.pk or task.secondary_assignees.filter(pk=user.pk).exists()
+
+
+def responsible_ids(task):
+    return {task.assignee_id, *task.secondary_assignees.values_list("pk", flat=True)}
 
 
 def subordinate_ids(user):
@@ -53,7 +80,10 @@ def visible_task(request, pk):
         if task.approval_records.filter(decision=TaskApprovalRecord.Decision.PENDING, approver=user).exists():
             return task
     elif task.approval_status == Task.Approval.APPROVED:
-        if task.assignee_id == user.pk or task.creator_id in subordinate_ids(user) or task.assignee_id in subordinate_ids(user):
+        if responsible_for(task, user):
+            return task
+        reports = subordinate_ids(user)
+        if task.creator_id in reports or reports.intersection(responsible_ids(task)):
             return task
     raise NotFound("任务不存在。")
 
@@ -68,8 +98,12 @@ def require_assignee(task, user):
         raise PermissionDenied("仅任务负责人可执行此操作。")
 
 
-def require_executable(task, user):
-    require_assignee(task, user)
+def require_executable(task, user, *, allow_secondary=False):
+    if allow_secondary:
+        if not responsible_for(task, user):
+            raise PermissionDenied("仅任务负责人可执行此操作。")
+    else:
+        require_assignee(task, user)
     if task.approval_status != Task.Approval.APPROVED or task.lifecycle_status != Task.Lifecycle.ACTIVE or task.completion_status != Task.Completion.UNFINISHED:
         raise ValidationError("任务尚不可执行、已完成或已取消。")
 
@@ -90,7 +124,7 @@ def create_task_notification(task, recipient, notification_type, event_key, subm
     if recipient is None:
         return None
     notification, _ = TaskNotification.objects.get_or_create(event_key=event_key, defaults={
-        "recipient": recipient,
+        "recipient_id": recipient.pk if isinstance(recipient, User) else recipient,
         "task": task,
         "submission": submission,
         "notification_type": notification_type,
@@ -98,19 +132,29 @@ def create_task_notification(task, recipient, notification_type, event_key, subm
     return notification
 
 
-def resolve_task_notifications(task, notification_types=None, submission=None):
+def resolve_task_notifications(task, notification_types=None, submission=None, *, recipient_ids=None):
     rows = TaskNotification.objects.filter(task=task, resolved_at__isnull=True)
     if notification_types is not None:
         rows = rows.filter(notification_type__in=notification_types)
     if submission is not None:
         rows = rows.filter(submission=submission)
+    if recipient_ids is not None:
+        rows = rows.filter(recipient_id__in=recipient_ids)
     return rows.update(resolved_at=timezone.now())
 
 
-def send_assignment(task, approval_id=0):
-    if task.assignee_id != task.creator_id:
-        create_task_notification(task, task.assignee, TaskNotification.Type.ASSIGNMENT_RECEIVED,
-                                 f"assignment:{task.pk}:{approval_id}")
+def send_assignment(task, approval_id=0, *, recipient_ids=None):
+    recipients = responsible_ids(task) if recipient_ids is None else set(recipient_ids)
+    if task.creator_id == task.assignee_id:
+        recipients.discard(task.creator_id)
+    prefix = f"assignment:{task.pk}:{approval_id}"
+    # Older assignment events used a key without a recipient suffix.
+    existing_recipient = task.notifications.filter(event_key=prefix).values_list("recipient_id", flat=True).first()
+    recipients.discard(existing_recipient)
+    for user_id in sorted(recipients):
+        create_task_notification(
+            task, user_id, TaskNotification.Type.ASSIGNMENT_RECEIVED, f"{prefix}:{user_id}",
+        )
 
 
 def set_task_tags(task, tags):
@@ -150,6 +194,7 @@ def task_summary(task):
 def task_detail(task):
     data = task_summary(task)
     data.update(creator=user_brief(task.creator), assignee=user_brief(task.assignee),
+        secondary_assignees=[user_brief(user) for user in task.secondary_assignees.order_by("pk")],
         description=task.description, required_materials=task.required_materials,
         association_note=task.association_note, creator_department_id=task.creator_department_id,
         assignee_department_id=task.assignee_department_id,

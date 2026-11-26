@@ -22,7 +22,7 @@ ALLOWED_VALUE_FIELDS = {
     Module.PROFILE: frozenset({"display_name", "username"}),
     Module.TASKS: frozenset({
         "title", "description", "required_materials", "association_note",
-        "estimated_start_at", "due_at", "assignee_id", "tag_ids",
+        "estimated_start_at", "due_at", "assignee_id", "secondary_assignee_ids", "tag_ids",
         "approval_status", "completion_status", "lifecycle_status", "decision",
         "approval_round", "cancellation_reason", "content", "comment",
         "completion_note", "materials_note", "review_status", "review_comment",

@@ -97,7 +97,7 @@ class AppOperationAuditApiTests(APITestCase):
 
     def test_profile_changes_keep_field_names_and_redact_sensitive_values(self):
         self.auth(self.employee)
-        new_id_number = "ID-NEW-0001"
+        new_id_number = "99000020000229001X"
         response = self.client.patch("/api/v1/app/me/", {
             "display_name": "张三", "username": "13900000001", "id_number": new_id_number,
         }, format="json")

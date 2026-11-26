@@ -304,9 +304,9 @@ class AppMeFieldValidationTests(OrgMixin, TestCase):
 
     def test_id_number_normalized(self):
         """TC-WSX-286 正常：身份证号去空格并转大写。"""
-        serializer = self.validate(id_number=" 11010119900101123x ")
+        serializer = self.validate(id_number=" 99000020000229001x ")
         self.assertTrue(serializer.is_valid(), serializer.errors)
-        self.assertEqual(serializer.validated_data["id_number"], "11010119900101123X")
+        self.assertEqual(serializer.validated_data["id_number"], "99000020000229001X")
 
     # ---------- 边界值 ----------
 
@@ -326,14 +326,14 @@ class AppMeFieldValidationTests(OrgMixin, TestCase):
         # 字段级 CharField 会先 trim 再判空，因此报 blank 而非自定义文案
         self.assertIn("display_name", error)
 
-    def test_boundary_display_name_length_100_accepted(self):
-        """TC-WSX-288 边界：姓名 100 字符（上界）通过。"""
-        serializer = self.validate(display_name="名" * 100)
+    def test_boundary_display_name_length_50_accepted(self):
+        """TC-WSX-288 边界：姓名 50 字符（上界）通过。"""
+        serializer = self.validate(display_name="名" * 50)
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
-    def test_boundary_display_name_length_101_rejected(self):
-        """TC-WSX-289 边界：姓名 101 字符（上界外）被拒绝。"""
-        error = self.assert_blocked(display_name="名" * 101)
+    def test_boundary_display_name_length_51_rejected(self):
+        """TC-WSX-289 边界：姓名 51 字符（上界外）被拒绝。"""
+        error = self.assert_blocked(display_name="名" * 51)
         self.assertIn("display_name", error)
 
     def test_boundary_empty_id_number_rejected(self):
@@ -345,9 +345,9 @@ class AppMeFieldValidationTests(OrgMixin, TestCase):
 
     def test_exception_duplicate_id_number_rejected(self):
         """TC-WSX-290 异常：提交他人已用身份证号被拒绝。"""
-        self.other.id_number = "110101199001015555"
+        self.other.id_number = "990000200002290028"
         self.other.save(update_fields=["id_number"])
-        error = self.assert_blocked(id_number="110101199001015555")
+        error = self.assert_blocked(id_number="990000200002290028")
         self.assertIn("该身份证号已被使用", error)
 
     def test_exception_business_fields_not_editable(self):
@@ -388,10 +388,10 @@ class AppMeUpdateTests(OrgMixin, TestCase):
 
     def test_id_number_change_audit_excludes_plaintext(self):
         """TC-WSX-303 边界：身份证号变更的审计不写入明文。"""
-        self.patch_me(id_number="110101199001017777")
+        self.patch_me(id_number="990000200002290028")
         log = AppOperationAuditLog.objects.get(module=AppOperationAuditLog.Module.PROFILE)
         dumped = str(log.before_data) + str(log.after_data)
-        self.assertNotIn("110101199001017777", dumped)
+        self.assertNotIn("990000200002290028", dumped)
 
     def test_invalid_field_rolls_back_whole_update(self):
         """TC-WSX-304 异常（原子性）：任一字段失败则整次更新不生效。"""
@@ -408,9 +408,12 @@ class AppMeUpdateTests(OrgMixin, TestCase):
 
     def test_response_returns_masked_id_number(self):
         """TC-WSX-306 正常：更新响应返回脱敏身份证号，不含明文。"""
-        self.patch_me(id_number="110101199001017777")
+        updated = self.patch_me(id_number="990000200002290028")
+        self.assertEqual(updated.status_code, 200, updated.data)
+        self.assertEqual(updated.data["data"]["id_number_masked"], "**************0028")
+        self.employee.refresh_from_db()
         response = self.client.get("/api/v1/app/me/")
-        self.assertEqual(response.data["data"]["id_number_masked"], "**************7777")
+        self.assertEqual(response.data["data"]["id_number_masked"], "**************0028")
         self.assertNotIn("id_number", response.data["data"])
 
 

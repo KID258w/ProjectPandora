@@ -304,8 +304,8 @@ The system SHALL create notifications for applicable task lifecycle events. Supe
 - **THEN** the pending approval notification is resolved and the pending approver receives an unread cancellation notification with the reason and no approval action
 
 #### Scenario: An approved assignment is cancelled
-- **WHEN** the creator cancels an approved task assigned to another user
-- **THEN** outstanding assignment or submission reminders are resolved and each primary/secondary assignee receives an unread cancellation notification with the reason
+- **WHEN** the creator cancels an approved task, including when the creator is an assignee
+- **THEN** outstanding assignment or submission reminders are resolved and every primary or secondary assignee other than the creator receives an unread cancellation notification with the reason
 
 #### Scenario: A returned task is cancelled before approval
 - **WHEN** the creator cancels a task returned for editing before it is approved

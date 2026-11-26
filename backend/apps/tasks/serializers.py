@@ -8,6 +8,7 @@ from .models import TaskNotification
 
 class TaskCreateInputSerializer(StrictInputMixin, serializers.Serializer):
     assignee_id = serializers.IntegerField(min_value=1)
+    secondary_assignee_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False)
     title = serializers.CharField(max_length=200, allow_blank=False, trim_whitespace=True)
     description = serializers.CharField(allow_blank=False, trim_whitespace=True)
     required_materials = serializers.CharField(allow_blank=True, trim_whitespace=True, required=False)
@@ -26,6 +27,7 @@ class TaskCreateInputSerializer(StrictInputMixin, serializers.Serializer):
 
 class TaskInputSerializer(StrictInputMixin, serializers.Serializer):
     assignee_id = serializers.IntegerField(min_value=1, required=False)
+    secondary_assignee_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False)
     title = serializers.CharField(max_length=200, allow_blank=False, trim_whitespace=True, required=False)
     description = serializers.CharField(allow_blank=False, trim_whitespace=True, required=False)
     required_materials = serializers.CharField(allow_blank=True, trim_whitespace=True, required=False)
@@ -125,6 +127,7 @@ class TaskSubmissionSerializer(serializers.Serializer):
 class TaskDetailSerializer(TaskSummarySerializer):
     creator = AuthorBriefSerializer()
     assignee = AuthorBriefSerializer()
+    secondary_assignees = AuthorBriefSerializer(many=True)
     description = serializers.CharField()
     required_materials = serializers.CharField()
     association_note = serializers.CharField()
