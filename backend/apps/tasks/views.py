@@ -607,10 +607,11 @@ class TaskCancelView(BusinessAPIView):
                 pending_approval = task.approval_records.filter(
                     decision=TaskApprovalRecord.Decision.PENDING
                 ).order_by("-round").first()
-                if pending_approval is not None and pending_approval.approver_id != request.user.pk:
+                if pending_approval is not None:
                     recipient_ids.add(pending_approval.approver_id)
             elif task.approval_status == Task.Approval.APPROVED:
                 recipient_ids = responsible_ids(task)
+            recipient_ids.discard(task.creator_id)
             task.lifecycle_status = Task.Lifecycle.CANCELLED
             task.cancellation_reason = values["reason"]
             task.cancelled_at = timezone.now()

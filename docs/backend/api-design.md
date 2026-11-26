@@ -51,7 +51,7 @@ App 可分别提交或同时提交个人资料字段。一次请求含多个字�
 - `POST /api/v1/app/tasks/{id}/updates/`：主要或次要负责人可追加进展，记录真实操作人。
 - `POST /api/v1/app/tasks/{id}/submissions/`：仅主要负责人可首次提交成果或在验收退回后重提。已有 `POST /api/v1/app/tasks/{id}/resubmit/` 仍供创建人编辑被审批退回的任务后重新送审。
 - `GET /api/v1/app/organization/tree/`：创始人的负责人选择器同时提供搜索栏和公司组织树。无关键词时显示组织树，根节点为创始人和各部门，部门/团队节点可展开或收起；有关键词时按姓名或职位搜索当前有权指派的启用成员，并显示匹配人员结果；清空关键词后恢复组织树。搜索可复用 `GET /api/v1/app/organization/assignable-users/?keyword=...`，其结果必须限于创始人有权指派的启用成员。其他角色继续使用可搜索的扁平候选人列表，不显示树。
-- 新任务通过审批后，向主要负责人和每名次要负责人分别生成 `assignment_received` 通知；创建人若同时是主要负责人，不向本人发送自己的派发通知。已审批任务取消时通知所有负责人；验收通过/退回通知仅发给主要负责人。通知列表、未读数和工作视图按接收人/实际操作人规则返回，不把验收结果复制给次要负责人。
+- 新任务通过审批后，向主要负责人和每名次要负责人分别生成 `assignment_received` 通知；创建人若同时是主要负责人，不向本人发送自己的派发通知。取消已审批任务时，仅向创建人之外的主要和次要负责人分别发送取消通知；验收通过/退回通知仅发给主要负责人。通知列表、未读数和工作视图按接收人/实际操作人规则返回，不把验收结果复制给次要负责人。
 
 任务历史及 App 操作审计的 `secondary_assignee_ids` 前后值用 `[{id, display_name}]` 保存操作时的姓名。工作视图任务条归属主要或次要负责人；进展动态只归属实际更新人，成果提交动态归属主要负责人，验收动态归属实际验收人，不按负责人列表复制动态。详见 `docs/requirements/04-month-week-day-work-views.md`。
 
@@ -316,7 +316,7 @@ Content-Type: application/json
 
 通知只通过 App 内列表提供，不发送操作系统推送。创建人有直属上级时，任务进入待审批状态即向该直属上级生成审批通知；每轮审批通过或退回后，另向创建人生成“审批通过”或“审批退回”结果通知，退回通知包含原因。审批通过后，他人创建并派发给当前用户的任务生成新任务通知。本人创建并由本人承担的任务不生成新任务通知。
 
-任务通知类型为 `approval_required`、`approval_approved`、`approval_returned`、`assignment_received`、`task_cancelled`、`submission_received`、`submission_accepted` 和 `submission_returned`。`approval_required` 发给待审批的直属上级；审批通过或退回后结束该条待审批通知，并按审批轮次向创建人生成独立结果通知。结果通知保留本轮决定和意见，不因后续重新送审而覆盖。取消待审批任务时，关闭其待审批通知并通知当前待审批的直属上级；取消已审批任务时，关闭尚未处理的派发/提交/退回通知并通知所有主要和次要负责人。审批退回后、重新审批通过前取消的任务尚未进入负责人任务列表，不向负责人发送取消通知。提交完成结果通知直接派发人；验收通过或退回只通知主要负责人，退回通知包含原因。重新提交会结束上一次验收退回通知。取消、验收或重新提交等流程变化通过 `resolved_at` 结束待处理通知，但审批结果事件通知不会因后续轮次自动结束。`unread_only=true` 与未读数只包含 `is_read=false` 且 `resolved_at=null` 的通知。
+任务通知类型为 `approval_required`、`approval_approved`、`approval_returned`、`assignment_received`、`task_cancelled`、`submission_received`、`submission_accepted` 和 `submission_returned`。`approval_required` 发给待审批的直属上级；审批通过或退回后结束该条待审批通知，并按审批轮次向创建人生成独立结果通知。结果通知保留本轮决定和意见，不因后续重新送审而覆盖。取消待审批任务时，关闭其待审批通知并通知当前待审批的直属上级；取消已审批任务时，关闭尚未处理的派发、提交和退回通知，并向创建人之外的每位主要和次要负责人发送取消通知。审批退回后、重新审批通过前取消的任务尚未进入负责人任务列表，不向负责人发送取消通知。提交完成结果通知直接派发人；验收通过或退回只通知主要负责人，退回通知包含原因。重新提交会结束上一次验收退回通知。取消、验收或重新提交等流程变化通过 `resolved_at` 结束待处理通知，但审批结果事件通知不会因后续轮次自动结束。`unread_only=true` 与未读数只包含 `is_read=false` 且 `resolved_at=null` 的通知。
 
 创建任务时 `assignee_id`、`title`、`description`、`due_at` 为必填字段；`estimated_start_at`、`required_materials`、`association_note`、`tag_ids` 和 `secondary_assignee_ids` 为可选字段。`estimated_start_at` 是可空的计划开始时间，不能晚于必填的 `due_at`；编辑时可以传 ISO 8601 日期时间或 `null` 清除。截止时间仍精确到分钟，列表筛选 `due_from`、`due_to`、`estimated_start_from` 和 `estimated_start_to` 均为含边界的 `YYYY-MM-DD` 日期筛选。编辑任务使用部分更新，字段可按需提交。任务创建及编辑的 `TaskSummary`、`TaskDetail` 响应始终包含 `estimated_start_at`，未设置时返回 `null`。
 

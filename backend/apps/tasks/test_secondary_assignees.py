@@ -156,17 +156,27 @@ class SecondaryAssigneeTests(MidtermTaskFixtures):
         for kind in (NOTICE.SUBMISSION_RETURNED, NOTICE.SUBMISSION_ACCEPTED):
             self.assertEqual(self.notification_recipients(task, kind), {self.worker.pk})
 
-    def test_cancellation_notifies_all_assignees_and_resolves_old_assignment_per_account(self):
-        task = Task.objects.get(pk=self.create(self.founder, self.founder, secondary_assignee_ids=[
-            self.leader.pk, self.worker.pk,
-        ])["id"])
-        self.assertEqual(self.notification_recipients(task, NOTICE.ASSIGNMENT_RECEIVED),
-                         {self.leader.pk, self.worker.pk})
-        self.request(self.founder, "post", self.route(task, "cancel/"), 200, reason="范围取消")
-        self.assertEqual(self.notification_recipients(task, NOTICE.TASK_CANCELLED),
-                         {self.founder.pk, self.leader.pk, self.worker.pk})
-        self.assertEqual(self.notification_recipients(task, NOTICE.ASSIGNMENT_RECEIVED, unresolved=True), set())
-        self.assertEqual(task.notifications.filter(notification_type=NOTICE.TASK_CANCELLED, is_read=False).count(), 3)
+    def test_cancellation_notifies_other_assignees_and_resolves_assignment_reminders(self):
+        cases = (
+            ("creator_is_primary", self.founder, [self.leader.pk, self.worker.pk],
+             {self.leader.pk, self.worker.pk}),
+            ("creator_is_secondary", self.worker, [self.founder.pk, self.leader.pk],
+             {self.leader.pk, self.worker.pk}),
+            ("creator_is_neither", self.worker, [self.leader.pk], {self.leader.pk, self.worker.pk}),
+            ("creator_is_only_assignee", self.founder, [], set()),
+        )
+        for name, primary, secondary_ids, expected_recipients in cases:
+            with self.subTest(name=name):
+                data = self.create(self.founder, primary, secondary_assignee_ids=secondary_ids)
+                task = Task.objects.get(pk=data["id"])
+                self.request(self.founder, "post", self.route(task, "cancel/"), 200, reason="范围取消")
+                self.assertTaskState(task, lifecycle_status=Task.Lifecycle.CANCELLED)
+                self.assertEqual(self.notification_recipients(task, NOTICE.TASK_CANCELLED), expected_recipients)
+                self.assertEqual(
+                    self.notification_recipients(task, NOTICE.ASSIGNMENT_RECEIVED, unresolved=True), set(),
+                )
+                unread = task.notifications.filter(notification_type=NOTICE.TASK_CANCELLED, is_read=False)
+                self.assertEqual(unread.count(), len(expected_recipients))
 
     def test_self_completion_resolves_secondary_assignment_without_review_notice(self):
         task = Task.objects.get(pk=self.create(self.founder, self.founder, secondary_assignee_ids=[
