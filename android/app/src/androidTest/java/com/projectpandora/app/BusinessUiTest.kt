@@ -223,6 +223,14 @@ class BusinessUiTest {
         compose.onNodeWithText("组员甲（员工 · 客户端组）").performClick()
         compose.onNodeWithText("完成").performClick()
 
+        compose.onNodeWithText("选择主要负责人 *").performClick()
+        compose.onNodeWithText("取消选择").performClick()
+        compose.onNodeWithTag("primary_assignee_selection").assertTextEquals("未选择")
+        compose.onNodeWithText("选择主要负责人 *").performClick()
+        compose.onNodeWithTag("primary_assignee_search").performTextInput("组员甲")
+        compose.onNodeWithText("组员甲（员工 · 客户端组）").performClick()
+        compose.onNodeWithText("完成").performClick()
+
         compose.onNodeWithText("选择次要负责人").performClick()
         compose.onNodeWithTag("secondary_assignee_search").performTextInput("组员甲")
         compose.onNodeWithText("没有找到符合条件的负责人。").assertExists()
@@ -232,6 +240,9 @@ class BusinessUiTest {
 
         compose.onNodeWithText("组员甲（员工 · 客户端组）").assertExists()
         compose.onNodeWithText("组员乙（员工 · 客户端组）", substring = true).assertExists()
+        compose.onNodeWithTag("remove_secondary_assignee_9").assertExists().performClick()
+        compose.onNodeWithText("组员乙（员工 · 客户端组）", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("未选择次要负责人").assertExists()
     }
 
     @Test fun founderAssigneePickerExpandsOrganizationTreeAndSearchesMembers() {

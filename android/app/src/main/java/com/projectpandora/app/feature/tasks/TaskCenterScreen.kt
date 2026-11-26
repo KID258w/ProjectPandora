@@ -753,16 +753,35 @@ private fun TaskForm(api: BusinessApi, existing: JsonObject?, currentUserId: Lon
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { showAssigneePicker = true }) { Text("选择主要负责人 *") }
             val chosen = people.firstOrNull { it.long("id") == assignee } ?: existing?.obj("assignee")
-            Text(chosen?.let { assigneeOptionLabel(it, currentUserId, currentUserRole) } ?: "未选择", Modifier.weight(1f).padding(start = 12.dp))
+            Text(
+                chosen?.let { assigneeOptionLabel(it, currentUserId, currentUserRole) } ?: "未选择",
+                Modifier.weight(1f).padding(start = 12.dp).testTag("primary_assignee_selection"),
+            )
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { showSecondaryPicker = true }) { Text("选择次要负责人") }
             Text("可多选", Modifier.padding(start = 10.dp), color = C.Muted, fontSize = 12.sp)
         }
         if (secondaryAssignees.isEmpty()) Text("未选择次要负责人", color = C.Muted, fontSize = 13.sp)
-        else Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            secondaryAssignees.mapNotNull { id -> people.firstOrNull { it.long("id") == id } ?: existing?.array("secondary_assignees")?.firstOrNull { it.long("id") == id } }
-                .forEach { person -> Text("• ${assigneeOptionLabel(person, currentUserId, currentUserRole)}", color = C.Ink, fontSize = 13.sp) }
+        else Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            secondaryAssignees.mapNotNull { id ->
+                (people.firstOrNull { it.long("id") == id } ?: existing?.array("secondary_assignees")?.firstOrNull { it.long("id") == id })?.let { id to it }
+            }.forEach { (id, person) ->
+                Surface(color = C.BluePale, contentColor = C.Ink, shape = RoundedCornerShape(50)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp, end = 2.dp)) {
+                        Text(assigneeOptionLabel(person, currentUserId, currentUserRole), fontSize = 13.sp)
+                        IconButton(
+                            onClick = { secondaryAssignees = secondaryAssignees - id },
+                            modifier = Modifier.size(32.dp).testTag("remove_secondary_assignee_$id")
+                                .semantics { contentDescription = "移除次要负责人${person.string("display_name")}" },
+                        ) { Text("×", color = C.Muted, fontSize = 18.sp, fontWeight = FontWeight.Medium) }
+                    }
+                }
+            }
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             WheelDateTimeField("预计开始时间（选填）", estimatedStart, Modifier.weight(1f)) { showEstimatedStartWheel = true }
@@ -791,8 +810,10 @@ private fun TaskForm(api: BusinessApi, existing: JsonObject?, currentUserId: Lon
             currentUserId = currentUserId, currentUserRole = currentUserRole,
             selectedIds = setOf(assignee).filter { it > 0 }.toSet(), multiple = false,
             excludedIds = secondaryAssignees,
+            showClearAction = true,
             onDismiss = { showAssigneePicker = false },
             onConfirm = { selected -> assignee = selected.firstOrNull() ?: 0L; showAssigneePicker = false },
+            onClear = { assignee = 0L; showAssigneePicker = false },
         )
     }
     if (showSecondaryPicker) {
@@ -840,8 +861,10 @@ private fun AssigneePickerDialog(
     selectedIds: Set<Long>,
     multiple: Boolean,
     excludedIds: Set<Long>,
+    showClearAction: Boolean = false,
     onDismiss: () -> Unit,
     onConfirm: (Set<Long>) -> Unit,
+    onClear: () -> Unit = {},
 ) {
     var keyword by remember(title) { mutableStateOf("") }
     var pending by remember(title) { mutableStateOf(selectedIds) }
@@ -889,7 +912,12 @@ private fun AssigneePickerDialog(
             }
         },
         confirmButton = { TextButton(onClick = { onConfirm(pending) }) { Text("完成") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (showClearAction && pending.isNotEmpty()) TextButton(onClick = onClear) { Text("取消选择") }
+                TextButton(onClick = onDismiss) { Text("取消") }
+            }
+        },
     )
 }
 
