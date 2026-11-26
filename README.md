@@ -99,6 +99,7 @@ bash scripts/connect-android-backend.sh
 - [`docs/openspec/openspec-summary.md`](docs/openspec/openspec-summary.md)：OpenSpec 变更范围总览
 - [`docs/cicd/cicd-guide.md`](docs/cicd/cicd-guide.md)：CI/CD 模块协作引导与待办范围
 - [`docs/cicd/server-deploy.md`](docs/cicd/server-deploy.md)：服务器部署手册（首次部署、更新、回滚、备份、排障）
+- [`docs/cicd/github-repo-setup.md`](docs/cicd/github-repo-setup.md)：GitHub 仓库配置（部署密钥、Secrets/Variables、Environment 审批、分支保护）
 
 ## 项目协作约定
 

@@ -2,6 +2,7 @@
 
 本文是服务器侧的实操手册：首次准备、从旧的手动部署迁移、更新、回滚、备份、排障。
 CI 门禁与 PR 流程见 [ci-gates.md](ci-gates.md) 与 [pr-check-workflow.md](pr-check-workflow.md)；
+GitHub 仓库侧配置见 [github-repo-setup.md](github-repo-setup.md)；
 整体方案与协作约定见 [cicd-guide.md](cicd-guide.md)。
 
 ## 1. 部署形态
@@ -99,23 +100,20 @@ server {
 
 ### 2.3 GitHub 仓库配置
 
-Settings → Secrets and variables → Actions：
+完整操作步骤（含密钥准备、逐个字段填写、Environment 审批、分支保护与排错）见
+**[github-repo-setup.md](github-repo-setup.md)**。最小必填项如下：
 
 | 类型 | 名称 | 说明 |
 | --- | --- | --- |
 | Secret | `SSH_HOST` | 服务器公网 IP |
 | Secret | `SSH_USER` | SSH 用户名（需有 docker 权限） |
-| Secret | `SSH_KEY` | 私钥全文，含 `BEGIN/END` 行 |
-| Secret | `SSH_PORT` | 可选，默认 22 |
-| Secret | `GHCR_PULL_USER` | 可选；镜像包为私有时必填 |
-| Secret | `GHCR_PULL_TOKEN` | 可选；需 `read:packages` 权限 |
-| Variable | `DEPLOY_PATH` | 可选，默认 `/opt/pandora` |
-| Variable | `PANDORA_DATA_DIR` | 可选，默认 `/var/lib/pandora` |
-| Variable | `WEB_PORT` | 可选，默认 `8080`（仅绑定回环地址） |
-| Variable | `APP_URL` | 建议填 `https://pandora.xinphotoshare.click`，用于部署后验证公网入口 |
-| Variable | `VITE_API_BASE_URL` | 留空表示同域（前端走相对路径），建议留空 |
+| Secret | `SSH_KEY` | **私钥**全文，含 `BEGIN/END` 行 |
+| Variable | `APP_URL` | 如 `https://pandora.xinphotoshare.click`，用于部署后验证公网入口 |
 
-Environment `production` 用于部署 job，可在 Settings → Environments 里加人工审批或限分支。
+`DEPLOY_PATH`、`PANDORA_DATA_DIR`、`WEB_PORT` 在工作流中已有默认值，不填即可；
+`SSH_PORT`、`GHCR_PULL_*`、`VITE_API_BASE_URL` 按需。
+
+Environment `production` 建议配置 Required reviewers，使部署前需人工批准。
 
 ## 3. 从手动部署迁移到容器（本项目一次性步骤）
 

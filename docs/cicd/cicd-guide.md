@@ -2,6 +2,7 @@
 
 > 本文说明 CI/CD 的整体方案与协作约定。**服务器从零部署、从手动部署迁移、日常更新、回滚、备份和排障的实操步骤见 [server-deploy.md](server-deploy.md)。**
 > CI 门禁（PR 检查什么、ruleset 怎么配）见 [ci-gates.md](ci-gates.md) 与 [pr-check-workflow.md](pr-check-workflow.md)。
+> GitHub 仓库侧配置（Secrets/Variables/Environment/分支保护）见 [github-repo-setup.md](github-repo-setup.md)。
 
 ## 当前状态
 
@@ -17,8 +18,9 @@ CI 与自动部署配置已落地，合并到 `main` 即自动发布到服务器
 | `main` 更新触发的端到端部署验证 | ⬜ 待执行 | 见 Issue 11「首次自动部署验证」 |
 | Android 签名发布 | ⬜ 未启用（模板在 `templates/`） | `templates/cd-android-release.yml` |
 
-**上线前仍需人做的两件事**：在 GitHub 配置 Secrets/Variables（见 server-deploy.md 2.3），
-在服务器 `/opt/pandora/.env` 填正式密钥。配置完成前，工作流会因缺少凭据失败。
+**上线前仍需人做的两件事**：在 GitHub 配置 Secrets/Variables（逐字段步骤见
+[github-repo-setup.md](github-repo-setup.md)），在服务器 `/opt/pandora/.env` 填正式密钥
+（见 [server-deploy.md](server-deploy.md) 第 3 节）。配置完成前，工作流会因缺少凭据失败。
 
 ## 已确定技术栈
 
