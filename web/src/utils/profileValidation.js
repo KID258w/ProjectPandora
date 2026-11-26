@@ -32,6 +32,7 @@ export function validateNationalId(value) {
   const year = Number(idNumber.slice(6, 10))
   const month = Number(idNumber.slice(10, 12))
   const day = Number(idNumber.slice(12, 14))
+  if (year < 1) return '身份证号中的出生日期无效。'
   const birthday = new Date(0)
   birthday.setUTCHours(0, 0, 0, 0)
   birthday.setUTCFullYear(year, month - 1, day)

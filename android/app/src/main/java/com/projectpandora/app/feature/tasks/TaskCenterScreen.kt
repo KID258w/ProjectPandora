@@ -1161,6 +1161,7 @@ private fun formatTaskChanges(changes: JsonObject?): String {
     if (changes == null || changes.entrySet().isEmpty()) return "没有记录字段变更。"
     val labels = mapOf(
         "title" to "标题", "description" to "任务详情", "assignee_id" to "负责人",
+        "secondary_assignee_ids" to "次要负责人",
         "estimated_start_at" to "预计开始时间", "due_at" to "截止时间", "required_materials" to "预期提交材料",
         "association_note" to "关联说明", "tag_ids" to "关联标签",
     )
@@ -1176,8 +1177,19 @@ private fun formatTaskChangeValue(field: String, value: JsonElement?): String =
     when (field) {
         "tag_ids" -> formatTagSnapshots(value)
         "assignee_id" -> formatPersonSnapshot(value)
+        "secondary_assignee_ids" -> formatPeopleSnapshots(value)
         else -> formatJsonValue(value)
     }
+
+private fun formatPeopleSnapshots(value: JsonElement?): String {
+    if (value == null || value.isJsonNull) return "无"
+    if (!value.isJsonArray) return formatPersonSnapshot(value)
+    return value.asJsonArray
+        .map(::formatPersonSnapshot)
+        .filter { it != "无" }
+        .joinToString("、")
+        .ifBlank { "无" }
+}
 
 private fun formatPersonSnapshot(value: JsonElement?): String {
     if (value == null || value.isJsonNull) return "无"

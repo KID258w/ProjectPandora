@@ -72,6 +72,24 @@ function resetCreateForm() {
 function openCreate() { resetCreateForm(); initialCredentials.value = null; dialogVisible.value = true }
 function clearInitialCredentials() { initialCredentials.value = null }
 function clearServerFieldError(field) { serverFieldErrors[field] = '' }
+function getUnmappedCreateErrorMessage(error, mappedFieldErrors) {
+  const responseBody = error.response?.data
+  const details = responseBody?.data
+  if (details && typeof details === 'object' && !Array.isArray(details)) {
+    const unmappedDetails = Object.fromEntries(
+      Object.entries(details).filter(([field]) => !(field in mappedFieldErrors)),
+    )
+    if (!Object.keys(unmappedDetails).length) return ''
+    return getApiErrorMessage({
+      ...error,
+      response: {
+        ...error.response,
+        data: { ...responseBody, data: unmappedDetails },
+      },
+    })
+  }
+  return Object.keys(mappedFieldErrors).length ? '' : getApiErrorMessage(error)
+}
 async function createUser() {
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid || submitting.value) return
@@ -90,8 +108,10 @@ async function createUser() {
     ElMessage.success(`已创建账号，直属上级：${created.manager_name ?? '无'}`)
     dialogVisible.value = false; credentialsDialogVisible.value = true; await loadData()
   } catch (error) {
-    Object.assign(serverFieldErrors, { display_name: '', username: '', id_number: '', ...getProfileFieldErrors(error) })
-    showOperationError('员工账号未创建', getApiErrorMessage(error))
+    const mappedFieldErrors = getProfileFieldErrors(error)
+    Object.assign(serverFieldErrors, { display_name: '', username: '', id_number: '', ...mappedFieldErrors })
+    const unmappedErrorMessage = getUnmappedCreateErrorMessage(error, mappedFieldErrors)
+    if (unmappedErrorMessage) showOperationError('员工账号未创建', unmappedErrorMessage)
   }
   finally { submitting.value = false }
 }

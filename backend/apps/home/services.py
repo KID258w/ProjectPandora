@@ -5,13 +5,14 @@
 """
 
 from django.db import transaction
-from django.db.models import Case, F, IntegerField, Value, When
+from django.db.models import Case, IntegerField, Value, When
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.content.services import HOME_PREVIEW_ITEMS, published_items
 from apps.logs.services import recent_submitted_logs
 from apps.tasks.models import Task, TaskNotification
+from apps.tasks.services import assigned_to
 
 from .models import HomePersonalDailyItem, HomePersonalFocusState, HomePersonalFocusTask
 
@@ -23,10 +24,10 @@ LOG_SUMMARY_CHARS = 50
 def candidate_tasks(user):
     """本人承担、已审批、未完成、未取消的任务——公司十大与个人重点的唯一候选源。
 
-    仅按 `assignee` 过滤，因此“只派发给下属”的任务不会进入结果。
+    主要负责人和次要负责人都属于任务承担人；仅作为创建人的任务不会进入结果。
     """
     return Task.objects.filter(
-        assignee=user,
+        assigned_to([user.pk]),
         approval_status=Task.Approval.APPROVED,
         completion_status=Task.Completion.UNFINISHED,
         lifecycle_status=Task.Lifecycle.ACTIVE,
@@ -37,7 +38,7 @@ def ordered_candidates(user):
     """候选任务统一排序：先按来源（他人派发 → 本人自建），再按截止时间、创建时间。"""
     return candidate_tasks(user).annotate(
         source_rank=Case(
-            When(creator=F("assignee"), then=Value(1)),
+            When(creator=user, then=Value(1)),
             default=Value(0),
             output_field=IntegerField(),
         )
@@ -88,7 +89,7 @@ def _focus_entries(user):
 def _eligible(task, user):
     return bool(
         task is not None
-        and task.assignee_id == user.pk
+        and (task.assignee_id == user.pk or task.secondary_assignees.filter(pk=user.pk).exists())
         and task.approval_status == Task.Approval.APPROVED
         and task.completion_status == Task.Completion.UNFINISHED
         and task.lifecycle_status == Task.Lifecycle.ACTIVE
