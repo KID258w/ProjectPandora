@@ -1,207 +1,167 @@
-# GitHub 仓库配置手册（自动部署所需）
+# 仓库配置完整步骤
 
-本文说明让 `main` 自动部署跑起来，需要在 **GitHub 仓库侧**完成的一次性配置：
-Secrets、Variables、Environment 与分支保护规则。
+全部在 `https://github.com/KID258w/ProjectPandora` 仓库里操作。**需要 Admin 权限**（Settings 标签只对管理员可见；如果你看不到 Settings，说明权限不够）。
 
-- 服务器侧准备（Docker、数据目录、宿主 Nginx 反向代理）见 [server-deploy.md](server-deploy.md)。
-- 工作流设计与触发规则见 [cicd-guide.md](cicd-guide.md)。
+---
 
-## 0. 前提
+## 第 1 步：进配置页
 
-| 项 | 要求 |
-| --- | --- |
-| 仓库权限 | **Admin**（否则看不到 `Settings` 标签） |
-| 服务器 | 已装 Docker + Compose，SSH 可用密钥登录（见第 1 节） |
-| 部署分支 | 已推送，含 `.github/workflows/cd-deploy.yml` |
+浏览器打开：
 
-> 配置本身无法单独"测试"，只能通过触发一次工作流验证。因此顺序是：
-> **配完本节 → 推送分支 → 手动 Run workflow → 看结果**。
-
-## 1. 前置：准备部署密钥
-
-GitHub Actions 以**客户端**身份通过 SSH 连接服务器，因此需要一对密钥：
-
-| 文件 | 比喻 | 放在哪 |
-| --- | --- | --- |
-| 公钥 `*.pub` | 锁 | 服务器 `~/.ssh/authorized_keys` |
-| 私钥 | 钥匙 | GitHub Secret `SSH_KEY` |
-
-公钥只能验证签名、不能签名，所以把公钥放进 Secret 是无效的。
-
-### 1.1 生成专用密钥（本地 PowerShell）
-
-```powershell
-ssh-keygen -t ed25519 -C "github-actions-pandora-deploy" -f "$HOME\.ssh\pandora_deploy" -N '""'
+```
+https://github.com/KID258w/ProjectPandora/settings/secrets/actions
 ```
 
-刻意使用**专用密钥**而不是复用个人密钥：可随时单独吊销，不影响其他用途。
+或者点：仓库页 → **Settings** → 左侧 **Secrets and variables** → **Actions**
 
-### 1.2 授权到服务器
-
-把公钥内容追加到服务器（在服务器终端或阿里云控制台执行）：
-
-```bash
-mkdir -p ~/.ssh && chmod 700 ~/.ssh
-cat >> ~/.ssh/authorized_keys <<'KEY'
-把 ~/.ssh/pandora_deploy.pub 的整行内容粘在这里
-KEY
-chmod 600 ~/.ssh/authorized_keys
-```
-
-> 用 `<<'KEY'` heredoc 而不是 `echo '...'`：粘贴内容不会被 shell 解析，
-> 可避免中文标点、引号截断导致写错文件（例如生成 `authorized_keys、` 这种无效文件）。
-
-### 1.3 验证
-
-**服务器侧**校验公钥格式（比 `cat` 可靠，能发现隐藏字符）：
-
-```bash
-ssh-keygen -lf ~/.ssh/authorized_keys
-# 期望：256 SHA256:xxxx... github-actions-pandora-deploy (ED25519)
-```
-
-**本地侧**校验私钥可用：
-
-```powershell
-ssh -i "$HOME\.ssh\pandora_deploy" -o IdentitiesOnly=yes root@<服务器IP> "echo SSH_OK; docker --version"
-```
-
-> Windows 下若报 `Permissions for 'pandora_deploy' are too open`，
-> 用 `icacls "$HOME\.ssh\pandora_deploy" /inheritance:r /grant:r "$($env:USERNAME):(R)"` 收紧权限。
-
-## 2. 配置清单总览
-
-| # | 位置 | 名称 | 值 | 必填 |
-| --- | --- | --- | --- | --- |
-| 1 | Secrets | `SSH_HOST` | 服务器公网 IP | ✅ |
-| 2 | Secrets | `SSH_USER` | 登录用户名 | ✅ |
-| 3 | Secrets | `SSH_KEY` | 私钥全文 | ✅ |
-| 4 | Secrets | `SSH_PORT` | 非 22 时填写 | 可选 |
-| 5 | Secrets | `GHCR_PULL_USER` / `GHCR_PULL_TOKEN` | 镜像包为私有时填写 | 可选 |
-| 6 | Variables | `APP_URL` | `https://<域名>` | 建议 |
-| 7 | Variables | `DEPLOY_PATH` | 默认 `/opt/pandora` | 可选 |
-| 8 | Variables | `PANDORA_DATA_DIR` | 默认 `/var/lib/pandora` | 可选 |
-| 9 | Variables | `WEB_PORT` | 默认 `8080`（仅绑 127.0.0.1） | 可选 |
-| 10 | Variables | `VITE_API_BASE_URL` | 留空 = 同域相对路径 | 可选 |
-| 11 | Environments | `production` + Required reviewers | 部署前人工批准 | 建议 |
-| 12 | Rules | `protect-main` | PR + 禁止强推 | 建议 |
-
-第 7～10 项在工作流里已有默认值，**不填也能跑**；只有需要改默认行为时才加。
-
-## 3. Secrets 与 Variables 的区别（放错即泄露）
+页面上有两个标签：**Secrets** 和 **Variables**。两者区别很重要：
 
 | | Secrets | Variables |
-| --- | --- | --- |
+|---|---|---|
 | 存储 | 加密，写入后不可再查看 | 明文，随时可见 |
-| 日志 | 自动打码为 `***` | 原样显示 |
-| 放什么 | 私钥、Token、密码 | 路径、端口、域名 |
+| 日志 | 自动打码成 `***` | 原样显示 |
+| 用来放 | 私钥、Token、密码 | 路径、端口、域名 |
 
-私钥、访问令牌**只能**放 Secrets。Variables 的内容会出现在工作流日志里。
+**放错地方 = 泄露**。私钥必须放 Secrets。
 
-## 4. 操作步骤
+---
 
-### 4.1 添加 Secrets
+## 第 2 步：加 3 个 Secret
 
-打开 `https://github.com/<owner>/<repo>/settings/secrets/actions`，
-或在仓库页点击 **Settings → Secrets and variables → Actions → Secrets** 标签页。
+在 **Secrets** 标签页，点右上角 **New repository secret**，逐个添加：
 
-逐个点 **New repository secret**：
+### Secret 1
 
-| Name | Secret |
-| --- | --- |
-| `SSH_HOST` | 服务器公网 IP |
-| `SSH_USER` | 登录用户名（如 `root`） |
-| `SSH_KEY` | 私钥文件**全部内容** |
+| 字段 | 值 |
+|---|---|
+| Name | `SSH_HOST` |
+| Secret | `47.118.21.150` |
 
-复制私钥到剪贴板：
+点 **Add secret**
+
+### Secret 2
+
+| 字段 | 值 |
+|---|---|
+| Name | `SSH_USER` |
+| Secret | `root` |
+
+点 **Add secret**
+
+### Secret 3（最关键）
+
+先在 PowerShell 里复制私钥：
 
 ```powershell
 Get-Content "$HOME\.ssh\pandora_deploy" -Raw | Set-Clipboard
 ```
 
-粘贴到 Secret 时确认三点：
+然后：
 
-1. 复制的是私钥（无 `.pub` 后缀，约 400 字节），不是公钥；
-2. 首行是 `-----BEGIN OPENSSH PRIVATE KEY-----`；
-3. 末行是 `-----END OPENSSH PRIVATE KEY-----`。
+| 字段 | 值 |
+|---|---|
+| Name | `SSH_KEY` |
+| Secret | 粘贴（Ctrl+V） |
 
-### 4.2 添加 Variables
+**必须确认的 3 点**：
 
-同一页面切到 **Variables** 标签页 → **New repository variable**：
+1. 文件是 `pandora_deploy`（419 字节），**不是** `pandora_deploy.pub`（112 字节）
+2. 首行是 `-----BEGIN OPENSSH PRIVATE KEY-----`
+3. 末行是 `-----END OPENSSH PRIVATE KEY-----`
 
-| Name | Value |
-| --- | --- |
-| `APP_URL` | `https://<域名>` |
+贴错的表现：
 
-作用：部署成功后 Actions 页面显示可点击的访问地址，`remote-deploy.sh` 用它再验一次公网入口。
+| 症状 | 原因 |
+|---|---|
+| `error in libcrypto` | 缺 BEGIN/END 行，或粘贴被截断 |
+| `invalid format` | 粘成了公钥 |
+| `Permission denied (publickey)` | 粘的是另一把密钥（比如 `id_ed25519_mat`） |
 
-### 4.3 配置 Environment（部署前人工审批）
+---
 
-打开 `https://github.com/<owner>/<repo>/settings/environments`：
+## 第 3 步：加 1 个 Variable
 
-1. **New environment**，名称必须为 **`production`**（与 `cd-deploy.yml` 的 `environment.name` 一致）；
-2. 勾选 **Required reviewers**，加入需要审批的账号；
-3. **Save protection rules**。
+切到 **Variables** 标签页，点 **New repository variable**：
 
-效果：每次部署先暂停等待 Approve，避免误合 `main` 立即上生产。
+| 字段 | 值 |
+|---|---|
+| Name | `APP_URL` |
+| Value | `https://pandora.xinphotoshare.click` |
 
-### 4.4 保护 `main` 分支
+作用：部署成功后，Actions 页面会显示可点击的访问链接；`remote-deploy.sh` 还会用它验证一次公网入口。
 
-打开 `https://github.com/<owner>/<repo>/settings/rules` → **New ruleset → New branch ruleset**：
+> 另外 3 个变量 `DEPLOY_PATH`、`PANDORA_DATA_DIR`、`WEB_PORT` **不用加**，工作流里已有默认值 `/opt/pandora`、`/var/lib/pandora`、`8080`。
 
-| 配置 | 值 |
-| --- | --- |
+---
+
+## 第 4 步：给 `production` 环境加人工审批（强烈建议）
+
+```
+https://github.com/KID258w/ProjectPandora/settings/environments
+```
+
+1. 点 **New environment**，名字填 **`production`**（必须完全一致，工作流里写的就是这个名字）
+2. 创建后勾选 **Required reviewers**
+3. 在搜索框里输入你自己的 GitHub 账号 → 选中 → **Save protection rules**
+
+效果：以后每次部署，Actions 会先停下来等你点 **Approve**，防止误合 `main` 直接上生产。
+
+---
+
+## 第 5 步：保护 `main` 分支（强烈建议）
+
+```
+https://github.com/KID258w/ProjectPandora/settings/rules
+```
+
+点 **New ruleset** → **New branch ruleset**：
+
+| 配置项 | 值 |
+|---|---|
 | Ruleset Name | `protect-main` |
-| Enforcement status | `Active` |
-| Target branches | Include by pattern → `main` |
+| Enforcement status | **Active** |
+| Target branches → Add target | **Include by pattern** → `main` |
 
 勾选：
 
-- **Require a pull request before merging**（Approvals 建议 1）
-- **Block force pushes**
+- ✅ **Require a pull request before merging**（Approvals 设 1）
+- ✅ **Block force pushes**
 
-效果：`main` 只能通过 PR 合入。**启用后不能再本地 `git push origin main`**，
-发布流程改为 `dev` → PR → `main`。
+点 **Create**
 
-## 5. 验证
+效果：不能直接推 `main`，必须走 PR。这正好补上 Issue 里 `add-ci-cd-gates/tasks.md` 第 5 节一直没勾的那条。
 
-配置完成后：
+> 注意：这条开了之后，以后发布要从 `dev` 开 PR 到 `main`，不能再本地直接 `git push origin main`。
 
-1. 推送含 `cd-deploy.yml` 的分支；
-2. 打开 **Actions → CD Deploy → Run workflow**，选择该分支；
-3. 观察两个 job：`构建并推送镜像` → `部署到服务器`。
+---
 
-首次建议验证以下几点：
+## 第 6 步：验证配置是否生效
 
-| 观察点 | 期望 |
-| --- | --- |
-| `构建并推送镜像` | 两个镜像均 push 成功，标签为 commit sha 前 12 位 |
-| `部署到服务器` | 上传 Compose 与脚本、SSH 执行、健康检查全部成功 |
-| Step Summary | 显示镜像标签、访问地址与回滚命令 |
-| `APP_URL` 公网检查 | 输出「公网入口正常」，否则提示检查宿主 Nginx |
+**配置本身无法直接"测试"**，只能通过跑一次工作流来验。所以顺序是：
 
-## 6. 排错对照表
+```
+你配完 → 我推分支 → 你点 Run workflow → 看结果
+```
 
-| 报错 | 原因 | 处理 |
-| --- | --- | --- |
-| `secret not found` / 变量为空 | 名称拼错（大小写、连字符、下划线） | 严格按第 2 节名称重建 |
-| `error in libcrypto` | 私钥缺 BEGIN/END 行或被截断 | 重新完整复制私钥 |
-| `Load key ... invalid format` | 粘成了公钥 | 换成无 `.pub` 后缀的文件 |
-| `Permission denied (publickey)` | 公钥未授权，或粘了另一把密钥 | 用第 1.3 节的指纹比对确认 |
-| `Connection timed out` | 安全组未放行 SSH 端口 | 云控制台入方向放行该端口 |
-| `unauthorized` 拉取镜像 | 镜像包为私有 | 配置 `GHCR_PULL_USER` / `GHCR_PULL_TOKEN`（`read:packages`） |
-| 部署 job 卡在 waiting | 配了 Required reviewers | 到 Actions 页面点 **Review deployments → Approve** |
-| `port is already allocated` | 宿主已有服务占用该端口 | 调整 `WEB_PORT` 或检查 `PANDORA_DATA_DIR` 配置 |
+配置页面上能看到 Secret 的"Updated"时间戳，说明写进去了：
 
-## 7. 安全注意事项
+```
+SSH_HOST      Updated just now
+SSH_USER      Updated just now
+SSH_KEY       Updated just now
+```
 
-- **私钥只存在于 GitHub Secret**：不要贴到 Issue、PR、聊天记录或文档里。
-- **`Variables` 是明文**，任何敏感值都不能放这里。
-- **限制仓库写权限**：能推 `main` 的人等于能通过工作流在服务器上执行命令，
-  因此务必启用第 4.4 节的分支保护与第 4.3 节的部署审批。
-- **密钥轮换**：私钥泄露时，在服务器 `~/.ssh/authorized_keys` 删除对应行，
-  重新生成密钥对并更新 Secret 即可，无需改动其他配置。
-- **同机多站点**：若服务器还承载其他服务，部署脚本的误操作会连带影响，
-  建议部署审批与备份同时到位。
-- **生产密钥（`DJANGO_SECRET_KEY`、`IDENTITY_NUMBER_ENCRYPTION_KEY`）不进 GitHub**，
-  它们只在服务器 `/opt/pandora/.env`，详见 [server-deploy.md](server-deploy.md) 第 3 节。
+如果名字拼错（比如 `SSH-HOST` 用了连字符），工作流会报 `secret not found`，所以要**严格按上表大小写和下划线**。
+
+---
+
+## 完整清单（配完自查）
+
+| # | 位置 | 名称 | 值 | 必填 |
+|---|---|---|---|---|
+| 1 | Secrets | `SSH_HOST` | `47.118.21.150` | ✅ 必须 |
+| 2 | Secrets | `SSH_USER` | `root` | ✅ 必须 |
+| 3 | Secrets | `SSH_KEY` | 私钥全文 | ✅ 必须 |
+| 4 | Variables | `APP_URL` | `https://pandora.xinphotoshare.click` | ✅ 建议 |
+| 5 | Environments | `production` + Required reviewers | 你自己 | ⭐ 建议 |
+| 6 | Rules | `protect-main` | PR + 禁止强推 | ⭐ 建议 |
