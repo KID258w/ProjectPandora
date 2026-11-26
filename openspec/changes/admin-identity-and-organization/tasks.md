@@ -51,8 +51,10 @@
 
 ## Issue 11 follow-up: shared employee-field validation
 
-- [ ] 5.1 Add matching Web and Android pre-submit validation for employee name, phone, and mainland national ID; retain the agreed field boundaries and user-readable per-field errors.
+- [x] 5.1a Web: validate employee name, phone, and mainland national ID before employee-creation requests; align normalization, input boundaries, and field-level messages with the backend.
+- [ ] 5.1b Android: add matching profile-edit validation and field-level messages.
 - [x] 5.2 Enforce the same field formats and global phone/ID uniqueness on backend account creation and App profile updates, including disabled accounts; normalize ID whitespace and `x/X` before checking uniqueness.
 - [x] 5.3 Preserve atomic profile updates when multiple fields are submitted; reject invalid direct API requests without partial writes.
 - [x] 5.4 Add backend validation coverage and synchronize the API, database, requirements, and this OpenSpec change.
-- [ ] 5.5 Verify the matching Web and Android validation and error messages.
+- [x] 5.5a Web: verify profile validators and backend field-error mapping with automated tests and a production build.
+- [ ] 5.5b Android: verify profile validators and backend field-error mapping.
