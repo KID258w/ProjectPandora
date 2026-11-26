@@ -24,11 +24,11 @@ from .serializers import (CancelInputSerializer, DecisionInputSerializer, Histor
                           TaskCreateInputSerializer,
                           TaskDetailSerializer, TaskInputSerializer, TaskSummarySerializer,
                           TaskSubmissionSerializer, TaskUpdateSerializer, UpdateInputSerializer)
-from .services import (assignable_users, create_approval_round, create_task_notification,
-                       json_value, require_assignee, require_creator, require_executable,
+from .services import (assignable_users, assigned_to, create_approval_round, create_task_notification,
+                       json_value, require_creator, require_executable, responsible_for, responsible_ids,
                        resolve_task_notifications, send_assignment, set_task_tags,
                        subordinate_ids, task_detail, task_summary, task_tags, user_brief,
-                       validate_assignee, validated_task_tags, visible_task)
+                       validate_task_assignees, validated_task_tags, visible_task)
 
 
 TASK_DATE_FILTER_PARAMETERS = [
@@ -105,11 +105,11 @@ class TaskListView(BusinessAPIView):
             raise ValidationError({"scope": "应为 mine、created 或 all。"})
         queryset = Task.objects.filter(approval_status=Task.Approval.APPROVED).select_related("creator", "assignee")
         if scope == "mine":
-            queryset = queryset.filter(assignee=request.user)
+            queryset = queryset.filter(assigned_to([request.user.pk]))
         elif scope == "created":
             queryset = queryset.filter(creator=request.user)
         else:
-            queryset = queryset.filter(Q(creator=request.user) | Q(assignee=request.user))
+            queryset = queryset.filter(Q(creator=request.user) | assigned_to([request.user.pk]))
         queryset = filtered_tasks(request, queryset)
         return paginated_response(self, request, queryset, lambda rows: [task_summary(row) for row in rows])
 
@@ -117,7 +117,9 @@ class TaskListView(BusinessAPIView):
     def post(self, request):
         values = form_data(TaskCreateInputSerializer, request.data)
         validate_task_schedule(values.get("estimated_start_at"), values["due_at"])
-        assignee = validate_assignee(request.user, values["assignee_id"])
+        assignee, secondary = validate_task_assignees(
+            request.user, values["assignee_id"], values.get("secondary_assignee_ids", []),
+        )
         tags = validated_task_tags(None, values.get("tag_ids", []))
         try:
             with transaction.atomic():
@@ -131,8 +133,10 @@ class TaskListView(BusinessAPIView):
                     due_at=values["due_at"],
                     approval_status=(Task.Approval.APPROVED if request.user.business_role == User.Role.FOUNDER else Task.Approval.PENDING),
                 )
+                task.secondary_assignees.set(secondary)
                 set_task_tags(task, tags)
-                changes = {key: {"before": None, "after": json_value(value)} for key, value in values.items() if key != "tag_ids"}
+                changes = {key: {"before": None, "after": json_value(value)} for key, value in values.items()
+                           if key not in {"tag_ids", "secondary_assignee_ids"}}
                 if "assignee_id" in changes:
                     changes["assignee_id"]["after"] = user_reference_snapshot(assignee.pk)
                 if tags:
@@ -140,6 +144,9 @@ class TaskListView(BusinessAPIView):
                         "before": [],
                         "after": tag_name_snapshots([tag.pk for tag in tags]),
                     }
+                secondary_snapshots = [user_brief(user) for user in secondary]
+                if secondary or "secondary_assignee_ids" in values:
+                    changes["secondary_assignee_ids"] = {"before": [], "after": secondary_snapshots}
                 TaskChangeHistory.objects.create(task=task, actor=request.user,
                     change_type=TaskChangeHistory.Change.CREATED, changes=changes)
                 if task.approval_status == Task.Approval.PENDING:
@@ -150,7 +157,8 @@ class TaskListView(BusinessAPIView):
                     actor=request.user, module=AppOperationAuditLog.Module.TASKS, action="create",
                     object_type="task", object_id=task.pk, object_label=task.title,
                     before={},
-                    after={**values, "tag_ids": [tag.pk for tag in tags]},
+                    after={**values, "tag_ids": [tag.pk for tag in tags],
+                           "secondary_assignee_ids": secondary_snapshots},
                 )
         except IntegrityError as exc:
             raise ValidationError("创建任务时发生并发冲突，请重试。") from exc
@@ -163,12 +171,12 @@ class PinnedTaskListView(BusinessAPIView):
 
     @extend_schema(tags=["App 任务"], summary="查询本人置顶任务")
     def get(self, request):
-        pins = TaskPin.objects.filter(
-            user=request.user,
-            task__approval_status=Task.Approval.APPROVED,
-        ).filter(
-            Q(task__creator=request.user) | Q(task__assignee=request.user),
-        ).select_related("task", "task__creator", "task__assignee")
+        tasks = Task.objects.filter(approval_status=Task.Approval.APPROVED).filter(
+            Q(creator=request.user) | assigned_to([request.user.pk]),
+        )
+        pins = TaskPin.objects.filter(user=request.user, task_id__in=tasks.values("pk")).select_related(
+            "task", "task__creator", "task__assignee",
+        )
         return paginated_response(self, request, pins,
                                   lambda rows: [task_summary(row.task) for row in rows])
 
@@ -184,7 +192,7 @@ class TaskPinView(BusinessAPIView):
         if task is None:
             raise NotFound("任务不存在。")
         if (task.approval_status != Task.Approval.APPROVED
-                or (task.creator_id != request.user.pk and task.assignee_id != request.user.pk)):
+                or (task.creator_id != request.user.pk and not responsible_for(task, request.user))):
             raise PermissionDenied("只能置顶本人任务中心中可见的已审批任务。")
         _pin, created = TaskPin.objects.get_or_create(user=request.user, task=task)
         return Response(task_summary(task), status=201 if created else 200)
@@ -217,12 +225,15 @@ class SubordinateTaskListView(BusinessAPIView):
             if target not in allowed:
                 raise PermissionDenied("不能查看该人员的任务。")
             allowed = {target}
-        lookup = "assignee_id__in" if scope == "assigned" else "creator_id__in"
-        queryset = Task.objects.filter(approval_status=Task.Approval.APPROVED, **{lookup: allowed}).select_related("creator", "assignee")
         keyword = request.query_params.get("keyword", "").strip()
         if keyword:
-            selected = User.objects.filter(pk__in=allowed).filter(Q(display_name__icontains=keyword) | Q(username__icontains=keyword)).values_list("pk", flat=True)
-            queryset = queryset.filter(**{lookup: selected})
+            allowed = User.objects.filter(pk__in=allowed).filter(
+                Q(display_name__icontains=keyword) | Q(username__icontains=keyword),
+            ).values_list("pk", flat=True)
+        scope_filter = assigned_to(allowed) if scope == "assigned" else Q(creator_id__in=allowed)
+        queryset = Task.objects.filter(scope_filter, approval_status=Task.Approval.APPROVED).select_related(
+            "creator", "assignee",
+        )
         return paginated_response(self, request, filtered_tasks(request, queryset), lambda rows: [task_summary(row) for row in rows])
 
 
@@ -280,7 +291,30 @@ class TaskDetailView(BusinessAPIView):
             tags = validated_task_tags(task, values["tag_ids"]) if "tag_ids" in values else None
             changes = {}
             key_changed = False
+            secondary = None
+            previous_assignees = set()
+            if "assignee_id" in values or "secondary_assignee_ids" in values:
+                old_secondary = list(task.secondary_assignees.order_by("pk"))
+                old_secondary_ids = [user.pk for user in old_secondary]
+                previous_assignees = {task.assignee_id, *old_secondary_ids}
+                primary, secondary = validate_task_assignees(
+                    request.user, values.get("assignee_id", task.assignee_id),
+                    values.get("secondary_assignee_ids", old_secondary_ids),
+                )
+                if task.assignee_id != primary.pk:
+                    changes["assignee_id"] = {"before": user_brief(task.assignee), "after": user_brief(primary)}
+                    task.assignee = primary
+                    task.assignee_department = primary.department
+                if old_secondary_ids != [user.pk for user in secondary]:
+                    changes["secondary_assignee_ids"] = {
+                        "before": [user_brief(user) for user in old_secondary],
+                        "after": [user_brief(user) for user in secondary],
+                    }
+                key_changed = bool(changes)
+
             for field, value in values.items():
+                if field in {"assignee_id", "secondary_assignee_ids"}:
+                    continue
                 if field == "tag_ids":
                     before = [row["id"] for row in task_tags(task)]
                     wanted = {tag.pk for tag in tags}
@@ -292,23 +326,15 @@ class TaskDetailView(BusinessAPIView):
                             "after": tag_name_snapshots(after),
                         }
                     continue
-                if field == "assignee_id":
-                    if task.assignee_id != value:
-                        assignee = validate_assignee(request.user, value)
-                        changes[field] = {
-                            "before": user_reference_snapshot(task.assignee_id),
-                            "after": user_reference_snapshot(value),
-                        }
-                        task.assignee = assignee
-                        task.assignee_department = assignee.department
-                        key_changed = True
-                elif getattr(task, field) != value:
+                if getattr(task, field) != value:
                     changes[field] = {"before": json_value(getattr(task, field)), "after": json_value(value)}
                     setattr(task, field, value)
                     if field in ("title", "description", "estimated_start_at", "due_at", "required_materials"):
                         key_changed = True
             if changes:
                 task.save()
+                if "secondary_assignee_ids" in changes:
+                    task.secondary_assignees.set(secondary)
                 set_task_tags(task, tags)
                 history = TaskChangeHistory.objects.create(task=task, actor=request.user,
                     change_type=TaskChangeHistory.Change.UPDATED, changes=changes)
@@ -316,16 +342,22 @@ class TaskDetailView(BusinessAPIView):
                     task.returned_edit_required = False
                     task.save(update_fields=["returned_edit_required", "updated_at"])
                 elif task.approval_status == Task.Approval.APPROVED and key_changed:
-                    resolve_task_notifications(task, [
-                        TaskNotification.Type.ASSIGNMENT_RECEIVED,
-                        TaskNotification.Type.SUBMISSION_RETURNED,
-                    ])
                     if request.user.business_role != User.Role.FOUNDER:
+                        resolve_task_notifications(task, [
+                            TaskNotification.Type.ASSIGNMENT_RECEIVED, TaskNotification.Type.SUBMISSION_RETURNED,
+                        ])
                         task.approval_status = Task.Approval.PENDING
                         task.save(update_fields=["approval_status", "updated_at"])
                         create_approval_round(task)
-                    elif "assignee_id" in changes:
-                        send_assignment(task, history.pk)
+                    elif previous_assignees:
+                        current_assignees = responsible_ids(task)
+                        resolve_task_notifications(
+                            task, [TaskNotification.Type.ASSIGNMENT_RECEIVED],
+                            recipient_ids=previous_assignees - current_assignees,
+                        )
+                        if "assignee_id" in changes:
+                            resolve_task_notifications(task, [TaskNotification.Type.SUBMISSION_RETURNED])
+                        send_assignment(task, history.pk, recipient_ids=current_assignees - previous_assignees)
                 record_app_operation(
                     actor=request.user, module=AppOperationAuditLog.Module.TASKS, action="update",
                     object_type="task", object_id=task.pk, object_label=task.title,
@@ -452,7 +484,7 @@ class TaskUpdateView(BusinessAPIView):
             task = Task.objects.select_for_update().filter(pk=pk).first()
             if task is None:
                 raise NotFound("任务不存在。")
-            require_executable(task, request.user)
+            require_executable(task, request.user, allow_secondary=True)
             row = TaskUpdate.objects.create(task=task, author=request.user, content=values["content"])
             record_app_operation(
                 actor=request.user, module=AppOperationAuditLog.Module.TASKS, action="progress",
@@ -482,13 +514,14 @@ class TaskSubmissionView(BusinessAPIView):
             row = TaskSubmission.objects.create(task=task, submitted_by=request.user,
                 completion_note=values["completion_note"], materials_note=values.get("materials_note", ""),
                 review_status=(TaskSubmission.Review.SELF_COMPLETED if self_assigned else TaskSubmission.Review.WAITING))
+            resolve_task_notifications(task, [
+                TaskNotification.Type.ASSIGNMENT_RECEIVED, TaskNotification.Type.SUBMISSION_RETURNED,
+            ])
             if self_assigned:
                 task.completion_status = Task.Completion.COMPLETED
                 task.completed_at = timezone.now()
                 task.save(update_fields=["completion_status", "completed_at", "updated_at"])
             else:
-                resolve_task_notifications(task, [TaskNotification.Type.ASSIGNMENT_RECEIVED])
-                resolve_task_notifications(task, [TaskNotification.Type.SUBMISSION_RETURNED])
                 create_task_notification(task, task.creator, TaskNotification.Type.SUBMISSION_RECEIVED,
                                          f"submission:{row.pk}:received", submission=row)
             record_app_operation(
@@ -569,14 +602,15 @@ class TaskCancelView(BusinessAPIView):
             require_creator(task, request.user)
             if task.lifecycle_status != Task.Lifecycle.ACTIVE or task.completion_status != Task.Completion.UNFINISHED:
                 raise ValidationError("任务已完成或取消。")
-            recipient = None
+            recipient_ids = set()
             if task.approval_status == Task.Approval.PENDING:
                 pending_approval = task.approval_records.filter(
                     decision=TaskApprovalRecord.Decision.PENDING
-                ).select_related("approver").order_by("-round").first()
-                recipient = pending_approval.approver if pending_approval else None
-            elif task.approval_status == Task.Approval.APPROVED and task.assignee_id != task.creator_id:
-                recipient = task.assignee
+                ).order_by("-round").first()
+                if pending_approval is not None and pending_approval.approver_id != request.user.pk:
+                    recipient_ids.add(pending_approval.approver_id)
+            elif task.approval_status == Task.Approval.APPROVED:
+                recipient_ids = responsible_ids(task)
             task.lifecycle_status = Task.Lifecycle.CANCELLED
             task.cancellation_reason = values["reason"]
             task.cancelled_at = timezone.now()
@@ -596,9 +630,9 @@ class TaskCancelView(BusinessAPIView):
                 TaskNotification.Type.SUBMISSION_RECEIVED,
                 TaskNotification.Type.SUBMISSION_RETURNED,
             ])
-            if recipient is not None and recipient.pk != request.user.pk:
-                create_task_notification(task, recipient, TaskNotification.Type.TASK_CANCELLED,
-                                         f"task-cancelled:{task.pk}:{recipient.pk}")
+            for user_id in sorted(recipient_ids):
+                create_task_notification(task, user_id, TaskNotification.Type.TASK_CANCELLED,
+                                         f"task-cancelled:{task.pk}:{user_id}")
         return Response({"task_id": task.pk, "lifecycle_status": task.lifecycle_status,
                          "cancelled_at": task.cancelled_at})
 
@@ -776,13 +810,16 @@ class AssignableUserListView(BusinessAPIView):
     serializer_class = PersonSerializer
     pagination_class = StandardPagination
 
-    @extend_schema(tags=["App 组织"], summary="查询可指派的任务负责人")
+    @extend_schema(tags=["App 组织"], summary="查询可指派的任务负责人", parameters=[
+        OpenApiParameter("keyword", str, description="姓名、职位、手机号或组织关键词"),
+    ])
     def get(self, request):
         users = assignable_users(request.user)
         keyword = request.query_params.get("keyword", "").strip().casefold()
         if keyword:
             users = [u for u in users if any(keyword in (value or "").casefold() for value in (
-                u.display_name, u.username, u.department.name if u.department else "", u.team.name if u.team else "",
+                  u.display_name, u.username, u.business_role, u.get_business_role_display(),
+                  u.department.name if u.department else "", u.team.name if u.team else "",
             ))]
         return paginated_response(self, request, users, lambda rows: [person_data(u) for u in rows])
 

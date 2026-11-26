@@ -745,14 +745,14 @@ class MidtermTaskNotificationTests(MidtermTaskFixtures):
         send_assignment(task, 17)
         notice = task.notifications.get()
         self.assertEqual((notice.recipient, notice.notification_type, notice.event_key),
-                         (self.worker, NOTICE.ASSIGNMENT_RECEIVED, f"assignment:{task.pk}:17"))
+                         (self.worker, NOTICE.ASSIGNMENT_RECEIVED, f"assignment:{task.pk}:17:{self.worker.pk}"))
 
     def test_dispatch_default_and_repeat(self):
         # TC-LJC-074 · send_assignment()
         task = self.task(self.founder, self.worker)
         send_assignment(task)
         send_assignment(task)
-        self.assertEqual(task.notifications.get().event_key, f"assignment:{task.pk}:0")
+        self.assertEqual(task.notifications.get().event_key, f"assignment:{task.pk}:0:{self.worker.pk}")
 
     def test_dispatch_suppresses_self_assignment(self):
         # TC-LJC-075 · send_assignment()

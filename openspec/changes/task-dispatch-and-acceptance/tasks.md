@@ -50,10 +50,11 @@
 
 ## Issue 11 follow-up: secondary assignees and Founder selector
 
-- [ ] 6.1 Add a secondary-assignee many-to-many relation while retaining `tasks_task.assignee_id` as the required primary assignee; enforce unique task/user pairs and prevent overlap with the primary assignee.
-- [ ] 6.2 Extend task create/edit/detail/list APIs and history snapshots for `secondary_assignee_ids`; apply the same role eligibility, enabled-account, reapproval, and authorized-subordinate rules to all assignees.
-- [ ] 6.3 Allow primary and secondary assignees to append progress updates; restrict result submission/resubmission and acceptance outcome notifications to the primary assignee.
-- [ ] 6.4 Fan out post-approval assignment notifications to each assignee and cancellation notifications to all assignees; preserve per-recipient read/resolved state and suppress the creator's own assignment notice when they are the primary assignee.
+- [x] 6.1 Add a secondary-assignee many-to-many relation while retaining `tasks_task.assignee_id` as the required primary assignee; enforce unique task/user pairs and prevent overlap with the primary assignee.
+- [x] 6.2 Extend task create/edit/detail/list APIs and history snapshots for `secondary_assignee_ids`; apply the same role eligibility, enabled-account, reapproval, and authorized-subordinate rules to all assignees.
+- [x] 6.3 Allow primary and secondary assignees to append progress updates; restrict result submission/resubmission and acceptance outcome notifications to the primary assignee.
+- [x] 6.4 Fan out post-approval assignment notifications to each assignee and cancellation notifications to all assignees; preserve per-recipient read/resolved state and suppress the creator's own assignment notice when they are the primary assignee.
 - [ ] 6.5 Build the Founder selector with a searchable, expandable organization tree and readable text/selection contrast; keep other roles on searchable flat candidate lists.
-- [ ] 6.6 Include tasks in each primary or secondary assignee's “我的任务” and work-view bars; keep view dynamics attributed to the actual operator and avoid duplicate task bars.
-- [ ] 6.7 Add backend and Android coverage for assignment scope, duplicate/inactive candidates, notifications, progress/submission permissions, history names, task lists, and work views; synchronize API/database/requirements and the related work-view OpenSpec change.
+- [x] 6.6 Include tasks in each primary or secondary assignee's “我的任务” and work-view bars; keep view dynamics attributed to the actual operator and avoid duplicate task bars.
+- [x] 6.7 Add backend coverage for assignment eligibility, notifications, permissions, history, lists and work views; synchronize API/database/requirements and the work-view change.
+- [ ] 6.8 Verify the Android selector, progress and submission controls, and notification integration on a device.

@@ -19,6 +19,10 @@ class Task(models.Model):
 
     creator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_tasks")
     assignee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="assigned_tasks")
+    secondary_assignees = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, through="TaskSecondaryAssignee",
+        related_name="secondary_assigned_tasks", blank=True,
+    )
     title = models.CharField(max_length=200)
     description = models.TextField()
     required_materials = models.TextField(blank=True)
@@ -48,6 +52,17 @@ class Task(models.Model):
                 condition=Q(estimated_start_at__isnull=True) | Q(estimated_start_at__lte=F("due_at")),
                 name="task_estimated_start_before_due",
             ),
+        ]
+
+
+class TaskSecondaryAssignee(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+
+    class Meta:
+        db_table = "tasks_task_secondary_assignee"
+        constraints = [
+            models.UniqueConstraint(fields=["task", "user"], name="unique_task_secondary_assignee"),
         ]
 
 

@@ -246,7 +246,7 @@ class UserUpdateManagerLinkTests(TestCase):
         self.manager.refresh_from_db()
         self.assertIsNone(self.manager.manager_id)
         response = self.client.post("/api/v1/admin/users/", {
-            "username": "founder2", "id_number": "110101199001018888",
+            "username": "13800000099", "id_number": "99000020000229001X",
             "display_name": "新创始人", "business_role": "founder",
         }, format="json")
         self.assertEqual(response.status_code, 201, response.data)
