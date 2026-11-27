@@ -43,10 +43,11 @@ fun EditPersonalInfoScreen(
     // The API deliberately returns only a masked ID, so this input starts blank.
     // Do not use rememberSaveable for the full identity number.
     var idNumber by remember(user) { mutableStateOf("") }
+    var localErrors by remember(user) { mutableStateOf(ProfileFieldErrors()) }
 
-    val changedName = name.trim().takeIf { it != user.name }
+    val changedName = normalizeProfileName(name).takeIf { it != user.name }
     val changedPhone = phone.trim().takeIf { it != user.account }
-    val changedIdNumber = idNumber.trim().takeIf(String::isNotEmpty)
+    val changedIdNumber = normalizeProfileIdNumber(idNumber).takeIf(String::isNotEmpty)
     val request = ProfileUpdateRequest(
         displayName = changedName,
         username = changedPhone,
@@ -61,34 +62,37 @@ fun EditPersonalInfoScreen(
 
         OutlinedTextField(
             value = name,
-            onValueChange = { name = it; onErrorDismiss() },
+            onValueChange = { name = it; localErrors = localErrors.copy(name = null); onErrorDismiss() },
             modifier = Modifier.fillMaxWidth().testTag("profile_name"),
             enabled = !saving,
             label = { Text("姓名") },
             singleLine = true,
-            isError = error?.contains("姓名") == true,
+            isError = localErrors.name != null || error?.contains("姓名") == true,
+            supportingText = (localErrors.name ?: error?.takeIf { it.contains("姓名") })?.let { message -> { Text(message) } },
             shape = RoundedCornerShape(14.dp),
         )
         OutlinedTextField(
             value = phone,
-            onValueChange = { phone = it; onErrorDismiss() },
+            onValueChange = { phone = it; localErrors = localErrors.copy(phone = null); onErrorDismiss() },
             modifier = Modifier.fillMaxWidth().testTag("profile_phone"),
             enabled = !saving,
             label = { Text("手机号") },
             singleLine = true,
-            isError = error?.contains("手机号") == true,
+            isError = localErrors.phone != null || error?.contains("手机号") == true,
+            supportingText = (localErrors.phone ?: error?.takeIf { it.contains("手机号") })?.let { message -> { Text(message) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             shape = RoundedCornerShape(14.dp),
         )
         Text("身份证号 · 当前：${user.idNumberMasked ?: "未设置"}", fontSize = 13.sp, color = C.Ink)
         OutlinedTextField(
             value = idNumber,
-            onValueChange = { idNumber = it; onErrorDismiss() },
+            onValueChange = { idNumber = it; localErrors = localErrors.copy(idNumber = null); onErrorDismiss() },
             modifier = Modifier.fillMaxWidth().testTag("profile_id_number"),
             enabled = !saving,
             label = { Text("请输入完整身份证号") },
             singleLine = true,
-            isError = error?.contains("身份证") == true,
+            isError = localErrors.idNumber != null || error?.contains("身份证") == true,
+            supportingText = (localErrors.idNumber ?: error?.takeIf { it.contains("身份证") })?.let { message -> { Text(message) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
             shape = RoundedCornerShape(14.dp),
         )
@@ -98,7 +102,11 @@ fun EditPersonalInfoScreen(
         error?.let { Note(it, C.ErrorPale, C.Error) }
         PrimaryButton(
             if (saving) "正在保存…" else "保存个人资料",
-            onClick = { onSave(request) },
+            onClick = {
+                val invalidFields = validateProfileFields(changedName, changedPhone, changedIdNumber)
+                localErrors = invalidFields
+                if (!invalidFields.hasErrors) onSave(request)
+            },
             enabled = !saving && hasChanges,
             modifier = Modifier.testTag("save_personal_info"),
         )

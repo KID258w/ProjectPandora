@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { adminApi, fetchAllPages, getApiErrorMessage, unwrapResponse } from '../services/http'
 import { showOperationError } from '../services/feedback'
 import { businessRoles, roleLabel } from '../data/accountManagementDemo'
+import { getProfileFieldErrors, normalizeDisplayName, normalizeNationalId, validateDisplayName, validateNationalId, validatePhone } from '../utils/profileValidation'
 
 const users = ref([])
 const departments = ref([])
@@ -24,6 +25,7 @@ const submitting = ref(false)
 const saving = ref(false)
 const togglingUserIds = ref(new Set())
 const formRef = ref()
+const serverFieldErrors = reactive({ display_name: '', username: '', id_number: '' })
 const form = reactive({ username: '', id_number: '', display_name: '', business_role: '', department_id: '', team_id: '' })
 const editForm = reactive({ business_role: '', department_id: '', team_id: '', is_active: true })
 const isFounder = computed(() => form.business_role === 'founder')
@@ -36,9 +38,9 @@ const rows = computed(() => users.value.map((user) => ({
   team_name: user.team_name || teams.value.find((team) => team.id === user.team_id)?.name || '—',
 })))
 const userRules = {
-  username: [{ required: true, message: '请输入手机号', trigger: 'blur' }, { max: 150, message: '手机号不能超过 150 个字符', trigger: 'blur' }],
-  id_number: [{ required: true, message: '请输入身份证号', trigger: 'blur' }, { max: 64, message: '身份证号不能超过 64 个字符', trigger: 'blur' }],
-  display_name: [{ required: true, message: '请输入员工姓名', trigger: 'blur' }, { max: 100, message: '姓名不能超过 100 个字符', trigger: 'blur' }],
+  username: [{ validator: (_rule, value, callback) => { const message = validatePhone(value); message ? callback(new Error(message)) : callback() }, trigger: 'blur' }],
+  id_number: [{ validator: (_rule, value, callback) => { const message = validateNationalId(value); message ? callback(new Error(message)) : callback() }, trigger: 'blur' }],
+  display_name: [{ validator: (_rule, value, callback) => { const message = validateDisplayName(value); message ? callback(new Error(message)) : callback() }, trigger: 'blur' }],
   business_role: [{ required: true, message: '请选择业务身份', trigger: 'change' }],
   department_id: [{ validator: (_rule, value, callback) => isFounder.value || value ? callback() : callback(new Error('请选择所属部门')), trigger: 'change' }],
   team_id: [{ validator: (_rule, value, callback) => !needsTeam.value || value ? callback() : callback(new Error('请选择所属团队')), trigger: 'change' }],
@@ -64,14 +66,39 @@ async function loadData() {
 }
 function resetCreateForm() {
   Object.assign(form, { username: '', id_number: '', display_name: '', business_role: '', department_id: '', team_id: '' })
+  Object.assign(serverFieldErrors, { display_name: '', username: '', id_number: '' })
   formRef.value?.clearValidate()
 }
 function openCreate() { resetCreateForm(); initialCredentials.value = null; dialogVisible.value = true }
 function clearInitialCredentials() { initialCredentials.value = null }
+function clearServerFieldError(field) { serverFieldErrors[field] = '' }
+function getUnmappedCreateErrorMessage(error, mappedFieldErrors) {
+  const responseBody = error.response?.data
+  const details = responseBody?.data
+  if (details && typeof details === 'object' && !Array.isArray(details)) {
+    const unmappedDetails = Object.fromEntries(
+      Object.entries(details).filter(([field]) => !(field in mappedFieldErrors)),
+    )
+    if (!Object.keys(unmappedDetails).length) return ''
+    return getApiErrorMessage({
+      ...error,
+      response: {
+        ...error.response,
+        data: { ...responseBody, data: unmappedDetails },
+      },
+    })
+  }
+  return Object.keys(mappedFieldErrors).length ? '' : getApiErrorMessage(error)
+}
 async function createUser() {
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid || submitting.value) return
-  const payload = { username: form.username.trim(), id_number: form.id_number.trim(), display_name: form.display_name.trim(), business_role: form.business_role }
+  const payload = {
+    username: form.username.trim(),
+    id_number: normalizeNationalId(form.id_number),
+    display_name: normalizeDisplayName(form.display_name),
+    business_role: form.business_role,
+  }
   if (!isFounder.value) payload.department_id = form.department_id
   if (needsTeam.value) payload.team_id = form.team_id
   submitting.value = true
@@ -80,7 +107,12 @@ async function createUser() {
     initialCredentials.value = { phone: created.username, password: created.initial_password }
     ElMessage.success(`已创建账号，直属上级：${created.manager_name ?? '无'}`)
     dialogVisible.value = false; credentialsDialogVisible.value = true; await loadData()
-  } catch (error) { showOperationError('员工账号未创建', getApiErrorMessage(error)) }
+  } catch (error) {
+    const mappedFieldErrors = getProfileFieldErrors(error)
+    Object.assign(serverFieldErrors, { display_name: '', username: '', id_number: '', ...mappedFieldErrors })
+    const unmappedErrorMessage = getUnmappedCreateErrorMessage(error, mappedFieldErrors)
+    if (unmappedErrorMessage) showOperationError('员工账号未创建', unmappedErrorMessage)
+  }
   finally { submitting.value = false }
 }
 async function openDetail(row) {
@@ -148,7 +180,7 @@ onMounted(loadData)
   <section class="summary-strip"><div><span>当前结果</span><strong>{{ users.length }}</strong></div><div><span>启用中</span><strong>{{ users.filter((user) => user.is_active).length }}</strong></div><div class="summary-note">个人资料与密码只读；身份、组织和状态由管理员维护</div></section>
   <el-card class="data-card" shadow="never"><div class="table-toolbar users-toolbar"><div><h2>员工账号</h2><p>共 {{ users.length }} 条匹配记录</p></div><div class="filter-controls"><el-input v-model="searchText" clearable placeholder="搜索姓名或手机号" class="user-search" @keyup.enter="loadData" @clear="loadData"/><el-select v-model="filterRole" clearable placeholder="全部身份" class="toolbar-select"><el-option v-for="role in businessRoles" :key="role.value" :label="role.label" :value="role.value"/></el-select><el-select v-model="filterDepartment" clearable placeholder="全部部门" class="toolbar-select"><el-option v-for="department in departments" :key="department.id" :label="department.name" :value="department.id"/></el-select><el-select v-model="filterTeam" clearable placeholder="全部团队" class="toolbar-select"><el-option v-for="team in teams" :key="team.id" :label="team.name" :value="team.id"/></el-select><el-select v-model="filterActive" clearable placeholder="全部状态" class="status-select"><el-option label="启用中" value="active"/><el-option label="已停用" value="inactive"/></el-select><el-button text :loading="loading" @click="loadData">筛选</el-button></div></div>
     <el-table v-loading="loading" :data="rows" class="admin-table" empty-text="没有符合条件的员工"><el-table-column label="员工" min-width="205"><template #default="{ row }"><div class="user-primary"><span class="user-avatar">{{ row.display_name?.slice(0, 1) }}</span><span><span class="primary-cell">{{ row.display_name }}</span><span class="secondary-cell">{{ row.username }}</span></span></div></template></el-table-column><el-table-column label="身份证号" min-width="170"><template #default="{ row }">{{ row.id_number_masked ?? '—' }}</template></el-table-column><el-table-column label="业务身份" min-width="135"><template #default="{ row }"><el-tag class="role-tag" effect="plain">{{ roleLabel(row.business_role) }}</el-tag></template></el-table-column><el-table-column label="所属部门" min-width="145" prop="department_name"><template #default="{ row }">{{ row.department_name || '—' }}</template></el-table-column><el-table-column label="所属团队" min-width="145" prop="team_name"><template #default="{ row }">{{ row.team_name || '—' }}</template></el-table-column><el-table-column label="账号状态" width="135"><template #default="{ row }"><el-switch :model-value="row.is_active" :loading="togglingUserIds.has(row.id)" :disabled="togglingUserIds.has(row.id)" @change="(value) => toggleUserActive(row, value)"/><span class="switch-label">{{ row.is_active ? '启用' : '停用' }}</span></template></el-table-column><el-table-column label="操作" width="130" fixed="right"><template #default="{ row }"><el-button link type="primary" @click="openDetail(row)">详情</el-button><el-button link type="primary" @click="openEdit(row)">调整</el-button></template></el-table-column></el-table><div class="table-footnote">身份证号仅显示脱敏值；员工姓名、手机号、身份证号和密码不允许在 Web 修改。</div></el-card>
-  <el-dialog v-model="dialogVisible" title="录入员工" width="min(640px, 94vw)" destroy-on-close @closed="resetCreateForm"><p class="dialog-intro">选择业务身份后填写对应组织。直属上级由后端自动关联，不由表单提交。</p><el-form ref="formRef" :model="form" :rules="userRules" label-position="top"><div class="form-grid"><el-form-item label="员工姓名" prop="display_name"><el-input v-model="form.display_name" maxlength="100" placeholder="请输入真实姓名"/></el-form-item><el-form-item label="手机号" prop="username"><el-input v-model="form.username" type="tel" maxlength="150" autocomplete="tel" placeholder="请输入手机号"/><p class="field-hint">该手机号同时作为员工登录 App 的账号。</p></el-form-item></div><el-form-item label="身份证号" prop="id_number"><el-input v-model="form.id_number" maxlength="64" autocomplete="off" placeholder="请输入员工身份证号"/></el-form-item><el-form-item label="业务身份" prop="business_role"><el-select v-model="form.business_role" placeholder="请选择一种业务身份" class="full-width"><el-option v-for="role in businessRoles" :key="role.value" :label="role.label" :value="role.value"/></el-select></el-form-item><template v-if="!isFounder"><el-form-item label="所属部门" prop="department_id"><el-select v-model="form.department_id" placeholder="请选择部门" class="full-width"><el-option v-for="department in availableDepartments" :key="department.id" :label="department.name" :value="department.id"/></el-select></el-form-item><el-form-item v-if="needsTeam" label="所属团队" prop="team_id"><el-select v-model="form.team_id" :disabled="!form.department_id" :placeholder="form.department_id ? '请选择团队' : '请先选择部门'" class="full-width"><el-option v-for="team in availableTeams" :key="team.id" :label="team.name" :value="team.id"/></el-select></el-form-item></template><el-alert class="manager-hint" title="负责人唯一性及组织关系由后端校验；员工管理不提供个人资料编辑或密码重置。" type="info" :closable="false" show-icon/></el-form><template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" :loading="submitting" @click="createUser">创建账号</el-button></template></el-dialog>
+  <el-dialog v-model="dialogVisible" title="录入员工" width="min(640px, 94vw)" destroy-on-close @closed="resetCreateForm"><p class="dialog-intro">选择业务身份后填写对应组织。直属上级由后端自动关联，不由表单提交。</p><el-form ref="formRef" :model="form" :rules="userRules" label-position="top"><div class="form-grid"><el-form-item label="员工姓名" prop="display_name" :error="serverFieldErrors.display_name"><el-input v-model="form.display_name" maxlength="100" placeholder="请输入真实姓名" @input="clearServerFieldError('display_name')"/></el-form-item><el-form-item label="手机号" prop="username" :error="serverFieldErrors.username"><el-input v-model="form.username" type="tel" maxlength="32" autocomplete="tel" placeholder="请输入 11 位手机号" @input="clearServerFieldError('username')"/><p class="field-hint">该手机号同时作为员工登录 App 的账号。</p></el-form-item></div><el-form-item label="身份证号" prop="id_number" :error="serverFieldErrors.id_number"><el-input v-model="form.id_number" maxlength="64" autocomplete="off" placeholder="请输入 18 位员工身份证号" @input="clearServerFieldError('id_number')"/></el-form-item><el-form-item label="业务身份" prop="business_role"><el-select v-model="form.business_role" placeholder="请选择一种业务身份" class="full-width"><el-option v-for="role in businessRoles" :key="role.value" :label="role.label" :value="role.value"/></el-select></el-form-item><template v-if="!isFounder"><el-form-item label="所属部门" prop="department_id"><el-select v-model="form.department_id" placeholder="请选择部门" class="full-width"><el-option v-for="department in availableDepartments" :key="department.id" :label="department.name" :value="department.id"/></el-select></el-form-item><el-form-item v-if="needsTeam" label="所属团队" prop="team_id"><el-select v-model="form.team_id" :disabled="!form.department_id" :placeholder="form.department_id ? '请选择团队' : '请先选择部门'" class="full-width"><el-option v-for="team in availableTeams" :key="team.id" :label="team.name" :value="team.id"/></el-select></el-form-item></template><el-alert class="manager-hint" title="姓名、手机号和身份证号提交前会校验格式；唯一性及组织关系由后端校验。" type="info" :closable="false" show-icon/></el-form><template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" :loading="submitting" @click="createUser">创建账号</el-button></template></el-dialog>
   <el-dialog v-model="credentialsDialogVisible" title="员工账号创建成功" width="min(520px, 94vw)" :close-on-click-modal="false" :close-on-press-escape="false" :show-close="false" @closed="clearInitialCredentials"><p class="dialog-intro">请将以下信息转交员工。关闭后，初始密码无法再次查看。</p><div class="credential-row"><span>登录手机号</span><strong>{{ initialCredentials?.phone }}</strong></div><div class="credential-row"><span>初始密码</span><code>{{ initialCredentials?.password }}</code></div><template #footer><el-button type="primary" @click="credentialsDialogVisible = false">我已记录</el-button></template></el-dialog>
   <el-dialog v-model="detailVisible" :title="`${detail?.display_name || '员工'}资料`" width="min(620px, 94vw)"><div v-if="detail" class="detail-grid"><div><span>姓名</span><strong>{{ detail.display_name }}</strong></div><div><span>手机号</span><strong>{{ detail.username }}</strong></div><div><span>身份证号</span><strong>{{ detail.id_number_masked || '—' }}</strong></div><div><span>业务身份</span><strong>{{ roleLabel(detail.business_role) }}</strong></div><div><span>所属部门</span><strong>{{ detail.department_name || '—' }}</strong></div><div><span>所属团队</span><strong>{{ detail.team_name || '—' }}</strong></div><div><span>直属上级</span><strong>{{ detail.manager_name || '—' }}</strong></div><div><span>状态</span><el-tag :type="detail.is_active ? 'success' : 'info'">{{ detail.is_active ? '启用中' : '已停用' }}</el-tag></div></div><template #footer><el-button @click="detailVisible = false">关闭</el-button><el-button type="primary" @click="detailVisible = false; openEdit(detail)">调整身份与组织</el-button></template></el-dialog>
   <el-dialog v-model="editing" :title="`调整员工：${detail?.display_name || ''}`" width="min(560px, 94vw)"><el-form v-if="detail" label-position="top"><el-form-item label="业务身份"><el-select v-model="editForm.business_role" class="full-width"><el-option v-for="role in businessRoles" :key="role.value" :label="role.label" :value="role.value"/></el-select></el-form-item><el-form-item v-if="editForm.business_role !== 'founder'" label="所属部门"><el-select v-model="editForm.department_id" clearable placeholder="请选择启用中的部门" class="full-width"><el-option v-for="department in availableDepartments" :key="department.id" :label="department.name" :value="department.id"/><el-option v-if="editForm.department_id && !availableDepartments.some((item) => item.id === editForm.department_id)" :label="`${editDepartmentLabel(editForm.department_id)}（保留现有归属）`" :value="editForm.department_id" disabled/></el-select></el-form-item><el-form-item v-if="editNeedsTeam" label="所属团队"><el-select v-model="editForm.team_id" clearable placeholder="请选择启用中的团队" class="full-width"><el-option v-for="team in editTeams" :key="team.id" :label="team.name" :value="team.id"/><el-option v-if="editForm.team_id && !editTeams.some((item) => item.id === editForm.team_id)" :label="`${editTeamLabel(editForm.team_id)}（保留现有归属）`" :value="editForm.team_id" disabled/></el-select></el-form-item><el-form-item label="账号状态"><el-switch v-model="editForm.is_active" active-text="启用" inactive-text="停用"/></el-form-item><el-alert title="负责人变更通过身份及组织归属完成。姓名、手机号、身份证号和密码为只读资料。" type="info" :closable="false" show-icon/></el-form><template #footer><el-button @click="editing = false">取消</el-button><el-button type="primary" :loading="saving" @click="saveEdit">保存调整</el-button></template></el-dialog>

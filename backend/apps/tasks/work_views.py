@@ -14,7 +14,7 @@ from apps.core.api import BusinessAPIView
 from apps.logs.views import parse_date
 
 from .models import Task, TaskApprovalRecord, TaskChangeHistory, TaskSubmission, TaskUpdate
-from .services import subordinate_ids, visible_task
+from .services import assigned_to, subordinate_ids, visible_task
 from .china_calendar import calendar_days_for_range
 
 
@@ -37,7 +37,7 @@ class WorkDaySerializer(serializers.Serializer):
     overflow_count = serializers.IntegerField()
 
 
-class CalendarDaySerializer(serializers.Serializer):
+class WorkViewCalendarDaySerializer(serializers.Serializer):
     date = serializers.DateField()
     day_type = serializers.ChoiceField(choices=("holiday", "rest_day", "makeup_workday"))
     holiday_name = serializers.CharField(allow_null=True)
@@ -61,7 +61,7 @@ class MonthViewSerializer(serializers.Serializer):
     calendar_start_date = serializers.DateField()
     calendar_end_date = serializers.DateField()
     days = WorkDaySerializer(many=True)
-    calendar_days = CalendarDaySerializer(many=True)
+    calendar_days = WorkViewCalendarDaySerializer(many=True)
 
 
 class WeekViewSerializer(serializers.Serializer):
@@ -71,7 +71,7 @@ class WeekViewSerializer(serializers.Serializer):
     dates = serializers.ListField(child=serializers.DateField())
     all_day_tasks = WorkBarSerializer(many=True)
     events = WorkEventSerializer(many=True)
-    calendar_days = CalendarDaySerializer(many=True)
+    calendar_days = WorkViewCalendarDaySerializer(many=True)
 
 
 class DayViewSerializer(WeekViewSerializer):
@@ -125,7 +125,7 @@ def month_data(user, year, month):
     calendar_end = last + timedelta(days=6 - last.weekday())
     # DateTimeField date lookup uses the configured business time zone.
     tasks = task_rows(Task.objects.filter(
-        assignee=user, approval_status=Task.Approval.APPROVED,
+        assigned_to([user.pk]), approval_status=Task.Approval.APPROVED,
         lifecycle_status=Task.Lifecycle.ACTIVE, due_at__date__gte=calendar_start,
     ))
     bars = [bar(task) for task in tasks]
@@ -145,7 +145,7 @@ def month_data(user, year, month):
 
 def all_day_tasks(user, selected_start, selected_end):
     tasks = task_rows(Task.objects.filter(
-        assignee=user, approval_status=Task.Approval.APPROVED,
+        assigned_to([user.pk]), approval_status=Task.Approval.APPROVED,
         lifecycle_status=Task.Lifecycle.ACTIVE,
         due_at__date__gte=selected_start,
     ).order_by("due_at", "pk"))

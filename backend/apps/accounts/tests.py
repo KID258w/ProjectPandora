@@ -7,6 +7,7 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
 from .models import AdminAuditLog, Department, Team, User
+from .test_fixtures import synthetic_identity
 
 
 @override_settings(PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"])
@@ -16,22 +17,29 @@ class AccountApiTests(APITestCase):
     def setUp(self):
         self.initial_passwords = {}
         self.identity_numbers = {}
+        self.test_phones = {}
         self.admin = User.objects.create_superuser(username="admin", password=self.password)
         self.client.credentials(HTTP_AUTHORIZATION="Bearer " + self.login("admin", "admin")["access"])
         self.department = Department.objects.create(name="研发")
         self.team = Team.objects.create(name="后端", department=self.department)
 
     def login(self, scope, username, expected=200, password=None):
+        username = self.test_phones.get(username, username)
         credential = password if password is not None else self.initial_passwords.get(username, self.password)
         response = self.client.post(f"/api/v1/{scope}/auth/token/", {"username": username, "password": credential}, format="json")
         self.assertEqual(response.status_code, expected, response.data)
         UUID(response.data["requestId"])
         return response.data["data"]
 
-    def create_user(self, username, role, department=None, team=None, **extra):
-        identity_number = extra.pop("id_number", f"TEST-ID-{username}")
+    def phone(self, label):
+        return self.test_phones.setdefault(label, f"138{len(self.test_phones) + 1:08d}")
+
+    def create_user(self, label, role, department=None, team=None, **extra):
+        username = self.phone(label)
+        identity_number = extra.pop("id_number", synthetic_identity(int(username[3:])))
         self.identity_numbers[username] = identity_number
-        data = {"username": username, "id_number": identity_number, "display_name": username, "business_role": role, **extra}
+        display_name = "".join(char for char in label if not char.isdigit())
+        data = {"username": username, "id_number": identity_number, "display_name": display_name, "business_role": role, **extra}
         if department:
             data["department_id"] = department.pk
         if team:
@@ -63,7 +71,7 @@ class AccountApiTests(APITestCase):
             profile = self.client.get("/api/v1/app/me/")
             self.assertEqual(profile.status_code, 200)
             self.assertEqual(profile.data["data"]["manager_id"], user.manager_id)
-            self.assertEqual(profile.data["data"]["display_name"], user.username)
+            self.assertEqual(profile.data["data"]["display_name"], user.display_name)
             self.assertEqual(profile.data["data"]["id_number_masked"], self.mask_identity_number(self.identity_numbers[user.username]))
             self.assertNotIn("id_number", profile.data["data"])
             self.assertNotIn("password", profile.data["data"])
@@ -79,22 +87,23 @@ class AccountApiTests(APITestCase):
     def test_creation_requires_identity_and_returns_one_time_password_without_caching(self):
         missing_id = self.client.post(
             "/api/v1/admin/users/",
-            {"username": "missing-id", "display_name": "missing-id", "business_role": "founder"},
+            {"username": self.phone("missing-id"), "display_name": "missing-id", "business_role": "founder"},
             format="json",
         )
         self.assertEqual(missing_id.status_code, 400)
-        self.assertFalse(User.objects.filter(username="missing-id").exists())
+        self.assertIn("id_number", missing_id.data["data"])
+        self.assertFalse(User.objects.filter(username=self.phone("missing-id")).exists())
 
         response = self.create_user("new-founder", "founder")
         self.assertEqual(response.status_code, 201, response.data)
         data = response.data["data"]
         initial_password = data["initial_password"]
-        user = User.objects.get(username="new-founder")
+        user = User.objects.get(username=self.phone("new-founder"))
         self.assertEqual(len(initial_password), 16)
         self.assertTrue(user.is_active)
         self.assertTrue(user.check_password(initial_password))
         self.assertNotIn("id_number", data)
-        self.assertEqual(data["id_number_masked"], self.mask_identity_number(self.identity_numbers["new-founder"]))
+        self.assertEqual(data["id_number_masked"], self.mask_identity_number(self.identity_numbers[user.username]))
         self.assertEqual(response["Cache-Control"], "no-store, no-cache, max-age=0, private")
         self.assertEqual(response["Pragma"], "no-cache")
         self.assertEqual(response["Expires"], "0")
@@ -128,7 +137,7 @@ class AccountApiTests(APITestCase):
 
     def test_disabled_users_cannot_login_access_or_refresh(self):
         self.hierarchy()
-        for scope, username in [("admin", "admin"), ("app", "employee")]:
+        for scope, username in [("admin", "admin"), ("app", self.phone("employee"))]:
             tokens = self.login(scope, username)
             User.objects.filter(username=username).update(is_active=False)
             self.login(scope, username, 401)
@@ -160,7 +169,7 @@ class AccountApiTests(APITestCase):
         ]
         for role, department, team in cases:
             self.assertEqual(self.create_user("candidate", role, department, team).status_code, 400)
-        User.objects.filter(username="leader").update(is_active=False)
+        User.objects.filter(username=self.phone("leader")).update(is_active=False)
         self.assertEqual(self.create_user("candidate", "employee", self.department, self.team).status_code, 400)
 
     def test_unique_accounts_roles_and_protected_input(self):
@@ -172,7 +181,7 @@ class AccountApiTests(APITestCase):
             self.assertEqual(self.create_user(username, role, department, team).status_code, 400)
         for extra in [{"manager_id": self.admin.pk}, {"account_type": "admin"}, {"is_staff": True}, {"is_superuser": True}, {"password": "123"}, {"is_active": False}, {"display_name": "  "}]:
             self.assertEqual(self.create_user("candidate", "employee", self.department, self.team, **extra).status_code, 400)
-        self.assertFalse(User.objects.filter(username="candidate").exists())
+        self.assertFalse(User.objects.filter(username=self.phone("candidate")).exists())
 
     def test_department_team_creation_filter_and_pagination(self):
         department = self.client.post("/api/v1/admin/departments/", {"name": "销售"})
@@ -218,25 +227,25 @@ class AccountApiTests(APITestCase):
 
     def test_inactive_leaders_do_not_block_active_replacements(self):
         self.hierarchy()
-        User.objects.filter(username="founder").update(is_active=False)
+        User.objects.filter(username=self.phone("founder")).update(is_active=False)
         response = self.create_user("founder2", "founder")
         self.assertEqual(response.status_code, 201, response.data)
-        founder2 = User.objects.get(username="founder2")
-        manager = User.objects.get(username="manager")
+        founder2 = User.objects.get(username=self.phone("founder2"))
+        manager = User.objects.get(username=self.phone("manager"))
         manager.refresh_from_db()
         self.assertEqual(manager.manager_id, founder2.pk)
-        User.objects.filter(username="manager").update(is_active=False)
+        User.objects.filter(username=self.phone("manager")).update(is_active=False)
         response = self.create_user("manager2", "department_manager", self.department)
         self.assertEqual(response.status_code, 201, response.data)
-        manager2 = User.objects.get(username="manager2")
-        leader = User.objects.get(username="leader")
+        manager2 = User.objects.get(username=self.phone("manager2"))
+        leader = User.objects.get(username=self.phone("leader"))
         leader.refresh_from_db()
         self.assertEqual(leader.manager_id, manager2.pk)
-        User.objects.filter(username="leader").update(is_active=False)
+        User.objects.filter(username=self.phone("leader")).update(is_active=False)
         response = self.create_user("leader2", "team_leader", self.department, self.team)
         self.assertEqual(response.status_code, 201, response.data)
-        leader2 = User.objects.get(username="leader2")
-        employee = User.objects.get(username="employee")
+        leader2 = User.objects.get(username=self.phone("leader2"))
+        employee = User.objects.get(username=self.phone("employee"))
         employee.refresh_from_db()
         self.assertEqual(employee.manager_id, leader2.pk)
 
@@ -326,7 +335,7 @@ class AccountApiTests(APITestCase):
         users = self.hierarchy()
         employee = users[3]
         leader = users[2]
-        for payload in [{"display_name": "改名"}, {"id_number": "110101199001011234"}, {"password": "xxx"}, {"username": "newname"}]:
+        for payload in [{"display_name": "改名"}, {"id_number": synthetic_identity(30)}, {"password": "xxx"}, {"username": "newname"}]:
             self.assertEqual(self.client.patch(f"/api/v1/admin/users/{employee.pk}/", payload, format="json").status_code, 400)
         self.assertEqual(self.client.patch(f"/api/v1/admin/users/{employee.pk}/", {"business_role": "team_leader"}, format="json").status_code, 400)
         self.assertEqual(self.client.patch(f"/api/v1/admin/users/{leader.pk}/", {"is_active": False}, format="json").status_code, 200)
@@ -367,7 +376,7 @@ class AccountApiTests(APITestCase):
     def test_app_me_update_and_password(self):
         users = self.hierarchy()
         employee = users[3]
-        initial = self.initial_passwords["employee"]
+        initial = self.initial_passwords[self.phone("employee")]
         token = self.login("app", employee.username, password=initial)
         self.client.credentials(HTTP_AUTHORIZATION="Bearer " + token["access"])
         response = self.client.patch("/api/v1/app/me/", {"display_name": "张三"}, format="json")
@@ -377,10 +386,10 @@ class AccountApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         employee.refresh_from_db()
         self.assertEqual(employee.username, "13900000000")
-        response = self.client.patch("/api/v1/app/me/", {"id_number": "110101199001011234"}, format="json")
+        response = self.client.patch("/api/v1/app/me/", {"id_number": synthetic_identity(30)}, format="json")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["data"]["id_number_masked"], "**************1234")
-        self.assertEqual(self.client.patch("/api/v1/app/me/", {"username": "leader"}, format="json").status_code, 400)
+        self.assertEqual(response.data["data"]["id_number_masked"], self.mask_identity_number(synthetic_identity(30)))
+        self.assertEqual(self.client.patch("/api/v1/app/me/", {"username": self.phone("leader")}, format="json").status_code, 400)
         self.assertEqual(self.client.post("/api/v1/app/me/password/", {"current_password": "wrong", "new_password": "New-Pass-123!", "new_password_confirm": "New-Pass-123!"}, format="json").status_code, 400)
         self.assertEqual(self.client.post("/api/v1/app/me/password/", {"current_password": initial, "new_password": "New-Pass-123!", "new_password_confirm": "Different"}, format="json").status_code, 400)
         response = self.client.post("/api/v1/app/me/password/", {"current_password": initial, "new_password": "New-Pass-123!", "new_password_confirm": "New-Pass-123!"}, format="json")
@@ -393,31 +402,31 @@ class AccountApiTests(APITestCase):
         # 录入时身份证号重复
         dup = self.create_user(
             "dup", "employee", self.department, self.team,
-            id_number=self.identity_numbers["employee"],
+            id_number=self.identity_numbers[self.phone("employee")],
         )
         self.assertEqual(dup.status_code, 400)
         self.assertIn("id_number", dup.data["data"])
-        self.assertFalse(User.objects.filter(username="dup").exists())
+        self.assertFalse(User.objects.filter(username=self.phone("dup")).exists())
         # App 本人修改为他人已用身份证号
-        employee = User.objects.get(username="employee")
+        employee = User.objects.get(username=self.phone("employee"))
         token = self.login("app", employee.username)
         self.client.credentials(HTTP_AUTHORIZATION="Bearer " + token["access"])
-        response = self.client.patch("/api/v1/app/me/", {"id_number": self.identity_numbers["leader"]}, format="json")
+        response = self.client.patch("/api/v1/app/me/", {"id_number": self.identity_numbers[self.phone("leader")]}, format="json")
         self.assertEqual(response.status_code, 400)
         # 数据库层唯一约束兑底（绕过序列化器）
         with self.assertRaises(IntegrityError), transaction.atomic():
             User.objects.create_user(
                 username="dbdup", password=self.password,
-                id_number=self.identity_numbers["manager"],
+                id_number=self.identity_numbers[self.phone("manager")],
                 business_role="employee", department=self.department, team=self.team,
-                manager=User.objects.get(username="leader"),
+                manager=User.objects.get(username=self.phone("leader")),
             )
 
     def test_id_number_case_is_normalized_for_creation_and_profile_updates(self):
         self.hierarchy()
-        uppercase_id = "11010119900101123X"
-        lowercase_id = "11010119900101123x"
-        employee = User.objects.get(username="employee")
+        uppercase_id = next(value for i in range(30, 60) if (value := synthetic_identity(i)).endswith("X"))
+        lowercase_id = uppercase_id.lower()
+        employee = User.objects.get(username=self.phone("employee"))
 
         app_tokens = self.login("app", employee.username)
         self.client.credentials(HTTP_AUTHORIZATION="Bearer " + app_tokens["access"])
@@ -434,22 +443,23 @@ class AccountApiTests(APITestCase):
         self.assertEqual(duplicate.status_code, 400)
         self.assertIn("id_number", duplicate.data["data"])
 
+        new_id = next(value for i in range(60, 99) if (value := synthetic_identity(i)).endswith("X"))
         employee2_response = self.create_user(
-            "employee2", "employee", self.department, self.team, id_number="11010119900101124x",
+            "employee2", "employee", self.department, self.team, id_number=new_id.lower(),
         )
         self.assertEqual(employee2_response.status_code, 201, employee2_response.data)
-        employee2 = User.objects.get(username="employee2")
-        self.assertEqual(employee2.id_number, "11010119900101124X")
+        employee2 = User.objects.get(username=self.phone("employee2"))
+        self.assertEqual(employee2.id_number, new_id)
         app_tokens = self.login("app", employee2.username)
         self.client.credentials(HTTP_AUTHORIZATION="Bearer " + app_tokens["access"])
         response = self.client.patch("/api/v1/app/me/", {"id_number": uppercase_id}, format="json")
         self.assertEqual(response.status_code, 400)
         employee2.refresh_from_db()
-        self.assertEqual(employee2.id_number, "11010119900101124X")
+        self.assertEqual(employee2.id_number, new_id)
 
     def test_detail_endpoints_reject_put(self):
         self.hierarchy()
-        employee = User.objects.get(username="employee")
+        employee = User.objects.get(username=self.phone("employee"))
         urls = [
             f"/api/v1/admin/departments/{self.department.pk}/",
             f"/api/v1/admin/teams/{self.team.pk}/",
@@ -462,7 +472,7 @@ class AccountApiTests(APITestCase):
         users = self.hierarchy()  # founder, manager, leader, employee
         employee = users[3]
         self.create_user("employee2", "employee", self.department, self.team)
-        employee2 = User.objects.get(username="employee2")
+        employee2 = User.objects.get(username=self.phone("employee2"))
         self.assertEqual(employee2.manager_id, users[2].pk)
         # 停用团队长：两个员工的直属上级应置空
         response = self.client.patch(f"/api/v1/admin/users/{users[2].pk}/", {"is_active": False}, format="json")
@@ -519,7 +529,7 @@ class AccountApiTests(APITestCase):
     def test_password_change_rejects_same_password(self):
         users = self.hierarchy()
         employee = users[3]
-        initial = self.initial_passwords["employee"]
+        initial = self.initial_passwords[self.phone("employee")]
         token = self.login("app", employee.username, password=initial)
         self.client.credentials(HTTP_AUTHORIZATION="Bearer " + token["access"])
         response = self.client.post("/api/v1/app/me/password/", {"current_password": initial, "new_password": initial, "new_password_confirm": initial}, format="json")

@@ -68,7 +68,7 @@ class BusinessUserCreateTests(TestCase):
     def employee_payload(self, **overrides):
         payload = {
             "username": "13800000001",
-            "id_number": "110101199001011234",
+            "id_number": "99000020000229001X",
             "display_name": "张三",
             "business_role": User.Role.EMPLOYEE,
             "department_id": self.department.pk,
@@ -114,35 +114,35 @@ class BusinessUserCreateTests(TestCase):
 
     def test_id_number_normalized_on_create(self):
         """TC-WSX-124 正常：身份证号保存前去首尾空格并转大写。"""
-        _, user = self.save_user(id_number=" 11010119900101123x ")
-        self.assertEqual(user.id_number, "11010119900101123X")
+        _, user = self.save_user(id_number=" 99000020000229001x ")
+        self.assertEqual(user.id_number, "99000020000229001X")
 
     def test_initial_password_differs_between_accounts(self):
         """TC-WSX-140 正常：两次录入生成的初始密码互不相同。"""
         first, _ = self.save_user()
-        second, _ = self.save_user(username="13800000002", id_number="110101199001011235")
+        second, _ = self.save_user(username="13800000002", id_number="990000200002290028")
         self.assertNotEqual(first.initial_password, second.initial_password)
 
     # ---------- 边界值 ----------
 
-    def test_boundary_id_number_length_64_accepted(self):
-        """TC-WSX-126 边界：身份证号 64 字符（字段上界）通过。"""
-        _, user = self.save_user(id_number="9" * 64)
-        self.assertEqual(len(user.id_number), 64)
+    def test_boundary_id_number_length_18_accepted(self):
+        """TC-WSX-126 边界：身份证号 18 字符（字段上界）通过。"""
+        _, user = self.save_user(id_number="99000020000229001X")
+        self.assertEqual(len(user.id_number), 18)
 
-    def test_boundary_id_number_length_65_rejected(self):
-        """TC-WSX-127 边界：身份证号 65 字符（上界外）被拒绝。"""
-        error = self.assert_rejected(id_number="9" * 65)
+    def test_boundary_id_number_length_19_rejected(self):
+        """TC-WSX-127 边界：身份证号 19 字符（上界外）被拒绝。"""
+        error = self.assert_rejected(id_number="99000020000229001X0")
         self.assertIn("id_number", error)
 
-    def test_boundary_display_name_length_100_accepted(self):
-        """TC-WSX-128 边界：姓名 100 字符（上界）通过。"""
-        _, user = self.save_user(display_name="名" * 100)
-        self.assertEqual(len(user.display_name), 100)
+    def test_boundary_display_name_length_50_accepted(self):
+        """TC-WSX-128 边界：姓名 50 字符（上界）通过。"""
+        _, user = self.save_user(display_name="名" * 50)
+        self.assertEqual(len(user.display_name), 50)
 
-    def test_boundary_display_name_length_101_rejected(self):
-        """TC-WSX-129 边界：姓名 101 字符（上界外）被拒绝。"""
-        error = self.assert_rejected(display_name="名" * 101)
+    def test_boundary_display_name_length_51_rejected(self):
+        """TC-WSX-129 边界：姓名 51 字符（上界外）被拒绝。"""
+        error = self.assert_rejected(display_name="名" * 51)
         self.assertIn("display_name", error)
 
     def test_boundary_whitespace_display_name_rejected(self):
@@ -168,9 +168,9 @@ class BusinessUserCreateTests(TestCase):
 
     def test_exception_duplicate_id_number_case_insensitive(self):
         """TC-WSX-132 异常：大小写不同的同一身份证号仍视为重复。"""
-        self.save_user(id_number="11010119900101123X")
+        self.save_user(id_number="99000020000229001X")
         error = self.assert_rejected(
-            username="13800000009", id_number="11010119900101123x",
+            username="13800000009", id_number="99000020000229001x",
         )
         self.assertIn("该身份证号已被使用", error)
 
@@ -205,13 +205,13 @@ class BusinessUserCreateTests(TestCase):
     def test_appointing_manager_rebuilds_direct_reports(self):
         """TC-WSX-139 正常：任命新部门经理后，本部门团队长的直属上级被重建。"""
         serializer = BusinessUserCreateSerializer(data={
-            "username": "manager2", "id_number": "110101199001019999", "display_name": "新经理",
+            "username": "13800000019", "id_number": "990000200002290028", "display_name": "新经理",
             "business_role": User.Role.DEPARTMENT_MANAGER, "department_id": self.department.pk,
         })
         # 本部门已有启用经理，应先停用再任命，验证唯一性约束下的重建路径
         User.objects.filter(pk=self.manager.pk).update(is_active=False)
         serializer = BusinessUserCreateSerializer(data={
-            "username": "manager2", "id_number": "110101199001019999", "display_name": "新经理",
+            "username": "13800000019", "id_number": "990000200002290028", "display_name": "新经理",
             "business_role": User.Role.DEPARTMENT_MANAGER, "department_id": self.department.pk,
         })
         serializer.is_valid(raise_exception=True)
@@ -243,7 +243,7 @@ class UserCreateResponseTests(TestCase):
 
     def post_user(self, **overrides):
         payload = {
-            "username": "13800000001", "id_number": "110101199001011234",
+            "username": "13800000001", "id_number": "99000020000229001X",
             "display_name": "张三", "business_role": User.Role.EMPLOYEE,
             "department_id": self.department.pk, "team_id": self.team.pk,
         }
@@ -268,7 +268,7 @@ class UserCreateResponseTests(TestCase):
         response = self.post_user()
         data = response.data["data"]
         self.assertNotIn("id_number", data)
-        self.assertEqual(data["id_number_masked"], "**************1234")
+        self.assertEqual(data["id_number_masked"], "**************001X")
 
     def test_create_writes_audit_log(self):
         """TC-WSX-144 正常：创建员工写入管理端审计，且不含身份证明文。"""
@@ -413,7 +413,7 @@ class IdNumberMaskTests(TestCase):
 
     def test_masked_value_never_contains_full_plaintext(self):
         """TC-WSX-169 异常：脱敏结果不得包含完整明文身份证号。"""
-        plaintext = "110101199001011234"
+        plaintext = "99000020000229001X"
         self.assertNotIn(plaintext, self.mask(plaintext))
 
     def test_mask_of_length_three(self):

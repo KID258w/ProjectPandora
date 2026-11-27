@@ -394,16 +394,19 @@ class AppMeView(VersionedMixin, generics.RetrieveUpdateAPIView):
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", True)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        before = {
-            "display_name": instance.display_name,
-            "username": instance.username,
-            "id_number": instance.id_number,
-        }
         with transaction.atomic():
-            serializer.save()
+            instance = User.objects.select_for_update().get(pk=self.get_object().pk)
+            serializer = self.get_serializer(instance, data=request.data, partial=partial)
+            serializer.is_valid(raise_exception=True)
+            before = {
+                "display_name": instance.display_name,
+                "username": instance.username,
+                "id_number": instance.id_number,
+            }
+            try:
+                serializer.save()
+            except IntegrityError as exc:
+                raise serializers.ValidationError("手机号或身份证号已被使用，请刷新后重试。") from exc
             after = {
                 "display_name": instance.display_name,
                 "username": instance.username,

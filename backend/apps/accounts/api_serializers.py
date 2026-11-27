@@ -15,6 +15,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .authentication import has_complete_supervisor_chain
 from .app_audit import user_reference_snapshot
 from .models import AdminAuditLog, AppOperationAuditLog, Department, Team, User
+from .profile_validation import EmployeeProfileFieldsMixin
 from apps.tags.services import tag_name_snapshots
 
 
@@ -393,36 +394,15 @@ class UserUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):
         return instance
 
 
-class AppMeUpdateSerializer(StrictInputMixin, serializers.ModelSerializer):
-    username = serializers.CharField(max_length=150, trim_whitespace=True, required=False)
-    display_name = serializers.CharField(max_length=100, required=False)
-    id_number = serializers.CharField(max_length=64, trim_whitespace=True, required=False, allow_blank=False)
+class AppMeUpdateSerializer(StrictInputMixin, EmployeeProfileFieldsMixin, serializers.ModelSerializer):
+    username = serializers.CharField(max_length=11, min_length=11, required=False)
+    display_name = serializers.CharField(max_length=50, required=False)
+    id_number = serializers.CharField(max_length=18, min_length=18, required=False, write_only=True)
 
     class Meta:
         model = User
         fields = ["username", "display_name", "id_number"]
         validators = []
-
-    def validate_username(self, value):
-        if not value:
-            raise serializers.ValidationError("手机号不能为空。")
-        if User.objects.filter(username=value).exclude(pk=self.instance.pk).exists():
-            raise serializers.ValidationError("该手机号已被使用。")
-        return value
-
-    def validate_display_name(self, value):
-        if not value.strip():
-            raise serializers.ValidationError("姓名不能为空。")
-        return value.strip()
-
-    def validate_id_number(self, value):
-        value = User.normalize_id_number(value)
-        if not value:
-            raise serializers.ValidationError("身份证号不能为空。")
-        if User.objects.filter(id_number_hash=User._hash_id_number(value)).exclude(pk=self.instance.pk).exists():
-            raise serializers.ValidationError("该身份证号已被使用。")
-        return value
-
 
 class AppPasswordChangeSerializer(StrictInputMixin, serializers.Serializer):
     current_password = serializers.CharField(write_only=True, trim_whitespace=False, max_length=128)
@@ -506,9 +486,10 @@ class BusinessUserCreateResponseSerializer(UserSerializer):
         fields = UserSerializer.Meta.fields + ["initial_password"]
 
 
-class BusinessUserCreateSerializer(StrictInputMixin, serializers.ModelSerializer):
-    id_number = serializers.CharField(write_only=True, trim_whitespace=True, max_length=64)
-    display_name = serializers.CharField(max_length=100)
+class BusinessUserCreateSerializer(StrictInputMixin, EmployeeProfileFieldsMixin, serializers.ModelSerializer):
+    username = serializers.CharField(max_length=11, min_length=11)
+    id_number = serializers.CharField(write_only=True, max_length=18, min_length=18)
+    display_name = serializers.CharField(max_length=50)
     business_role = serializers.ChoiceField(choices=User.Role.choices)
     department_id = serializers.PrimaryKeyRelatedField(source="department", queryset=Department.objects.filter(is_active=True), required=False, allow_null=True)
     team_id = serializers.PrimaryKeyRelatedField(source="team", queryset=Team.objects.filter(is_active=True), required=False, allow_null=True)
@@ -519,12 +500,6 @@ class BusinessUserCreateSerializer(StrictInputMixin, serializers.ModelSerializer
         validators = []
 
     def validate(self, attrs):
-        id_number = attrs.get("id_number")
-        if id_number:
-            id_number = User.normalize_id_number(id_number)
-            attrs["id_number"] = id_number
-            if User.objects.filter(id_number_hash=User._hash_id_number(id_number)).exists():
-                raise serializers.ValidationError({"id_number": "该身份证号已被使用。"})
         role = attrs["business_role"]
         department, team = attrs.get("department"), attrs.get("team")
         manager, department, team = resolve_placement(role, department, team, is_active=True)

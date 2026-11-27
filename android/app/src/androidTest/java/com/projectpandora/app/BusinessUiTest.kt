@@ -210,9 +210,71 @@ class BusinessUiTest {
         compose.onNode(hasText("协作") and !hasSetTextAction()).assertExists()
         compose.onNodeWithText("产品").assertDoesNotExist()
     }
+
+    @Test fun taskFormSelectsDistinctPrimaryAndMultipleSecondaryAssignees() {
+        val api = FakeBusinessApi(role = "team_leader")
+        compose.setContent { PandoraAppTheme { TaskCenterScreen(api, {}) } }
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("create-task").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("create-task").performClick()
+        compose.waitUntil(10000) { api.calls.any { it.contains("organization/assignable-users") } }
+
+        compose.onNodeWithText("选择主要负责人 *").performClick()
+        compose.onNodeWithTag("primary_assignee_search").performTextInput("组员甲")
+        compose.onNodeWithText("组员甲（员工 · 客户端组）").performClick()
+        compose.onNodeWithText("完成").performClick()
+
+        compose.onNodeWithText("选择主要负责人 *").performClick()
+        compose.onNodeWithText("取消选择").performClick()
+        compose.onNodeWithTag("primary_assignee_selection").assertTextEquals("未选择")
+        compose.onNodeWithText("选择主要负责人 *").performClick()
+        compose.onNodeWithTag("primary_assignee_search").performTextInput("组员甲")
+        compose.onNodeWithText("组员甲（员工 · 客户端组）").performClick()
+        compose.onNodeWithText("完成").performClick()
+
+        compose.onNodeWithText("选择次要负责人").performClick()
+        compose.onNodeWithTag("secondary_assignee_search").performTextInput("组员甲")
+        compose.onNodeWithText("没有找到符合条件的负责人。").assertExists()
+        compose.onNodeWithTag("secondary_assignee_search").performTextReplacement("组员乙")
+        compose.onNodeWithText("组员乙（员工 · 客户端组）").performClick()
+        compose.onNodeWithText("完成").performClick()
+
+        compose.onNodeWithText("组员甲（员工 · 客户端组）").assertExists()
+        compose.onNodeWithText("组员乙（员工 · 客户端组）", substring = true).assertExists()
+        compose.onNodeWithTag("remove_secondary_assignee_9").assertExists().performClick()
+        compose.onNodeWithText("组员乙（员工 · 客户端组）", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("未选择次要负责人").assertExists()
+    }
+
+    @Test fun founderAssigneePickerExpandsOrganizationTreeAndSearchesMembers() {
+        val api = FakeBusinessApi(role = "founder")
+        compose.setContent { PandoraAppTheme { TaskCenterScreen(api, {}) } }
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("create-task").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("create-task").performClick()
+        compose.waitUntil(10000) { api.calls.any { it.contains("organization/tree") } }
+        compose.onNodeWithText("选择主要负责人 *").performClick()
+        compose.onNodeWithText("创始人").assertExists()
+        compose.onNodeWithText("产品部").performClick()
+        compose.onNodeWithText("客户端组").performClick()
+        compose.onNodeWithText("组员甲（员工 · 客户端组）").performClick()
+        compose.onNodeWithText("完成").performClick()
+        compose.onNodeWithText("组员甲（员工 · 客户端组）").assertExists()
+    }
+
+    @Test fun secondaryAssigneeCanUpdateProgressButCannotSubmitCompletion() {
+        val api = FakeBusinessApi(role = "employee", secondaryDetail = true)
+        compose.setContent { PandoraAppTheme { TaskCenterScreen(api, {}, initialTaskId = 9) } }
+        compose.waitUntil(10000) { compose.onAllNodesWithText("次要负责人可以更新进展", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("追加执行进展").performScrollTo().assertExists()
+        compose.onNodeWithText("提交完成结果").assertDoesNotExist()
+        compose.onNodeWithText("追加执行进展").performScrollTo().performClick()
+        compose.onNodeWithText("进展内容（必填）").performTextInput("次责已完成联调")
+        compose.onNodeWithText("确定").performClick()
+        compose.waitUntil(10000) { api.calls.any { it.startsWith("POST") && it.contains("/updates/") } }
+        assertEquals("次责已完成联调", api.lastBody?.get("content")?.asString)
+    }
 }
 
-private class FakeBusinessApi(private val failFocus: Boolean = false, private val role: String = "team_leader", private val inboxAllowed: Boolean = true, private val failTag: Boolean = false, private val returnedTask: Boolean = false) : BusinessApi {
+private class FakeBusinessApi(private val failFocus: Boolean = false, private val role: String = "team_leader", private val inboxAllowed: Boolean = true, private val failTag: Boolean = false, private val returnedTask: Boolean = false, private val secondaryDetail: Boolean = false) : BusinessApi {
     val calls = java.util.concurrent.CopyOnWriteArrayList<String>()
     @Volatile var lastBody: JsonObject? = null
     val marked = java.util.concurrent.CopyOnWriteArrayList<Long>()
@@ -223,15 +285,18 @@ private class FakeBusinessApi(private val failFocus: Boolean = false, private va
     }
     override suspend fun get(path: String, query: Map<String, String>): JsonObject {
         calls += "GET $path"
+        val secondaryPeople = if (secondaryDetail) """[{"id":7,"display_name":"次责我"}]""" else "[]"
         return when {
             path.endsWith("home/") -> parse("""{"company_items":[{"id":1,"title":"Home item alpha"}],"company_top_tasks":[{"id":1,"title":"任务 1"},{"id":2,"title":"任务 2"},{"id":3,"title":"任务 3"},{"id":4,"title":"任务 4"},{"id":5,"title":"任务 5"},{"id":6,"title":"任务 6"}],"personal_focus_tasks":[],"recent_logs":[],"unread_notification_count":0}""")
             path.endsWith("notifications/") -> parse("{\"results\":[" + (1..20).joinToString(",") { """{"id":$it,"task_id":$it,"task_title":"${if (it == 1) "审批通知示例" else "通知 $it"}","notification_type":"${if (it == 1) "approval_required" else "assignment_received"}","is_read":false}""" } + "],\"next\":null}")
             path.endsWith("personal-focus/") -> if (failFocus) throw java.io.IOException("offline") else parse("""{"tasks":[{"task_id":1,"title":"重点 A"},{"task_id":2,"title":"重点 B"}],"initialized":true}""")
             path.endsWith("me/") -> parse("""{"id":7,"business_role":"$role"}""")
+            path.endsWith("organization/assignable-users/") -> if (role == "founder") parse("""{"results":[{"id":7,"display_name":"创始人","business_role":"founder"},{"id":8,"display_name":"组员甲","business_role":"employee","team_name":"客户端组"},{"id":9,"display_name":"组员乙","business_role":"employee","team_name":"客户端组"}],"next":null}""") else parse("""{"results":[{"id":7,"display_name":"我","business_role":"team_leader"},{"id":8,"display_name":"组员甲","business_role":"employee","team_name":"客户端组"},{"id":9,"display_name":"组员乙","business_role":"employee","team_name":"客户端组"}],"next":null}""")
+            path.endsWith("organization/tree/") -> parse("""{"roots":[{"id":7,"name":"创始人","node_type":"person","display_name":"创始人","business_role":"founder","children":[]},{"id":2,"name":"产品部","node_type":"department","children":[{"id":3,"name":"客户端组","node_type":"team","children":[{"id":8,"display_name":"组员甲","node_type":"person","business_role":"employee","children":[]},{"id":9,"display_name":"组员乙","node_type":"person","business_role":"employee","children":[]}]}]}]}""")
             path.endsWith("task-approvals/inbox/") -> if (inboxAllowed) parse("""{"results":[{"task_id":9,"title":"审查任务","approval_status":"pending"}],"next":null}""") else parse("""{"results":[],"next":null}""")
             path.endsWith("task-approvals/outbox/") -> if (returnedTask) parse("""{"results":[{"task_id":9,"title":"审查任务","approval_status":"returned"}],"next":null}""") else parse("""{"results":[],"next":null}""")
             path.endsWith("tasks/9/history/") -> parse("""{"results":[]}""")
-            path.endsWith("tasks/9/") -> parse("""{"id":9,"title":"审查任务","description":"审批说明","creator":{"id":${if (returnedTask) 7 else 1},"display_name":"派发人"},"assignee":{"id":2},"due_at":"2026-10-30T18:00:00+08:00","required_materials":"评审记录","association_note":"相关项目","approval_status":"${if (returnedTask) "returned" else "pending"}","completion_status":"unfinished","lifecycle_status":"active","approval_history":[],"updates":[],"submissions":[]}""")
+            path.endsWith("tasks/9/") -> parse("""{"id":9,"title":"审查任务","description":"审批说明","creator":{"id":${if (returnedTask) 7 else 1},"display_name":"派发人"},"assignee":{"id":2},"secondary_assignees":$secondaryPeople,"due_at":"2026-10-30T18:00:00+08:00","required_materials":"评审记录","association_note":"相关项目","approval_status":"${if (returnedTask) "returned" else if (secondaryDetail) "approved" else "pending"}","completion_status":"unfinished","lifecycle_status":"active","approval_history":[],"updates":[],"submissions":[]}""")
             path.endsWith("log-viewers/") -> parse("""{"results":[{"id":5,"display_name":"王同事","department_name":"产品部","team_name":"客户端组"}],"next":null}""")
             path.endsWith("tags/") -> parse("""{"results":[{"id":1,"name":"产品","color":"#C7DDFF","is_active":true},{"id":2,"name":"协作","color":"#BDEAF2","is_active":true}],"next":null}""")
             path.contains("logs/calendar/") -> parse("""{"days":[]}""")
