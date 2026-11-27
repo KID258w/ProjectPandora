@@ -44,9 +44,11 @@ jobs:
         run: |
           # GHCR 镜像名必须全小写，而仓库名 ProjectPandora 含大写
           repo="${GITHUB_REPOSITORY,,}"
-          echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
-          echo "backend_image=ghcr.io/${repo}/backend" >> "$GITHUB_OUTPUT"
-          echo "web_image=ghcr.io/${repo}/web" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=${GITHUB_SHA::12}"
+            echo "backend_image=ghcr.io/${repo}/backend"
+            echo "web_image=ghcr.io/${repo}/web"
+          } >> "$GITHUB_OUTPUT"
 
       - name: 登录 GHCR
         uses: docker/login-action@v3
